@@ -1,0 +1,6 @@
+/* Draft des anciens, multijoueur : compléments à style.css et ../commun/salle.css */
+.status-ico{ font-size:.8rem; color:var(--muted); font-weight:700; }
+.prog li.opened .ct{ color:var(--gold); }
+.my-jokers{ display:flex; flex-wrap:wrap; gap:8px; }
+.my-jokers span{ background:var(--ink); color:var(--gold); border:2px solid var(--gold); border-radius:999px; padding:6px 12px; font-weight:800; font-size:.85rem; }
+.player-card-wrap{ display:flex; justify-content:center; }

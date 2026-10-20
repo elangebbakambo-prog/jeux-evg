@@ -1,0 +1,58 @@
+/* Mafia ou pas mafia, multijoueur : compléments à style.css */
+
+/* Pastille de connexion */
+.conn{ position:fixed; top:calc(10px + env(safe-area-inset-top,0px)); left:10px; z-index:20; display:flex; align-items:center; gap:6px;
+  background:rgba(22,3,4,.85); color:var(--paper); border:2px solid var(--muted); border-radius:999px; padding:6px 12px; font-weight:800; font-size:.78rem; }
+.conn i{ width:8px; height:8px; border-radius:50%; background:var(--muted); }
+.conn.on{ border-color:var(--clean); } .conn.on i{ background:var(--clean); }
+.conn.connecting i{ background:var(--gold); animation:blink 1s infinite alternate; }
+.conn.error{ border-color:var(--red); } .conn.error i{ background:var(--red); }
+@keyframes blink{ to{ opacity:.2; } }
+
+/* Choix du rôle */
+.roles{ display:flex; flex-direction:column; gap:12px; }
+.role{ display:flex; flex-direction:column; gap:4px; text-align:left; padding:18px; border-radius:16px; border:2px solid var(--bg3); background:var(--bg2); color:var(--paper); }
+.role b{ font-family:var(--display); font-weight:400; font-size:1.9rem; line-height:1; }
+.role span{ color:var(--muted); }
+.role.main{ border-color:var(--red); background:radial-gradient(circle at 90% 10%, rgba(225,25,43,.35), transparent 60%), var(--bg2); }
+
+/* Code de la salle */
+.room{ display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 16px; border-radius:18px; background:var(--bg2); border:2px solid rgba(242,193,78,.4); text-align:center; }
+.room .code{ font-family:var(--display); font-weight:400; font-size:clamp(4rem,22vw,6.5rem); line-height:.9; letter-spacing:.12em; color:var(--gold); text-shadow:5px 5px 0 var(--red); }
+.qr{ background:#FFFFFF; padding:10px; border-radius:12px; line-height:0; }
+.qr img, .qr canvas{ width:180px; height:180px; display:block; }
+.joinurl{ font-size:.85rem; color:var(--muted); overflow-wrap:anywhere; }
+
+.code-in{ font-family:var(--display); font-weight:400; font-size:2.4rem; letter-spacing:.3em; text-transform:uppercase; text-align:center; }
+.note{ margin:0; background:var(--bg2); border-radius:10px; padding:10px 12px; border-left:6px solid var(--gold); font-weight:700; }
+
+/* Liste des joueurs */
+.roster{ list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:8px; }
+.roster li{ display:flex; align-items:center; gap:8px; padding:6px 8px 6px 12px; border-radius:999px; background:var(--bg2); font-weight:800; }
+.roster li .dot{ width:8px; height:8px; border-radius:50%; background:var(--clean); }
+.roster li.off{ color:var(--muted); } .roster li.off .dot{ background:var(--muted); }
+.roster li.me{ outline:2px solid var(--gold); }
+.roster .kick{ width:28px; height:28px; border-radius:50%; border:0; background:rgba(0,0,0,.3); color:var(--muted); font-size:1rem; line-height:1; }
+.roster .empty{ background:none; color:var(--muted); font-weight:600; padding:0; }
+
+/* Avancement des votes */
+.prog{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.prog li{ display:grid; grid-template-columns:minmax(0,1fr) 2fr auto; align-items:center; gap:10px; background:var(--bg2); border-radius:12px; padding:10px 14px; }
+.prog .nm{ font-weight:800; overflow-wrap:anywhere; }
+.prog .nm small{ display:block; font-weight:600; font-size:.72rem; color:var(--muted); }
+.prog .bar{ height:10px; border-radius:6px; background:rgba(0,0,0,.35); overflow:hidden; }
+.prog .bar i{ display:block; height:100%; background:linear-gradient(90deg, var(--red-dark), var(--red)); transition:width .3s ease; }
+.prog li.done .bar i{ background:var(--clean); }
+.prog .ct{ font-family:var(--display); font-size:1.2rem; font-variant-numeric:tabular-nums; }
+.prog li.done .ct{ color:var(--clean); }
+
+/* Écran d'attente du joueur */
+.wait{ display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; padding:24px 8px; }
+.pulse{ width:72px; height:72px; border-radius:50%; background:radial-gradient(circle, var(--red), var(--red-dark)); box-shadow:0 0 0 0 rgba(225,25,43,.6); animation:pulse 1.6s infinite; }
+@keyframes pulse{ 70%{ box-shadow:0 0 0 26px rgba(225,25,43,0); } 100%{ box-shadow:0 0 0 0 rgba(225,25,43,0); } }
+.mine{ display:inline-block; padding:6px 14px; border-radius:999px; font-weight:800; }
+.mine.y{ background:var(--red); color:var(--paper); }
+.mine.n{ background:var(--clean); color:var(--ink); }
+.error-box{ margin:0; padding:12px 14px; border-radius:12px; background:rgba(225,25,43,.18); border-left:6px solid var(--red); font-weight:700; }
+
+@media (prefers-reduced-motion: reduce){ .pulse, .conn.connecting i{ animation:none; } .prog .bar i{ transition:none; } }

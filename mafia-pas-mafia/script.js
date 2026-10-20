@@ -17,14 +17,19 @@ const EXAMPLES = [
   "Mettre la vidéo d'un autre danseur en story sans le créditer.",
   "Partir de l'EVG avant le dernier verre « parce que demain je bosse »."
 ].map(text => ({ text, ex:true }));
-// Exemples de danseurs pour le mode Danseurs (à remplacer)
-const EXAMPLE_DANCERS = ["Cody","Julien","Yo","Johan","Christian","Mehdi","Sofiane","Kenzo"].map(text => ({ text, ex:true }));
+// Danseurs des modes Danseurs et Battle
+const DANCER_NAMES = ["Ismaël", "Elange", "Vita", "Julie", "Dimust", "Aline", "Jikay", "Soyuz", "Yoh", "Kodi", "Dialo", "Ronyl", "Sobek", "Marie", "Ughost", "Viro", "Clément", "Suki", "Leah", "Noth", "Imou", "Semoss", "Lumi", "Paul (Meute Céleste)", "Evion", "Joann", "Youyou", "Missile", "Pakissi", "Richard Pop", "Ziko", "Forge", "Ma2t", "Hervé", "Ness", "Erine", "Spider", "Kuty", "Laura Nala", "Rubix", "Hamza", "Drop", "Poppin J", "Lossejoint", "Demannotche", "Mels", "Junior", "Miguel", "Xelyna", "Dyken", "Odilon", "Deadhomies", "Jean-Michel Cruel", "Willis", "Nastya", "Batalla", "Andrey Stylez", "Rochka", "Alex the Cage", "Icee", "Sam Yudat", "Lindsay", "Nicurl", "April", "Reverse", "Dereck", "Krissy", "Doyah", "Physs", "Jimmy Yudat", "Lilkens"];
+const DANCERS_VERSION = 4; // à augmenter pour remplacer la liste enregistrée sur les téléphones
+const EXAMPLE_DANCERS = DANCER_NAMES.map(text => ({ text }));
 const MODES = {
   sit: { label:"Situations", one:"situation", many:"situations", card:"Dossier", bankTitle:"Les<br>dossiers",
          intro:"Écris une situation qui fait débat. Plus c'est tiré de vos vraies histoires, plus ça part en clash.",
          placeholder:"Ex. : Réserver la salle de répét et ne pas venir." },
   dan: { label:"Danseurs", one:"danseur", many:"danseurs", card:"Danseur", bankTitle:"Les<br>suspects",
          intro:"Ajoute les danseurs à juger. Chacun dira s'il est mafia ou pas mafia, puis devra se justifier.",
+         placeholder:"Nom du danseur" },
+  bat: { label:"Battle", one:"danseur", many:"danseurs", card:"Danseur", bankTitle:"Les<br>suspects",
+         intro:"Ajoute les danseurs du tournoi. Ce sont les mêmes que pour le mode Danseurs.",
          placeholder:"Nom du danseur" }
 };
 const KEY = "mafia-v1";
@@ -45,7 +50,15 @@ function load(){
   try{ const r = localStorage.getItem(KEY); if(r) st = JSON.parse(r); }catch(e){}
   st = st || { players: DEFAULT_PLAYERS.slice(), bank: EXAMPLES.slice(), size: 10, game: null };
   if(!st.dancers) st.dancers = EXAMPLE_DANCERS.slice();
+  // Nouvelle liste officielle : on remplace les anciens exemples, et on garde les danseurs ajoutés à la main
+  if((st.dancersVersion || 1) < DANCERS_VERSION){
+    const renamed = ["roehka", "rrubix"]; // anciennes orthographes, remplacées par Rochka et Rubix
+    const mine = st.dancers.filter(d => !d.ex && !renamed.includes(d.text.toLowerCase()) && !DANCER_NAMES.some(n => n.toLowerCase() === d.text.toLowerCase()));
+    st.dancers = EXAMPLE_DANCERS.slice().concat(mine);
+    st.dancersVersion = DANCERS_VERSION;
+  }
   if(!st.mode) st.mode = "sit";
+  if(st.bsize == null) st.bsize = 8;
   return st;
 }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
@@ -103,14 +116,15 @@ paintSound(); document.body.appendChild(soundBtn);
 let screen = store.game ? "game" : "home", lastScreen = null, draftText = "";
 function render(){
   ({ home:renderHome, bank:renderBank, game:renderGame })[screen]();
-  const key = screen + (store.game ? store.game.step + store.game.turn + store.game.revealIdx : "");
+  const key = screen + (store.game ? [store.game.step, store.game.turn, store.game.revealIdx, store.game.r, store.game.m].join("-") : "");
   if(key !== lastScreen){ window.scrollTo(0,0); lastScreen = key; }
 }
 const players = () => store.players.map(n => n.trim()).filter(Boolean);
 const M = () => MODES[store.mode];
-const list = () => store.mode === "dan" ? store.dancers : store.bank;
-const setList = v => { if(store.mode === "dan") store.dancers = v; else store.bank = v; };
-const exList = () => store.mode === "dan" ? EXAMPLE_DANCERS : EXAMPLES;
+const isDan = () => store.mode !== "sit";
+const list = () => isDan() ? store.dancers : store.bank;
+const setList = v => { if(isDan()) store.dancers = v; else store.bank = v; };
+const exList = () => isDan() ? EXAMPLE_DANCERS : EXAMPLES;
 const deckSize = () => Math.min(store.size || list().length, list().length);
 
 /* ---------- Accueil ---------- */
@@ -118,11 +132,20 @@ function renderHome(){
   const exs = list().filter(q => q.ex).length, n = list().length, m = M();
   app.innerHTML = `<section class="screen">
     <h1 class="title">Mafia<br><em>ou pas</em><br>mafia</h1>
-    <p class="lead">Chacun glisse les cartes en secret : à droite c'est mafia, à gauche ça passe. Ensuite on révèle les votes carte par carte, et chacun doit se justifier.</p>
+    <p class="lead">${store.mode === "bat" ? "Le mode Battle : vos danseurs s'affrontent en tournoi, duel après duel, jusqu'à ce qu'il n'en reste qu'un." : "Chacun glisse les cartes en secret : à droite c'est mafia, à gauche ça passe. Ensuite on révèle les votes carte par carte, et chacun doit se justifier."}</p>
+    ${window.MULTI_URL ? `<a class="btn gold" href="${window.MULTI_URL}">Jouer sur plusieurs téléphones</a>` : ""}
     <h2 class="h2">Mode de jeu</h2>
-    <div class="seg two" role="group" aria-label="Mode de jeu">${Object.entries(MODES).map(([k,md]) =>
-      `<button data-mode="${k}" aria-pressed="${store.mode === k}">${md.label}<br><small>${(k === "dan" ? store.dancers : store.bank).length} ${md.many}</small></button>`).join("")}</div>
-    <p class="hint">${store.mode === "dan" ? "Chaque carte est un danseur : est-il mafia ou pas mafia ?" : "Chaque carte est une situation : c'est mafia ou ça passe ?"}</p>
+    <div class="seg" role="group" aria-label="Mode de jeu">${Object.entries(MODES).map(([k,md]) =>
+      `<button data-mode="${k}" aria-pressed="${store.mode === k}">${md.label}<br><small>${(k === "sit" ? store.bank : store.dancers).length} ${md.many}</small></button>`).join("")}</div>
+    <p class="hint">${store.mode === "bat" ? "Un tournoi à élimination directe : à chaque duel, vous débattez et choisissez le meilleur des deux, jusqu'au champion." : store.mode === "dan" ? "Chaque carte est un danseur : est-il mafia ou pas mafia ?" : "Chaque carte est une situation : c'est mafia ou ça passe ?"}</p>
+    ${store.mode === "bat" ? `
+    <h2 class="h2">Taille du tournoi</h2>
+    <div class="seg four" role="group" aria-label="Nombre de danseurs dans le tournoi">${[[4,"4"],[8,"8"],[16,"16"],[0,"Tous"]].map(([k,l]) =>
+      `<button data-bsize="${k}" aria-pressed="${store.bsize === k}">${l}<br><small>${k ? roundName(k / 2) : n + " danseurs"}</small></button>`).join("")}</div>
+    <div class="stat"><span><strong>Danseurs prêts</strong><br><span class="hint">${exs ? `Dont ${exs} exemple${exs > 1 ? "s" : ""} à remplacer.` : "Tous ajoutés par vous."}</span></span><b>${n}</b></div>
+    <button class="btn gold" id="bank">Préparer les danseurs</button>
+    <button class="btn main" id="start" ${n >= 2 ? "" : "disabled"}>Lancer le tournoi</button>
+  </section>` : `
     <h2 class="h2">Joueurs</h2>
     <ol class="players">${store.players.map((p,i) => `<li>
       <input class="field" id="pl-${i}" data-i="${i}" value="${esc(p)}" placeholder="Prénom" aria-label="Joueur ${i+1}">
@@ -134,53 +157,103 @@ function renderHome(){
       `<button data-size="${k}" aria-pressed="${(store.size || 0) === k}">${l}<br><small>${k ? k : n} cartes</small></button>`).join("")}</div>
     <button class="btn gold" id="bank">Préparer les ${m.many}</button>
     <button class="btn main" id="start" ${n && players().length >= 2 ? "" : "disabled"}>Lancer la partie</button>
-  </section>`;
+  </section>`}`;
+  $$("[data-bsize]").forEach(b => b.onclick = () => { store.bsize = +b.dataset.bsize; save(); sfx.click(); render(); });
   $$("input[data-i]").forEach(inp => inp.oninput = () => { store.players[+inp.dataset.i] = inp.value; save(); $("#start").disabled = !(n && players().length >= 2); });
   $$("[data-rm]").forEach(b => b.onclick = () => { if(store.players.length > 2){ store.players.splice(+b.dataset.rm, 1); save(); render(); } });
-  $("#add").onclick = () => { store.players.push(""); save(); render(); const all = $$("input[data-i]"); all[all.length-1].focus(); };
+  const ad = $("#add"); if(ad) ad.onclick = () => { store.players.push(""); save(); render(); const all = $$("input[data-i]"); all[all.length-1].focus(); };
   $$("[data-mode]").forEach(b => b.onclick = () => { store.mode = b.dataset.mode; save(); sfx.click(); render(); });
   $$("[data-size]").forEach(b => b.onclick = () => { store.size = +b.dataset.size; save(); sfx.click(); render(); });
   $("#bank").onclick = () => { screen = "bank"; render(); };
-  $("#start").onclick = startGame;
+  $("#start").onclick = () => store.mode === "bat" ? startBattle() : startGame();
 }
 
 /* ---------- Préparer les situations ---------- */
+// Sélection multiple dans l'écran de préparation
+let selMode = false, selected = new Set(), bankMsg = "";
+// Plusieurs danseurs d'un coup : séparés par des virgules, points-virgules ou retours à la ligne
+// Accord : danseur (masculin), situation (féminin)
+const agree = (w, n) => w + (isDan() ? "" : "e") + (n > 1 ? "s" : "");
+const splitEntries = t => (isDan() ? t.split(/[\n,;]+/) : t.split(/\n+/)).map(x => x.trim()).filter(Boolean);
+
 function renderBank(){
-  const m = M(), L = list();
+  const m = M(), L = list(), nSel = selected.size;
   app.innerHTML = `<section class="screen">
     <button class="btn ghost" id="back">Retour</button>
     <h1 class="title">${m.bankTitle}</h1>
-    <div class="seg two" role="group" aria-label="Liste à préparer">${Object.entries(MODES).map(([k,md]) =>
-      `<button data-mode="${k}" aria-pressed="${store.mode === k}">${md.label}</button>`).join("")}</div>
+    <div class="seg two" role="group" aria-label="Liste à préparer">${Object.entries(MODES).filter(([k]) => k !== "bat").map(([k,md]) =>
+      `<button data-mode="${k}" aria-pressed="${(isDan() ? "dan" : "sit") === k}">${md.label}</button>`).join("")}</div>
     <p class="lead">${m.intro}</p>
-    ${store.mode === "dan"
-      ? `<input class="field" id="qtext" placeholder="${m.placeholder}" aria-label="Nouveau danseur" value="${esc(draftText)}">`
-      : `<textarea class="field" id="qtext" placeholder="${m.placeholder}" aria-label="Nouvelle situation">${esc(draftText)}</textarea>`}
-    <button class="btn main" id="addq" ${draftText.trim() ? "" : "disabled"}>Ajouter ${store.mode === "dan" ? "le danseur" : "la situation"}</button>
-    <h2 class="h2">${L.length} ${L.length > 1 ? m.many : m.one}</h2>
-    ${L.length ? `<ol class="qlist">${L.map((q,i) => `<li class="qitem">
-        <p>${q.ex ? `<span class="tag">Exemple</span>` : ""}${esc(q.text)}</p>
-        <button class="del" data-del="${i}" aria-label="Supprimer">×</button></li>`).join("")}</ol>`
-      : `<p class="hint">La liste est vide. Ajoute ${store.mode === "dan" ? "le premier danseur" : "la première situation"} juste au-dessus.</p>`}
-    ${L.some(q => q.ex) ? `<button class="btn ghost" id="clearEx">Supprimer les exemples</button>` : `<button class="link" id="restoreEx">Remettre les exemples</button>`}
+    <textarea class="field ${isDan() ? "short" : ""}" id="qtext" rows="${isDan() ? 2 : 3}" placeholder="${isDan() ? "Nom du danseur, ou plusieurs : Kodi, Ughost, Viro" : m.placeholder}" aria-label="${isDan() ? "Nouveaux danseurs" : "Nouvelle situation"}">${esc(draftText)}</textarea>
+    <p class="hint">${isDan() ? "Tu peux en ajouter plusieurs d'un coup, séparés par des virgules ou des retours à la ligne." : "Une situation par ligne : tu peux en coller plusieurs d'un coup."}</p>
+    <button class="btn main" id="addq" ${draftText.trim() ? "" : "disabled"}>Ajouter</button>
+    ${bankMsg ? `<p class="note">${esc(bankMsg)}</p>` : ""}
+
+    <div class="list-head"><h2 class="h2">${L.length} ${L.length > 1 ? m.many : m.one}</h2>
+      ${L.length ? (selMode
+        ? `<button class="chipbtn" id="selAll">${nSel === L.length ? "Tout désélectionner" : "Tout sélectionner"}</button>`
+        : `<button class="chipbtn" id="selOn">Sélectionner</button>`) : ""}</div>
+    ${L.length && !selMode ? `<div class="tools"><button class="chipbtn" id="copy">Copier la liste</button><button class="chipbtn danger" id="wipe">Tout supprimer</button></div>` : ""}
+    ${selMode ? `<div class="selbar"><button class="btn main danger" id="delSel" ${nSel ? "" : "disabled"}>Supprimer la sélection (${nSel})</button><button class="btn ghost" id="selOff">Annuler</button></div>` : ""}
+
+    ${L.length ? `<ol class="qlist ${selMode ? "selecting" : ""}">${L.map((q,i) => selMode
+        ? `<li><label class="qitem pick ${selected.has(q.text) ? "on" : ""}"><input type="checkbox" data-sel="${i}" ${selected.has(q.text) ? "checked" : ""}><p>${q.ex ? `<span class="tag">Exemple</span>` : ""}${esc(q.text)}</p></label></li>`
+        : `<li class="qitem"><p>${q.ex ? `<span class="tag">Exemple</span>` : ""}${esc(q.text)}</p><button class="del" data-del="${i}" aria-label="Supprimer ${esc(q.text)}">×</button></li>`).join("")}</ol>`
+      : `<p class="hint">La liste est vide. Ajoute ${isDan() ? "le premier danseur" : "la première situation"} juste au-dessus.</p>`}
+    ${selMode ? "" : L.some(q => q.ex) ? `<button class="btn ghost" id="clearEx">Supprimer les exemples</button>` : `<button class="link" id="restoreEx">${isDan() ? "Remettre la liste de départ" : "Remettre les exemples"}</button>`}
   </section>`;
-  $("#back").onclick = () => { screen = "home"; render(); };
-  $$("[data-mode]").forEach(b => b.onclick = () => { store.mode = b.dataset.mode; draftText = ""; save(); sfx.click(); render(); });
+
+  $("#back").onclick = () => { screen = "home"; selMode = false; selected.clear(); bankMsg = ""; render(); };
+  $$("[data-mode]").forEach(b => b.onclick = () => { if(!(store.mode === "bat" && b.dataset.mode === "dan")) store.mode = b.dataset.mode; draftText = ""; bankMsg = ""; selMode = false; selected.clear(); save(); sfx.click(); render(); });
   const ta = $("#qtext");
   ta.oninput = () => { draftText = ta.value; $("#addq").disabled = !draftText.trim(); };
   const add = () => {
-    const t = draftText.trim(); if(!t) return;
-    if(store.mode === "dan" && L.some(q => q.text.toLowerCase() === t.toLowerCase())){ askConfirm(`${t} est déjà dans la liste.`, null, "OK", null); return; }
-    setList([{ text:t }, ...L]); draftText = ""; save(); sfx.clean(); render(); $("#qtext").focus();
+    const items = splitEntries(draftText); if(!items.length) return;
+    const have = new Set(L.map(q => q.text.toLowerCase())), fresh = [];
+    let dup = 0;
+    items.forEach(t => { const k = t.toLowerCase(); if(have.has(k)) dup++; else { have.add(k); fresh.push({ text:t }); } });
+    setList([...fresh, ...L]);
+    bankMsg = `${fresh.length} ${fresh.length > 1 ? m.many : m.one} ${agree("ajouté", fresh.length)}${dup ? `, ${dup} déjà dans la liste` : ""}.`;
+    draftText = ""; save(); sfx.clean(); render(); $("#qtext").focus();
   };
   $("#addq").onclick = add;
-  if(store.mode === "dan") ta.onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); add(); } };
+  if(isDan()) ta.onkeydown = e => { if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); add(); } };
+
+  // Suppression une par une
   $$("[data-del]").forEach(b => b.onclick = () => {
     const q = L[+b.dataset.del];
-    askConfirm(`Supprimer « ${q.text.slice(0, 60)}${q.text.length > 60 ? "…" : ""} » ?`, () => { setList(L.filter((_,k) => k !== +b.dataset.del)); save(); render(); }, "Supprimer");
+    askConfirm(`Supprimer « ${q.text.slice(0, 60)}${q.text.length > 60 ? "…" : ""} » ?`, () => { setList(L.filter((_,k) => k !== +b.dataset.del)); bankMsg = ""; save(); render(); }, "Supprimer");
   });
+  // Sélection multiple
+  const on = $("#selOn"); if(on) on.onclick = () => { selMode = true; selected.clear(); bankMsg = ""; sfx.click(); render(); };
+  const off = $("#selOff"); if(off) off.onclick = () => { selMode = false; selected.clear(); render(); };
+  const all = $("#selAll"); if(all) all.onclick = () => { if(selected.size === L.length) selected.clear(); else L.forEach(q => selected.add(q.text)); render(); };
+  $$("[data-sel]").forEach(c => c.onchange = () => { const t = L[+c.dataset.sel].text; c.checked ? selected.add(t) : selected.delete(t); render(); });
+  const ds = $("#delSel"); if(ds) ds.onclick = () => askConfirm(`Supprimer ${selected.size} ${selected.size > 1 ? m.many : m.one} ?`, () => {
+    const n = selected.size;
+    setList(L.filter(q => !selected.has(q.text))); selected.clear(); selMode = false;
+    bankMsg = `${n} ${n > 1 ? m.many : m.one} ${agree("supprimé", n)}.`; save(); render();
+  }, "Supprimer");
+  // Tout supprimer
+  const w = $("#wipe"); if(w) w.onclick = () => askConfirm(`Supprimer les ${L.length} ${m.many} de la liste ? Tu pourras remettre la liste de départ.`, () => { setList([]); bankMsg = "Liste vidée."; save(); render(); }, "Tout supprimer");
+  // Copier la liste (pour la garder, l'envoyer ou la coller ailleurs)
+  const cp = $("#copy"); if(cp) cp.onclick = () => {
+    const txt = L.map(q => q.text).join(isDan() ? ", " : "\n");
+    const done = () => { bankMsg = `Liste copiée : ${L.length} ${L.length > 1 ? m.many : m.one}. Tu peux la coller dans un message.`; render(); };
+    const fallback = () => showCopyBox(txt);
+    try{ navigator.clipboard.writeText(txt).then(done, fallback); }catch(e){ fallback(); }
+  };
   const ce = $("#clearEx"); if(ce) ce.onclick = () => askConfirm(`Supprimer les ${m.many} d'exemple ? Les tiens restent.`, () => { setList(L.filter(q => !q.ex)); save(); render(); }, "Supprimer les exemples");
-  const re = $("#restoreEx"); if(re) re.onclick = () => { setList(L.concat(exList())); save(); render(); };
+  const re = $("#restoreEx"); if(re) re.onclick = () => { const before = L.length; setList(L.concat(exList().filter(e => !L.some(q => q.text.toLowerCase() === e.text.toLowerCase())))); bankMsg = `${list().length - before} remis dans la liste.`; save(); render(); };
+}
+// Si la copie automatique est refusée : on affiche le texte, déjà sélectionné, à copier à la main
+function showCopyBox(txt){
+  const box = document.createElement("div"); box.className = "ov";
+  box.innerHTML = `<div class="ov-box" role="dialog" aria-modal="true"><p>Sélectionne le texte et copie-le.</p>
+    <textarea class="field" readonly rows="8"></textarea><button class="btn main" data-yes>Fermer</button></div>`;
+  document.body.appendChild(box);
+  const t = box.querySelector("textarea"); t.value = txt; t.focus(); t.select();
+  box.querySelector("[data-yes]").onclick = () => box.remove();
 }
 
 /* =========================================================
@@ -199,7 +272,18 @@ const tally = i => { const g = G(); const y = g.players.filter(p => g.votes[p][i
 
 function renderGame(){
   const g = G();
+  if(g.mode === "bat") return renderBattle();
   ({ handoff:renderHandoff, swipe:renderSwipe, revealIntro:renderRevealIntro, reveal:renderReveal, end:renderEnd })[g.step]();
+}
+
+// Revenir au vote précédent (même joueur, ou dernier vote du joueur d'avant)
+function undoVote(){
+  const g = G();
+  if(g.step === "swipe" && g.idx > 0){ g.idx--; }
+  else if((g.step === "handoff" || g.step === "revealIntro") && g.turn > 0){ g.turn--; g.idx = g.cards.length - 1; g.step = "swipe"; }
+  else return;
+  g.votes[g.players[g.turn]].length = g.idx;
+  save(); sfx.click(); render();
 }
 
 function renderHandoff(){
@@ -210,9 +294,11 @@ function renderHandoff(){
     <h1 class="big">${esc(p)}</h1>
     <p class="hint">${g.cards.length} ${GM().many === "danseurs" ? "danseurs à juger" : "dossiers"} t'attendent. Personne ne regarde, tu glisses en secret.</p>
     <button class="btn main" id="go">C'est moi, je commence</button>
+    ${g.turn > 0 ? `<button class="link" id="undo">${esc(g.players[g.turn - 1])} : revenir à ton dernier vote</button>` : ""}
     <button class="link" id="quit">Arrêter la partie</button>
   </section>`;
   $("#go").onclick = () => { g.step = "swipe"; g.idx = 0; save(); render(); };
+  const u = $("#undo"); if(u) u.onclick = undoVote;
   $("#quit").onclick = () => askConfirm("Arrêter la partie ? Les votes seront perdus.", () => { store.game = null; save(); screen = "home"; render(); }, "Arrêter");
 }
 
@@ -236,6 +322,7 @@ function renderSwipe(){
       <button class="choice no" id="no">Pas mafia<small>ou glisse à gauche</small></button>
       <button class="choice yes" id="yes">Mafia<small>ou glisse à droite</small></button>
     </div>
+    ${i > 0 ? `<button class="undo-btn" id="undo"><span aria-hidden="true">↶</span> Revenir à la carte précédente<small>Tu avais mis : ${g.votes[p][i - 1] ? "Mafia" : "Pas mafia"}</small></button>` : ""}
   </section>`;
   const card = $("#top"), sy = card.querySelector(".stamp.yes"), sn = card.querySelector(".stamp.no");
   let start = null, dx = 0, done = false;
@@ -271,6 +358,7 @@ function renderSwipe(){
   card.addEventListener("keydown", e => { if(e.key === "ArrowRight") fly(true); if(e.key === "ArrowLeft") fly(false); });
   $("#yes").onclick = () => fly(true);
   $("#no").onclick = () => fly(false);
+  const u = $("#undo"); if(u) u.onclick = () => { if(!done) undoVote(); };
   card.focus({ preventScroll:true });
 }
 
@@ -281,7 +369,9 @@ function renderRevealIntro(){
     <h1 class="big">L'heure<br>du verdict</h1>
     <p class="hint">Mettez-vous autour du téléphone. On révèle les ${g.cards.length} ${GM().many === "danseurs" ? "danseurs" : "dossiers"} un par un, et chacun défend son vote.</p>
     <button class="btn main" id="go">Révéler ${GM().many === "danseurs" ? "le premier danseur" : "le premier dossier"}</button>
+    <button class="link" id="undo">${esc(g.players[g.players.length - 1])} : revenir à ton dernier vote</button>
   </section>`;
+  $("#undo").onclick = undoVote;
   $("#go").onclick = () => { g.step = "reveal"; g.revealIdx = 0; save(); render(); sfx.reveal(); };
 }
 
@@ -312,6 +402,137 @@ function renderReveal(){
     if(last){ g.step = "end"; save(); render(); sfx.fanfare(); return; }
     g.revealIdx++; save(); render(); sfx.reveal();
   };
+}
+
+/* =========================================================
+   Battle : tournoi à élimination directe
+   ========================================================= */
+// Nom d'un tour selon son nombre de duels
+const roundName = n => ({ 1:"Finale", 2:"Demi-finales", 4:"Quarts de finale", 8:"Huitièmes de finale", 16:"Seizièmes de finale", 32:"32es de finale", 64:"64es de finale" })[n] || `Tour de ${n * 2}`;
+
+function startBattle(){
+  const all = shuffle(store.dancers.map(d => d.text));
+  const n = store.bsize ? Math.min(store.bsize, all.length) : all.length;
+  const ent = all.slice(0, n);
+  // Taille du tableau = puissance de 2 ; les places vides sont des exempts (qualifiés d'office)
+  let P = 1; while(P < n) P *= 2;
+  const byes = P - n, first = [];
+  let k = 0;
+  for(let i = 0; i < P / 2; i++) first.push(i < byes ? { a: ent[k++], b: null, w: null } : { a: ent[k++], b: ent[k++], w: null });
+  const round = shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : x);
+  store.game = { mode:"bat", rounds:[round], r:0, m:0, step:"intro", hist:[] };
+  seek(); store.game.step = "intro";
+  save(); screen = "game"; render();
+}
+// Passe au prochain duel à jouer, ou au tour suivant quand le tour est fini
+function seek(){
+  const g = G(), cur = g.rounds[g.r], i = cur.findIndex(x => x.w == null);
+  if(i >= 0){ g.m = i; return; }
+  const ws = cur.map(x => x.w);
+  if(ws.length === 1){ g.step = "champion"; return; }
+  const nx = [];
+  for(let j = 0; j < ws.length; j += 2) nx.push({ a: ws[j], b: ws[j + 1], w: null });
+  g.rounds.push(nx); g.r++; g.m = 0; g.step = "intro";
+}
+function choose(side){
+  const g = G(), x = g.rounds[g.r][g.m];
+  x.w = side === "a" ? x.a : x.b;
+  g.hist.push([g.r, g.m]);
+  seek(); save(); render();
+  if(g.step === "champion") sfx.fanfare(); else if(g.step === "intro") sfx.reveal();
+}
+function undoBattle(){
+  const g = G(), h = g.hist.pop(); if(!h) return;
+  const [r, m] = h;
+  g.rounds.length = r + 1; g.rounds[r][m].w = null;
+  g.r = r; g.m = m; g.step = "duel";
+  save(); sfx.click(); render();
+}
+const quitBattle = () => askConfirm("Arrêter le tournoi ? Le tableau sera perdu.", () => { store.game = null; save(); screen = "home"; render(); }, "Arrêter");
+
+function renderBattle(){
+  const g = G();
+  ({ intro:renderBattleIntro, duel:renderDuel, champion:renderChampion })[g.step]();
+}
+
+function renderBattleIntro(){
+  const g = G(), cur = g.rounds[g.r], name = roundName(cur.length);
+  const duels = cur.filter(x => !x.bye), byes = cur.filter(x => x.bye);
+  app.innerHTML = `<section class="screen">
+    <p class="meta">Battle, tour ${g.r + 1} sur ${Math.log2(g.rounds[0].length) + 1}</p>
+    <h1 class="title">${name.replace(" ", "<br>")}</h1>
+    <p class="lead">${cur.length === 1 ? "Plus que deux. Un seul repartira avec la couronne." : `${duels.length} duel${duels.length > 1 ? "s" : ""} au programme. Débattez, puis choisissez le gagnant de chaque duel.`}</p>
+    <ol class="mlist">${duels.map(x => `<li><span>${esc(x.a)}</span><b>VS</b><span>${esc(x.b)}</span></li>`).join("")}</ol>
+    ${byes.length ? `<p class="hint">Qualifié${byes.length > 1 ? "s" : ""} d'office pour le tour suivant : ${byes.map(x => esc(x.a)).join(", ")}.</p>` : ""}
+    <button class="btn main" id="go">${cur.length === 1 ? "Lancer la finale" : "Lancer les duels"}</button>
+    ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier choix</button>` : ""}
+    <button class="link" id="quit">Arrêter le tournoi</button>
+  </section>`;
+  $("#go").onclick = () => { g.step = "duel"; save(); render(); sfx.swipe(); };
+  const u = $("#undo"); if(u) u.onclick = undoBattle;
+  $("#quit").onclick = quitBattle;
+}
+
+const fighter = (name, side) => `<button class="fighter" data-side="${side}" aria-label="Faire gagner ${esc(name)}">
+  <span class="f-mono" aria-hidden="true">${esc([...name][0] || "?")}</span>
+  <span class="f-name">${esc(name)}<small>Touche pour le qualifier</small></span></button>`;
+
+function renderDuel(){
+  const g = G(), cur = g.rounds[g.r], x = cur[g.m];
+  const real = cur.filter(y => !y.bye), num = real.indexOf(x) + 1;
+  app.innerHTML = `<section class="screen">
+    <header class="bar"><span>${roundName(cur.length)}</span><span>${cur.length === 1 ? "Le duel final" : `Duel ${num} sur ${real.length}`}</span></header>
+    <div class="duel">${fighter(x.a, "a")}<span class="vs" aria-hidden="true">VS</span>${fighter(x.b, "b")}</div>
+    <p class="hint center">Débattez, puis touchez le gagnant.</p>
+    <button class="btn ghost" id="coin">Pas d'accord ? Pile ou face</button>
+    ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier choix</button>` : ""}
+    <button class="link" id="quit">Arrêter le tournoi</button>
+  </section>`;
+  let busy = false;
+  const fa = $('[data-side="a"]'), fb = $('[data-side="b"]');
+  const win = side => {
+    if(busy) return; busy = true;
+    sfx.swipe(); sfx.mafia();
+    (side === "a" ? fa : fb).classList.add("win"); (side === "a" ? fb : fa).classList.add("lose");
+    reduce() ? choose(side) : setTimeout(() => choose(side), 650);
+  };
+  fa.onclick = () => win("a"); fb.onclick = () => win("b");
+  // Pile ou face : la lumière passe d'un danseur à l'autre en ralentissant, puis s'arrête
+  $("#coin").onclick = () => {
+    if(busy) return; busy = true;
+    const side = Math.random() < .5 ? "a" : "b";
+    if(reduce()){ busy = false; win(side); return; }
+    let t = 0, d = 70, i = 0;
+    const steps = [];
+    while(t < 1600){ steps.push([t, i % 2 ? "b" : "a"]); t += d; d *= 1.15; i++; }
+    if(steps[steps.length - 1][1] !== side) steps.push([t, side]);
+    steps.forEach(([at, sd]) => setTimeout(() => { fa.classList.toggle("hot", sd === "a"); fb.classList.toggle("hot", sd === "b"); sfx.click(); }, at));
+    setTimeout(() => { fa.classList.remove("hot"); fb.classList.remove("hot"); busy = false; win(side); }, steps[steps.length - 1][0] + 350);
+  };
+  const u = $("#undo"); if(u) u.onclick = undoBattle;
+  $("#quit").onclick = quitBattle;
+}
+
+function renderChampion(){
+  const g = G(), fin = g.rounds[g.r][0], champ = fin.w, runner = fin.w === fin.a ? fin.b : fin.a;
+  app.innerHTML = `<section class="screen">
+    <div class="champ">
+      <span class="crown" aria-hidden="true">♛</span>
+      <p class="meta">Champion du tournoi</p>
+      <h1 class="champ-name">${esc(champ)}</h1>
+      <p class="hint">A battu ${esc(runner)} en finale.</p>
+    </div>
+    <h2 class="h2">Le tableau</h2>
+    <div class="bracket">${g.rounds.map(rd => `<section><h3>${roundName(rd.length)}</h3><ul>${rd.map(x => x.bye
+        ? `<li><span class="w">${esc(x.a)}</span><span class="q">qualifié d'office</span></li>`
+        : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(x.a)}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(x.b)}</span></li>`).join("")}</ul></section>`).join("")}</div>
+    <button class="btn main" id="again">Nouveau tournoi</button>
+    <button class="link" id="undo">Annuler le dernier choix</button>
+    <button class="btn ghost" id="home">Retour à l'accueil</button>
+  </section>`;
+  $("#again").onclick = startBattle;
+  $("#undo").onclick = undoBattle;
+  $("#home").onclick = () => { store.game = null; save(); screen = "home"; render(); };
 }
 
 /* ---------- Titres de fin ---------- */

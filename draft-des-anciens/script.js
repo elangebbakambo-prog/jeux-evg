@@ -7,10 +7,13 @@ const SHORT_ROUNDS = 3;    // partie courte
 const R = () => (S && S.rounds) || ROUNDS;
 const JOKER_CHANCE = 0;   // chance de trouver un joker dans un booster (0 = jokers uniquement par la roulette)
 
-const DANCERS = ["Cody","Julien","Yo","Johan","Christian","Mehdi","Sofiane","Kenzo","Bilal","Yanis","Lucas","Nathan","Ryan","Samy",
-  "Kevin","Mamadou","Ibrahim","Théo","Maxime","Hugo","Enzo","Malik","Nordine","Rachid","Steven","Jordan","Dylan","Anthony","Mickaël",
-  "Lenny","Wassim","Moussa","Fabrice","Cédric","Romain","Kader","Brahim","Jessy","Sacha","Lina","Inès","Sarah","Nadia","Léa","Maeva",
-  "Chloé","Manon","Yasmine","Kenza","Djibril"];
+const DANCERS = ["Ismaël","Elange","Vita","Julie","Dimust","Aline","Jikay","Soyuz","Yoh","Kodi","Dialo","Ronyl","Sobek",
+  "Marie","Ughost","Viro","Clément","Suki","Leah","Noth","Imou","Semoss","Lumi","Paul (Meute Céleste)","Evion",
+  "Joann","Youyou","Missile","Pakissi","Richard Pop","Ziko","Forge","Ma2t","Hervé","Ness","Erine","Spider",
+  "Kuty","Laura Nala","Rubix","Hamza","Drop","Poppin J","Lossejoint","Demannotche","Mels","Junior","Miguel",
+  "Xelyna","Dyken","Odilon","Deadhomies","Jean-Michel Cruel","Willis","Nastya","Batalla","Andrey Stylez",
+  "Rochka","Alex the Cage","Icee","Sam Yudat","Lindsay","Nicurl","April","Reverse","Dereck","Krissy","Doyah",
+  "Physs","Jimmy Yudat","Lilkens"];
 
 // Carte spéciale du futur marié (rareté Mythique). Son prénom se règle sur l'écran d'accueil.
 const GROOM = {
@@ -24,10 +27,10 @@ const GROOM = {
 const SPECIALTY_BONUS = 1.3; // +30 % dans sa spécialité
 // Choisis toi-même la spécialité de certains danseurs (battle, crea, presta, chore, workshop, best, bad).
 // Les autres reçoivent automatiquement la catégorie où leurs stats sont les meilleures.
-const SPECIALTY_OVERRIDES = { "Cody":"battle", "Julien":"chore", "Yo":"crea", "Johan":"workshop" };
+const SPECIALTY_OVERRIDES = {}; // ex. : { "Kodi":"battle", "Ughost":"chore" }
 
 // Choisis toi-même la rareté de certains danseurs. Les autres sont tirés au hasard.
-const RARITY_OVERRIDES = { "Cody":"Légendaire", "Julien":"Légendaire", "Yo":"Rare", "Johan":"Rare" };
+const RARITY_OVERRIDES = {}; // ex. : { "Kodi":"Légendaire", "Ughost":"Rare" }
 
 // Chaque catégorie rapporte des points selon certaines stats (pour le score et les bonus/malus)
 const CATS = [
@@ -302,6 +305,7 @@ function renderSetup(){
     <h2 class="h2">Durée de la partie</h2>
     <div class="vote">${[[SHORT_ROUNDS,"Courte"],[ROUNDS,"Normale"]].map(([n,l]) => `<button class="btn ${setupRounds === n ? "main" : "ghost"}" data-rounds="${n}" aria-pressed="${setupRounds === n}">${l}<br><small>${n} tours</small></button>`).join("")}</div>
     <button class="btn main" id="start">Lancer la partie</button>
+    ${window.MULTI_URL ? `<a class="btn gold" href="${window.MULTI_URL}">Jouer sur plusieurs téléphones</a>` : ""}
     <button class="btn ghost" id="gallery">Voir toutes les cartes</button>
   </section>`;
   $$("input[data-i]").forEach(inp => inp.oninput = () => setupNames[+inp.dataset.i] = inp.value);
@@ -394,7 +398,8 @@ const TEAR_TOP  = ["0% 0%", "100% 0%", ...TEAR_PTS.slice().reverse().map(([x,y])
 const TEAR_BODY = [...TEAR_PTS.map(([x,y]) => `${x}% ${y}%`), "100% 100%", "0% 100%"].join(",");
 let dealAnim = false;
 
-function bindTear(pack){
+// onOpen : ce qui se passe une fois le booster ouvert (par défaut, la partie sur un seul téléphone)
+function bindTear(pack, onOpen){
   const top = pack.querySelector(".top-piece"), rip = pack.querySelector(".rip");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let start = null, p = 0, dir = 1, lastSound = 0, finished = false;
@@ -411,7 +416,7 @@ function bindTear(pack){
   function finish(){
     if(finished) return; finished = true;
     sfx.tear();
-    const open = () => { S.packOpen = true; dealAnim = true; save(); render(); };
+    const open = onOpen || (() => { S.packOpen = true; dealAnim = true; save(); render(); });
     if(reduce){ open(); return; }
     pack.classList.add("torn");
     top.style.transition = "transform .6s cubic-bezier(.3,.7,.4,1), opacity .6s";
@@ -902,4 +907,5 @@ function doReset(){
   S = null; showRanking = false; overlay = null; clearSave(); render();
 }
 
-render();
+// En multijoueur, ce fichier sert de bibliothèque (cartes, roulettes…) : on ne lance pas la partie sur un seul téléphone
+if(!window.DRAFT_LIB) render();
