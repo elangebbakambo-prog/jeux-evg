@@ -30,7 +30,7 @@ Un double-clic sur `index.html` marche aussi, sans extension.
 
 ## Multijoueur (Mafia ou pas mafia, Draft des anciens)
 
-- `mafia-pas-mafia/multijoueur.html` : chacun vote sur son propre téléphone.
+- `mafia-pas-mafia/multijoueur.html` : chacun vote sur son propre téléphone. Trois modes : Situations, Danseurs et Battle (tournoi : à chaque duel, chacun vote pour un danseur, puis l'hôte révèle les votes un par un).
 - `draft-des-anciens/multijoueur.html` : chacun ouvre son booster, construit son deck et joue ses jokers sur son téléphone, en même temps. L'écran hôte anime la roulette des jokers de départ, la présentation de chaque tour, les votes, les roulettes bonus et malus, la révélation des équipes, les élections et le podium. Il réutilise `script.js` comme bibliothèque (`window.DRAFT_LIB = true`).
 - `commun/salle.css` : le style des salles (code, QR code, liste des joueurs, pastille de connexion), partagé par le Draft.
 

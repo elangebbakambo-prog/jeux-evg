@@ -56,3 +56,14 @@
 .error-box{ margin:0; padding:12px 14px; border-radius:12px; background:rgba(225,25,43,.18); border-left:6px solid var(--red); font-weight:700; }
 
 @media (prefers-reduced-motion: reduce){ .pulse, .conn.connecting i{ animation:none; } .prog .bar i{ transition:none; } }
+
+/* Mode Battle en ligne */
+.duel .vs{ font-variant-numeric:tabular-nums; }
+.fighter.hot{ outline-color:var(--gold); }
+.big-reveal{ margin:0; text-align:center; font-size:1.15rem; background:var(--bg2); border-radius:12px; padding:12px; border-left:6px solid var(--gold); animation:popin .35s ease both; }
+.who li.pop{ animation:popin .35s ease both; outline:2px solid var(--gold); }
+.who li.none{ background:none; color:var(--muted); font-weight:600; }
+.vote2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.score-line{ color:var(--gold); }
+@keyframes popin{ from{ transform:scale(.85); opacity:0; } to{ transform:none; opacity:1; } }
+@media (prefers-reduced-motion: reduce){ .big-reveal, .who li.pop{ animation:none; } }
