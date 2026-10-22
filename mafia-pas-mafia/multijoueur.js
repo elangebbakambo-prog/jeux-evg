@@ -261,6 +261,8 @@ function renderHost(){
   const k = H.phase + (H.revealIdx || 0) + (H.bat ? duelKey() : "");
   if(k !== lastHostKey){ window.scrollTo(0, 0); lastHostKey = k; }
   paintPlay();
+  // Musique du battle : barre en bas de l'écran hôte pendant le duel et sa révélation
+  if(window.Musique){ if(H.bat && ["duel", "dreveal"].includes(H.phase) && !hostEditing) Musique.show(H.bat.cat, duelKey()); else Musique.hide(); }
 }
 
 // Réglages de la partie : mode, puis nombre de cartes ou taille du tournoi
@@ -282,7 +284,8 @@ function settingsHTML(L){
     : `<h2 class="h2">Cartes par partie</h2>
     <div class="seg" role="group" aria-label="Nombre de cartes">${[[6, "Rapide"], [10, "Normal"], [0, "Toutes"]].map(([k, l]) =>
       `<button data-size="${k}" aria-pressed="${H.size === k}">${l}<br><small>${k || L[H.mode].length} cartes</small></button>`).join("")}</div>`}
-    ${addDancerHTML()}`;
+    ${addDancerHTML()}
+    ${H.mode === "bat" && window.Musique ? Musique.settingsHTML() : ""}`;
 }
 let addCats = [];
 function addDancerHTML(){
@@ -297,6 +300,7 @@ function addDancerHTML(){
       <button class="kick" data-rmx="${i}" aria-label="Retirer ${esc(e.name)}">×</button></li>`).join("")}</ul>` : ""}`;
 }
 function bindSettings(redraw){
+  if(window.Musique) Musique.bindSettings(app, redraw);
   const f = $("#addD");
   if(f) f.onsubmit = e => {
     e.preventDefault();

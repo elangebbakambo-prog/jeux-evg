@@ -136,6 +136,8 @@ function render(){
   ({ home:renderHome, bank:renderBank, game:renderGame })[screen]();
   const key = screen + (store.game ? [store.game.step, store.game.turn, store.game.revealIdx, store.game.r, store.game.m].join("-") : "");
   if(key !== lastScreen){ window.scrollTo(0,0); lastScreen = key; }
+  // Musique du battle (version hébergée seulement : commun/musique.js)
+  if(window.Musique){ const g = store.game; if(screen === "game" && g && g.mode === "bat" && g.step === "duel") Musique.show(g.cat, g.r + "-" + g.m + "-" + g.hist.length); else Musique.hide(); }
 }
 const players = () => store.players.map(n => n.trim()).filter(Boolean);
 const M = () => MODES[store.mode];
@@ -171,6 +173,7 @@ function renderHome(){
     <div class="stat"><span><strong>Danseurs prêts</strong><br><span class="hint">${exs ? `Dont ${exs} exemple${exs > 1 ? "s" : ""} à remplacer.` : "Tous ajoutés par vous."}</span></span><b>${n}</b></div>
     <button class="btn gold" id="bank">Préparer les danseurs</button>
     <p class="hint">Les catégories Hip hop et Popping prennent leurs danseurs dans cette liste. Un danseur ajouté à la main ne joue qu'en All style.</p>
+    ${window.Musique ? Musique.settingsHTML() : ""}
     <button class="btn main" id="start" ${nb >= 2 ? "" : "disabled"}>Lancer le tournoi</button>
   </section>` : `
     <h2 class="h2">Joueurs</h2>
@@ -185,6 +188,7 @@ function renderHome(){
     <button class="btn gold" id="bank">Préparer les ${m.many}</button>
     <button class="btn main" id="start" ${n && players().length >= 2 ? "" : "disabled"}>Lancer la partie</button>
   </section>`}`;
+  if(window.Musique) Musique.bindSettings(app, render);
   $$("[data-bfmt]").forEach(b => b.onclick = () => { store.bfmt = b.dataset.bfmt; save(); sfx.click(); render(); });
   $$("[data-bcat]").forEach(b => b.onclick = () => { store.bcat = b.dataset.bcat; save(); sfx.click(); render(); });
   $$("[data-bsize]").forEach(b => b.onclick = () => { store.bsize = +b.dataset.bsize; save(); sfx.click(); render(); });
