@@ -10,7 +10,7 @@ const JOKER_CHANCE = 0;   // chance de trouver un joker dans un booster (0 = jok
 const DANCERS = ["Ismaël","Elange","Vita","Julie","Dimust","Aline","Jikay","Soyuz","Yoh","Kodi","Dialo","Ronyl","Sobek",
   "Marie","Ughost","Viro","Clément","Suki","Leah","Noth","Imou","Semoss","Lumi","Paul (Meute Céleste)","Evion",
   "Joann","Youyou","Missile","Pakissi","Richard Pop","Ziko","Forge","Ma2t","Hervé","Ness","Erine","Spider",
-  "Kuty","Laura Nala","Rubix","Hamza","Drop","Poppin J","Lossejoint","Demannotche","Mels","Junior","Miguel",
+  "Kuty","Laura Nala","Rubix","Hamza","Drop","Poppin J","Lossejoint","Delannotche","Mels","Junior","Miguel",
   "Xelyna","Dyken","Odilon","Deadhomies","Jean-Michel Cruel","Willis","Nastya","Batalla","Andrey Stylez",
   "Rochka","Alex the Cage","Icee","Sam Yudat","Lindsay","Nicurl","April","Reverse","Dereck","Krissy","Doyah",
   "Physs","Jimmy Yudat","Lilkens"];

@@ -17,9 +17,19 @@ const EXAMPLES = [
   "Mettre la vidéo d'un autre danseur en story sans le créditer.",
   "Partir de l'EVG avant le dernier verre « parce que demain je bosse »."
 ].map(text => ({ text, ex:true }));
-// Danseurs des modes Danseurs et Battle
-const DANCER_NAMES = ["Ismaël", "Elange", "Vita", "Julie", "Dimust", "Aline", "Jikay", "Soyuz", "Yoh", "Kodi", "Dialo", "Ronyl", "Sobek", "Marie", "Ughost", "Viro", "Clément", "Suki", "Leah", "Noth", "Imou", "Semoss", "Lumi", "Paul (Meute Céleste)", "Evion", "Joann", "Youyou", "Missile", "Pakissi", "Richard Pop", "Ziko", "Forge", "Ma2t", "Hervé", "Ness", "Erine", "Spider", "Kuty", "Laura Nala", "Rubix", "Hamza", "Drop", "Poppin J", "Lossejoint", "Demannotche", "Mels", "Junior", "Miguel", "Xelyna", "Dyken", "Odilon", "Deadhomies", "Jean-Michel Cruel", "Willis", "Nastya", "Batalla", "Andrey Stylez", "Rochka", "Alex the Cage", "Icee", "Sam Yudat", "Lindsay", "Nicurl", "April", "Reverse", "Dereck", "Krissy", "Doyah", "Physs", "Jimmy Yudat", "Lilkens"];
-const DANCERS_VERSION = 4; // à augmenter pour remplacer la liste enregistrée sur les téléphones
+// Danseurs des modes Danseurs et Battle (la catégorie All style du Battle prend toute cette liste)
+const DANCER_NAMES = ["Ismaël", "Elange", "Vita", "Julie", "Dimust", "Aline", "Jikay", "Soyuz", "Yoh", "Kodi", "Dialo", "Ronyl", "Sobek", "Marie", "Ughost", "Viro", "Clément", "Suki", "Leah", "Noth", "Imou", "Semoss", "Lumi", "Paul (Meute Céleste)", "Evion", "Joann", "Youyou", "Missile", "Pakissi", "Richard Pop", "Ziko", "Forge", "Ma2t", "Hervé", "Ness", "Erine", "Spider", "Kuty", "Laura Nala", "Rubix", "Hamza", "Drop", "Poppin J", "Lossejoint", "Delannotche", "Mels", "Junior", "Miguel", "Xelyna", "Dyken", "Odilon", "Deadhomies", "Jean-Michel Cruel", "Willis", "Nastya", "Batalla", "Andrey Stylez", "Rochka", "Alex the Cage", "Icee", "Sam Yudat", "Lindsay", "Nicurl", "April", "Reverse", "Dereck", "Krissy", "Doyah", "Physs", "Jimmy Yudat", "Lilkens", "Joël Brown", "Dokyun", "Hozin", "Hoan", "Nikki Pop", "Slimboogie", "Greenteck", "Franqey", "Nelson", "Cinthia", "Sonya", "Eun-G", "Riha", "Nuria", "Lady C", "Ryu", "Sacha", "Paris", "Leila", "Bougito", "Creesto", "Iron Mike", "Linda", "Future", "Junior Boogaloo", "Super Dino", "Lemzo", "Gucchon", "Kei", "Breeze Lee", "Précise", "Jrock", "Jiggy Jaya", "Kinho", "Trakinas", "Jaygee", "Glory", "Jeff West Gang", "Poppin C", "Chams", "Kryss Boogie", "Jerems"];
+// Catégories du mode Battle. Un danseur peut être dans plusieurs catégories.
+const HIPHOP_NAMES = ["Alex the Cage", "Aline", "Andrey Stylez", "April", "Batalla", "Deadhomies", "Delannotche", "Dereck", "Dialo", "Dimust", "Doyah", "Drop", "Dyken", "Elange", "Erine", "Evion", "Forge", "Hamza", "Hervé", "Icee", "Imou", "Ismaël", "Jean-Michel Cruel", "Jikay", "Jimmy Yudat", "Joann", "Julie", "Junior", "Kodi", "Krissy", "Kuty", "Laura Nala", "Leah", "Lilkens", "Lindsay", "Lossejoint", "Lumi", "Ma2t", "Marie", "Mels", "Miguel", "Missile", "Nastya", "Ness", "Nicurl", "Noth", "Odilon", "Pakissi", "Physs", "Reverse", "Rochka", "Ronyl", "Rubix", "Sam Yudat", "Semoss", "Sobek", "Spider", "Viro", "Vita", "Willis", "Xelyna", "Yoh", "Ziko"];
+const POPPING_NAMES = ["Poppin J", "Missile", "Joël Brown", "Ness", "Dokyun", "Hozin", "Joann", "Hoan", "Nikki Pop", "Slimboogie", "Greenteck", "Franqey", "Nelson", "Cinthia", "Sonya", "Eun-G", "Riha", "Nuria", "Lady C", "Ryu", "Sacha", "Paris", "Leila", "Bougito", "Creesto", "Iron Mike", "Linda", "Future", "Junior Boogaloo", "Super Dino", "Lemzo", "Gucchon", "Kei", "Breeze Lee", "Précise", "Jrock", "Jiggy Jaya", "Kinho", "Trakinas", "Jaygee", "Glory", "Jeff West Gang", "Poppin C", "Chams", "Kryss Boogie", "Jerems"];
+const BCATS = {
+  all:     { label:"All style", names:null },
+  hiphop:  { label:"Hip hop",   names:HIPHOP_NAMES },
+  popping: { label:"Popping",   names:POPPING_NAMES }
+};
+// Danseurs du tournoi selon la catégorie, parmi la liste de « Préparer »
+const battlePool = (cat, names) => { const c = BCATS[cat] || BCATS.all; if(!c.names) return names; const set = new Set(c.names.map(n => n.toLowerCase())); return names.filter(n => set.has(n.toLowerCase())); };
+const DANCERS_VERSION = 5; // à augmenter pour remplacer la liste enregistrée sur les téléphones
 const EXAMPLE_DANCERS = DANCER_NAMES.map(text => ({ text }));
 const MODES = {
   sit: { label:"Situations", one:"situation", many:"situations", card:"Dossier", bankTitle:"Les<br>dossiers",
@@ -52,13 +62,14 @@ function load(){
   if(!st.dancers) st.dancers = EXAMPLE_DANCERS.slice();
   // Nouvelle liste officielle : on remplace les anciens exemples, et on garde les danseurs ajoutés à la main
   if((st.dancersVersion || 1) < DANCERS_VERSION){
-    const renamed = ["roehka", "rrubix"]; // anciennes orthographes, remplacées par Rochka et Rubix
+    const renamed = ["roehka", "rrubix", "demannotche"]; // anciennes orthographes, remplacées par Rochka, Rubix et Delannotche
     const mine = st.dancers.filter(d => !d.ex && !renamed.includes(d.text.toLowerCase()) && !DANCER_NAMES.some(n => n.toLowerCase() === d.text.toLowerCase()));
     st.dancers = EXAMPLE_DANCERS.slice().concat(mine);
     st.dancersVersion = DANCERS_VERSION;
   }
   if(!st.mode) st.mode = "sit";
   if(st.bsize == null) st.bsize = 8;
+  if(!st.bcat) st.bcat = "all";
   return st;
 }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
@@ -130,6 +141,7 @@ const deckSize = () => Math.min(store.size || list().length, list().length);
 /* ---------- Accueil ---------- */
 function renderHome(){
   const exs = list().filter(q => q.ex).length, n = list().length, m = M();
+  const nb = battlePool(store.bcat, store.dancers.map(d => d.text)).length;
   app.innerHTML = `<section class="screen">
     <h1 class="title">Mafia<br><em>ou pas</em><br>mafia</h1>
     <p class="lead">${store.mode === "bat" ? "Le mode Battle : vos danseurs s'affrontent en tournoi, duel après duel, jusqu'à ce qu'il n'en reste qu'un." : "Chacun glisse les cartes en secret : à droite c'est mafia, à gauche ça passe. Ensuite on révèle les votes carte par carte, et chacun doit se justifier."}</p>
@@ -139,12 +151,16 @@ function renderHome(){
       `<button data-mode="${k}" aria-pressed="${store.mode === k}">${md.label}<br><small>${(k === "sit" ? store.bank : store.dancers).length} ${md.many}</small></button>`).join("")}</div>
     <p class="hint">${store.mode === "bat" ? "Un tournoi à élimination directe : à chaque duel, vous débattez et choisissez le meilleur des deux, jusqu'au champion." : store.mode === "dan" ? "Chaque carte est un danseur : est-il mafia ou pas mafia ?" : "Chaque carte est une situation : c'est mafia ou ça passe ?"}</p>
     ${store.mode === "bat" ? `
+    <h2 class="h2">Catégorie</h2>
+    <div class="seg" role="group" aria-label="Catégorie du battle">${Object.entries(BCATS).map(([k,c]) =>
+      `<button data-bcat="${k}" aria-pressed="${store.bcat === k}">${c.label}<br><small>${battlePool(k, store.dancers.map(d => d.text)).length} danseurs</small></button>`).join("")}</div>
     <h2 class="h2">Taille du tournoi</h2>
     <div class="seg four" role="group" aria-label="Nombre de danseurs dans le tournoi">${[[4,"4"],[8,"8"],[16,"16"],[0,"Tous"]].map(([k,l]) =>
-      `<button data-bsize="${k}" aria-pressed="${store.bsize === k}">${l}<br><small>${k ? roundName(k / 2) : n + " danseurs"}</small></button>`).join("")}</div>
+      `<button data-bsize="${k}" aria-pressed="${store.bsize === k}">${l}<br><small>${k ? roundName(k / 2) : nb + " danseurs"}</small></button>`).join("")}</div>
     <div class="stat"><span><strong>Danseurs prêts</strong><br><span class="hint">${exs ? `Dont ${exs} exemple${exs > 1 ? "s" : ""} à remplacer.` : "Tous ajoutés par vous."}</span></span><b>${n}</b></div>
     <button class="btn gold" id="bank">Préparer les danseurs</button>
-    <button class="btn main" id="start" ${n >= 2 ? "" : "disabled"}>Lancer le tournoi</button>
+    <p class="hint">Les catégories Hip hop et Popping prennent leurs danseurs dans cette liste. Un danseur ajouté à la main ne joue qu'en All style.</p>
+    <button class="btn main" id="start" ${nb >= 2 ? "" : "disabled"}>Lancer le tournoi</button>
   </section>` : `
     <h2 class="h2">Joueurs</h2>
     <ol class="players">${store.players.map((p,i) => `<li>
@@ -158,6 +174,7 @@ function renderHome(){
     <button class="btn gold" id="bank">Préparer les ${m.many}</button>
     <button class="btn main" id="start" ${n && players().length >= 2 ? "" : "disabled"}>Lancer la partie</button>
   </section>`}`;
+  $$("[data-bcat]").forEach(b => b.onclick = () => { store.bcat = b.dataset.bcat; save(); sfx.click(); render(); });
   $$("[data-bsize]").forEach(b => b.onclick = () => { store.bsize = +b.dataset.bsize; save(); sfx.click(); render(); });
   $$("input[data-i]").forEach(inp => inp.oninput = () => { store.players[+inp.dataset.i] = inp.value; save(); $("#start").disabled = !(n && players().length >= 2); });
   $$("[data-rm]").forEach(b => b.onclick = () => { if(store.players.length > 2){ store.players.splice(+b.dataset.rm, 1); save(); render(); } });
@@ -411,7 +428,7 @@ function renderReveal(){
 const roundName = n => ({ 1:"Finale", 2:"Demi-finales", 4:"Quarts de finale", 8:"Huitièmes de finale", 16:"Seizièmes de finale", 32:"32es de finale", 64:"64es de finale" })[n] || `Tour de ${n * 2}`;
 
 function startBattle(){
-  const all = shuffle(store.dancers.map(d => d.text));
+  const all = shuffle(battlePool(store.bcat, store.dancers.map(d => d.text)));
   const n = store.bsize ? Math.min(store.bsize, all.length) : all.length;
   const ent = all.slice(0, n);
   // Taille du tableau = puissance de 2 ; les places vides sont des exempts (qualifiés d'office)
@@ -420,7 +437,7 @@ function startBattle(){
   let k = 0;
   for(let i = 0; i < P / 2; i++) first.push(i < byes ? { a: ent[k++], b: null, w: null } : { a: ent[k++], b: ent[k++], w: null });
   const round = shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : x);
-  store.game = { mode:"bat", rounds:[round], r:0, m:0, step:"intro", hist:[] };
+  store.game = { mode:"bat", cat:store.bcat, rounds:[round], r:0, m:0, step:"intro", hist:[] };
   seek(); store.game.step = "intro";
   save(); screen = "game"; render();
 }
@@ -459,7 +476,7 @@ function renderBattleIntro(){
   const g = G(), cur = g.rounds[g.r], name = roundName(cur.length);
   const duels = cur.filter(x => !x.bye), byes = cur.filter(x => x.bye);
   app.innerHTML = `<section class="screen">
-    <p class="meta">Battle, tour ${g.r + 1} sur ${Math.log2(g.rounds[0].length) + 1}</p>
+    <p class="meta">Battle ${(BCATS[g.cat] || BCATS.all).label}, tour ${g.r + 1} sur ${Math.log2(g.rounds[0].length) + 1}</p>
     <h1 class="title">${name.replace(" ", "<br>")}</h1>
     <p class="lead">${cur.length === 1 ? "Plus que deux. Un seul repartira avec la couronne." : `${duels.length} duel${duels.length > 1 ? "s" : ""} au programme. Débattez, puis choisissez le gagnant de chaque duel.`}</p>
     <ol class="mlist">${duels.map(x => `<li><span>${esc(x.a)}</span><b>VS</b><span>${esc(x.b)}</span></li>`).join("")}</ol>
@@ -518,7 +535,7 @@ function renderChampion(){
   app.innerHTML = `<section class="screen">
     <div class="champ">
       <span class="crown" aria-hidden="true">♛</span>
-      <p class="meta">Champion du tournoi</p>
+      <p class="meta">Champion ${(BCATS[g.cat] || BCATS.all).label}</p>
       <h1 class="champ-name">${esc(champ)}</h1>
       <p class="hint">A battu ${esc(runner)} en finale.</p>
     </div>

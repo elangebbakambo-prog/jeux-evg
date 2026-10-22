@@ -79,3 +79,7 @@ body.has-play{ padding-bottom:84px; }
 .play-switch.todo{ background:var(--gold); color:var(--ink); animation:nudge 1.2s ease-in-out infinite; }
 @keyframes nudge{ 50%{ transform:translateX(-50%) scale(1.06); } }
 @media (prefers-reduced-motion: reduce){ .play-switch.todo{ animation:none; } }
+
+/* Révélation d'un duel : colonne « Égalité » au milieu */
+.who.three{ grid-template-columns:1fr .8fr 1fr; }
+.who .t h3{ color:var(--gold); } .who .t li{ background:rgba(242,193,78,.18); }
