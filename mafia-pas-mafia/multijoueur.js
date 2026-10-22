@@ -113,7 +113,7 @@ function connect(code, key, meta, onMsg, onPresence, onUp){
   });
   return true;
 }
-function send(payload){ if(channel) channel.send({ type: "broadcast", event: "msg", payload }); }
+function send(payload){ if(channel) channel.send({ type: "broadcast", event: "msg", payload }); if(role === "host") deliverLocal(payload); }
 function disconnect(){ if(channel && sb) sb.removeChannel(channel); channel = null; conn = "off"; paintConn(); }
 
 /* =========================================================
@@ -135,12 +135,12 @@ let role = null;
 function boot(){
   const h = read(HOST_KEY), me = read(ME_KEY), code = cleanCode(params.get("salle"));
   if(code){ role = "player"; P.code = code; P.name = (me && me.name) || ""; if(me && me.code === code && me.name){ joinRoom(); return; } renderJoin(); return; }
-  if(h && h.phase && h.phase !== "setup"){ role = "host"; H = h; connectHost(); renderHost(); return; }
+  if(h && h.phase && h.phase !== "setup"){ role = "host"; H = h; if(H.me){ P.id = H.me.id; P.code = H.code; P.name = H.me.name; } connectHost(); renderHost(); return; }
   if(me && me.code && me.name){ role = "player"; Object.assign(P, { code: me.code, name: me.name }); joinRoom(); return; }
   renderStart();
 }
 function renderStart(){
-  role = null;
+  role = null; if(typeof paintPlay === "function") paintPlay();
   app.innerHTML = `<section class="screen">
     <h1 class="title">Mafia<br><em>en ligne</em></h1>
     <p class="lead">Chacun vote en secret sur son propre téléphone, en même temps. L'écran hôte affiche ensuite les verdicts pour tout le monde.</p>
@@ -181,9 +181,9 @@ const broadcast = () => send(publicState());
 
 function connectHost(){
   const ok = connect(H.code, "host", { role: "host" }, onHostMsg, ps => {
-    online = new Set(Object.keys(ps).filter(k => k !== "host"));
+    online = new Set(Object.keys(ps).filter(k => k !== "host")); if(H && H.me) online.add(H.me.id);
     if(role === "host") renderHost();
-  }, () => broadcast());
+  }, () => { broadcast(); if(H.me) onHostMsg({ t: "hello", id: H.me.id, name: H.me.name }); });
   if(!ok) renderHost();
 }
 function onHostMsg(m){
@@ -225,10 +225,14 @@ function onHostMsg(m){
 let lastHostKey = null, hostEditing = false;
 function renderHost(){
   if(hostEditing) return hostSetupInRoom();
+  // Le jeu de l'hôte s'affiche seulement quand il a quelque chose à faire ; sinon, retour à l'écran hôte
+  if(!PLAY_PHASES.includes(H.phase)) view = "host";
+  if(view === "play" && hostPlays()){ renderPlayer(); return; }
   ({ setup: hostSetup, lobby: hostLobby, vote: hostVote, reveal: hostReveal, end: hostEnd,
      bintro: hostBatIntro, duel: hostDuel, dreveal: hostDuelReveal, champion: hostChampion })[H.phase]();
   const k = H.phase + (H.revealIdx || 0) + (H.bat ? duelKey() : "");
   if(k !== lastHostKey){ window.scrollTo(0, 0); lastHostKey = k; }
+  paintPlay();
 }
 
 // Réglages de la partie : mode, puis nombre de cartes ou taille du tournoi
@@ -282,7 +286,7 @@ function hostLobby(){
     </div>
     <h2 class="h2">${H.players.length} joueur${H.players.length > 1 ? "s" : ""} dans la salle</h2>
     <ul class="roster">${rosterHTML()}</ul>
-    <p class="hint">Cet écran sert d'écran de jeu. Pour voter aussi, rejoins la salle depuis ton téléphone.</p>
+    ${hostJoinHTML()}
     <button class="btn main" id="start" ${H.players.length >= 2 ? "" : "disabled"}>Lancer la partie</button>
     <button class="link" id="close">Fermer la salle</button>
   </section>`;
@@ -290,7 +294,7 @@ function hostLobby(){
   if(window.QRCode){ try{ new QRCode(qr, { text: joinUrl(), width: 180, height: 180, colorDark: "#160304", colorLight: "#FFFFFF" }); }catch(e){ qr.hidden = true; } } else qr.hidden = true;
   $$("[data-kick]").forEach(b => b.onclick = () => {
     const id = b.dataset.kick;
-    askConfirm(`Retirer ${playerName(id)} de la salle ?`, () => { H.players = H.players.filter(p => p.id !== id); delete H.votes[id]; send({ t: "kick", to: id }); saveH(); broadcast(); renderHost(); }, "Retirer");
+    askConfirm(`Retirer ${playerName(id)} de la salle ?`, () => { if(H.me && H.me.id === id) H.me = null; H.players = H.players.filter(p => p.id !== id); delete H.votes[id]; send({ t: "kick", to: id }); saveH(); broadcast(); renderHost(); }, "Retirer");
   });
   $("#start").onclick = () => {
     if(H.mode === "bat"){ startBattleH(); return; }
@@ -301,6 +305,7 @@ function hostLobby(){
     saveH(); broadcast(); sfx.reveal(); renderHost();
   };
   $("#close").onclick = closeRoom;
+  bindHostJoin();
 }
 function closeRoom(){
   askConfirm("Fermer la salle ? Les joueurs seront déconnectés.", () => { send({ t: "closed" }); disconnect(); H = null; write(HOST_KEY, null); renderStart(); }, "Fermer la salle");
@@ -607,7 +612,7 @@ function joinRoom(){
   renderPlayer();
   const ok = connect(P.code, P.id, { role: "player", name: P.name }, onPlayerMsg, ps => {
     P.hostOnline = !!ps.host; renderPlayer();
-  }, () => send({ t: "hello", id: P.id, name: P.name }));
+  }, () => sendP({ t: "hello", id: P.id, name: P.name }));
   if(!ok){ P.msg = "Connexion impossible. Vérifie ta connexion internet, puis réessaie."; renderJoin(); return; }
   clearTimeout(waitTimer);
   waitTimer = setTimeout(() => { P.waited = true; if(!P.st) renderPlayer(); }, 6000);
@@ -619,6 +624,7 @@ function leaveRoom(msg){
   renderJoin();
 }
 function onPlayerMsg(m){
+  if(role === "host" && !hostPlays()) return;
   if(m.to && m.to !== P.id) return;
   if(m.t === "state"){
     const first = !P.st;
@@ -639,6 +645,7 @@ function onPlayerMsg(m){
 
 let lastPlayerKey = null;
 function renderPlayer(){
+  if(role === "host" && view !== "play"){ paintPlay(); return; }
   const st = P.st;
   if(!st || !st.phase) playerWaiting();
   else if(st.phase === "lobby") playerLobby();
@@ -651,9 +658,10 @@ function renderPlayer(){
   else playerEnd();
   const k = (st ? st.phase : "") + P.votes.length + (st && st.reveal ? st.reveal.i : "") + (st && st.duel ? st.duel.key : "") + (P.dv && P.dv.side ? "v" : "");
   if(k !== lastPlayerKey){ window.scrollTo(0, 0); lastPlayerKey = k; }
+  paintPlay();
 }
 const leaveLink = `<button class="link" id="leave">Quitter la salle</button>`;
-function bindLeave(){ const l = $("#leave"); if(l) l.onclick = () => askConfirm("Quitter la salle ?", () => { send({ t: "leave", id: P.id }); leaveRoom(); }, "Quitter"); }
+function bindLeave(){ const l = $("#leave"); if(l && role === "host"){ l.remove(); return; } if(l) l.onclick = () => askConfirm("Quitter la salle ?", () => { sendP({ t: "leave", id: P.id }); leaveRoom(); }, "Quitter"); }
 
 function playerWaiting(){
   const late = P.waited && conn === "on" && !P.hostOnline;
@@ -710,7 +718,7 @@ function playerSwipe(){
     if(done) return; done = true;
     mafia ? sfx.mafia() : sfx.clean();
     P.votes.push(mafia);
-    send({ t: "vote", id: P.id, i, v: mafia });
+    sendP({ t: "vote", id: P.id, i, v: mafia });
     if(reduce()){ renderPlayer(); return; }
     card.style.transition = "transform .35s ease-in";
     dx = (mafia ? 1 : -1) * window.innerWidth * 1.2; paint();
@@ -733,7 +741,7 @@ function playerSwipe(){
 }
 function undoMine(){
   if(!P.votes.length) return;
-  P.votes.pop(); send({ t: "undo", id: P.id, i: P.votes.length });
+  P.votes.pop(); sendP({ t: "undo", id: P.id, i: P.votes.length });
   sfx.click(); renderPlayer();
 }
 function playerDone(){
@@ -779,7 +787,7 @@ function playerBatIntro(){
 }
 function sendDuelVote(side){
   P.dv = { key: P.st.duel.key, side };
-  send({ t: "dvote", id: P.id, key: P.st.duel.key, side });
+  sendP({ t: "dvote", id: P.id, key: P.st.duel.key, side });
 }
 function playerDuel(){
   const d = P.st.duel;
@@ -814,7 +822,7 @@ function playerDuelDone(){
     <button class="undo-btn" id="change"><span aria-hidden="true">↶</span> Changer mon vote</button>
     ${leaveLink}
   </section>`;
-  $("#change").onclick = () => { P.dv.side = null; send({ t: "dvote", id: P.id, key: d.key, side: null }); sfx.click(); renderPlayer(); };
+  $("#change").onclick = () => { P.dv.side = null; sendP({ t: "dvote", id: P.id, key: d.key, side: null }); sfx.click(); renderPlayer(); };
   bindLeave();
 }
 function playerDuelReveal(){
@@ -846,6 +854,41 @@ function playerEnd(){
     ${leaveLink}
   </section>`;
   bindLeave();
+}
+
+/* =========================================================
+   L'hôte joue aussi, sur le même écran
+   Ses actions de joueur vont directement à l'hôte, sans passer par internet,
+   et ce que l'hôte envoie aux joueurs lui est aussi livré.
+   ========================================================= */
+let view = "host";
+const PLAY_PHASES = ["vote", "duel"]; // phases où les joueurs agissent sur leur téléphone
+const hostPlays = () => role === "host" && !!H && !!H.me;
+function sendP(m){ if(role === "host"){ if(hostPlays()) setTimeout(() => onHostMsg(m), 0); } else send(m); }
+function deliverLocal(payload){ if(hostPlays()){ const copy = JSON.parse(JSON.stringify(payload)); setTimeout(() => { if(hostPlays()) onPlayerMsg(copy); }, 0); } }
+const myTurn = () => !!P.st && ((P.st.phase === "vote" && P.votes.length < (P.st.cards || []).length) || (P.st.phase === "duel" && !(P.dv && P.dv.side)));
+const playBtn = document.createElement("button");
+playBtn.className = "play-switch"; playBtn.hidden = true;
+document.body.appendChild(playBtn);
+playBtn.onclick = () => { view = view === "play" ? "host" : "play"; sfx.click(); lastHostKey = lastPlayerKey = null; view === "play" ? renderPlayer() : renderHost(); };
+function paintPlay(){
+  const on = hostPlays() && PLAY_PHASES.includes(H.phase);
+  playBtn.hidden = !on; document.body.classList.toggle("has-play", on);
+  if(!on) return;
+  const todo = view === "host" && myTurn();
+  playBtn.textContent = view === "play" ? "Retour à l'écran hôte" : todo ? "À toi de jouer !" : "Voir mon jeu";
+  playBtn.classList.toggle("todo", todo);
+}
+const hostJoinHTML = () => H.me
+  ? `<p class="hint">Tu joues aussi, en tant que <strong>${esc(H.me.name)}</strong>. Pendant la partie, le bouton en bas de l'écran passe de l'écran hôte à ton jeu. <button class="link" id="unjoin">Ne plus jouer</button></p>`
+  : `<form class="host-join" id="hj" novalidate><input class="field solo" id="hjName" maxlength="24" autocomplete="given-name" placeholder="Ton prénom" aria-label="Ton prénom"><button class="btn gold" type="submit">Je joue aussi</button></form>
+     <p class="hint">Tu peux jouer depuis cet écran, ou rejoindre avec un autre téléphone.</p>`;
+function bindHostJoin(){
+  const f = $("#hj");
+  if(f) f.onsubmit = e => { e.preventDefault(); const name = $("#hjName").value.trim().slice(0, 24); if(!name) return;
+    H.me = { id: P.id, name }; online.add(P.id); P.code = H.code; P.name = name; P.st = null; saveH(); onHostMsg({ t: "hello", id: P.id, name }); };
+  const u = $("#unjoin");
+  if(u) u.onclick = () => { const id = H.me.id; H.me = null; H.players = H.players.filter(p => p.id !== id); saveH(); broadcast(); renderHost(); };
 }
 
 boot();

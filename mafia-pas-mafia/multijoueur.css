@@ -67,3 +67,15 @@
 .score-line{ color:var(--gold); }
 @keyframes popin{ from{ transform:scale(.85); opacity:0; } to{ transform:none; opacity:1; } }
 @media (prefers-reduced-motion: reduce){ .big-reveal, .who li.pop{ animation:none; } }
+
+/* L'hôte joue aussi : formulaire du lobby et bouton pour passer de l'écran hôte à son jeu */
+.host-join{ display:flex; gap:8px; align-items:stretch; }
+.host-join input{ flex:1; min-width:0; }
+.host-join .btn{ width:auto; flex:0 0 auto; padding-left:16px; padding-right:16px; }
+body.has-play{ padding-bottom:84px; }
+.play-switch{ position:fixed; left:50%; transform:translateX(-50%); bottom:calc(14px + env(safe-area-inset-bottom,0px)); z-index:15;
+  border:2px solid var(--gold); border-radius:999px; padding:12px 22px; font-weight:800; font-size:1rem; white-space:nowrap;
+  background:rgba(22,3,4,.92); color:var(--gold); box-shadow:0 8px 24px rgba(0,0,0,.5); }
+.play-switch.todo{ background:var(--gold); color:var(--ink); animation:nudge 1.2s ease-in-out infinite; }
+@keyframes nudge{ 50%{ transform:translateX(-50%) scale(1.06); } }
+@media (prefers-reduced-motion: reduce){ .play-switch.todo{ animation:none; } }
