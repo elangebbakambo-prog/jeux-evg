@@ -29,7 +29,13 @@ const BCATS = {
 };
 // Danseurs du tournoi selon la catégorie, parmi la liste de « Préparer »
 const battlePool = (cat, names) => { const c = BCATS[cat] || BCATS.all; if(!c.names) return names; const set = new Set(c.names.map(n => n.toLowerCase())); return names.filter(n => set.has(n.toLowerCase())); };
-const DANCERS_VERSION = 5; // à augmenter pour remplacer la liste enregistrée sur les téléphones
+const DANCERS_VERSION = 5;
+// Formats d'un duel du Battle
+const BFMTS = {
+  one:     { label:"1 passage",  hint:"Chaque danseur passe une fois, puis vous choisissez le gagnant." },
+  three:   { label:"3 passages", hint:"Vous désignez le gagnant de chaque passage. Après les 3 passages, celui qui en a pris le plus se qualifie (2-1 ou 3-0)." },
+  callout: { label:"Call out",   hint:"Les deux enchaînent jusqu'à ce que l'un n'ait plus rien. Touchez celui qui abandonne : l'autre se qualifie." }
+}; // à augmenter pour remplacer la liste enregistrée sur les téléphones
 const EXAMPLE_DANCERS = DANCER_NAMES.map(text => ({ text }));
 const MODES = {
   sit: { label:"Situations", one:"situation", many:"situations", card:"Dossier", bankTitle:"Les<br>dossiers",
@@ -70,6 +76,7 @@ function load(){
   if(!st.mode) st.mode = "sit";
   if(st.bsize == null) st.bsize = 8;
   if(!st.bcat) st.bcat = "all";
+  if(!st.bfmt) st.bfmt = "one";
   return st;
 }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(store)); }catch(e){} }
@@ -154,6 +161,10 @@ function renderHome(){
     <h2 class="h2">Catégorie</h2>
     <div class="seg" role="group" aria-label="Catégorie du battle">${Object.entries(BCATS).map(([k,c]) =>
       `<button data-bcat="${k}" aria-pressed="${store.bcat === k}">${c.label}<br><small>${battlePool(k, store.dancers.map(d => d.text)).length} danseurs</small></button>`).join("")}</div>
+    <h2 class="h2">Format des duels</h2>
+    <div class="seg" role="group" aria-label="Format des duels">${Object.entries(BFMTS).map(([k,f]) =>
+      `<button data-bfmt="${k}" aria-pressed="${store.bfmt === k}">${f.label}</button>`).join("")}</div>
+    <p class="hint">${BFMTS[store.bfmt].hint}</p>
     <h2 class="h2">Taille du tournoi</h2>
     <div class="seg four" role="group" aria-label="Nombre de danseurs dans le tournoi">${[[4,"4"],[8,"8"],[16,"16"],[0,"Tous"]].map(([k,l]) =>
       `<button data-bsize="${k}" aria-pressed="${store.bsize === k}">${l}<br><small>${k ? roundName(k / 2) : nb + " danseurs"}</small></button>`).join("")}</div>
@@ -174,6 +185,7 @@ function renderHome(){
     <button class="btn gold" id="bank">Préparer les ${m.many}</button>
     <button class="btn main" id="start" ${n && players().length >= 2 ? "" : "disabled"}>Lancer la partie</button>
   </section>`}`;
+  $$("[data-bfmt]").forEach(b => b.onclick = () => { store.bfmt = b.dataset.bfmt; save(); sfx.click(); render(); });
   $$("[data-bcat]").forEach(b => b.onclick = () => { store.bcat = b.dataset.bcat; save(); sfx.click(); render(); });
   $$("[data-bsize]").forEach(b => b.onclick = () => { store.bsize = +b.dataset.bsize; save(); sfx.click(); render(); });
   $$("input[data-i]").forEach(inp => inp.oninput = () => { store.players[+inp.dataset.i] = inp.value; save(); $("#start").disabled = !(n && players().length >= 2); });
@@ -437,7 +449,7 @@ function startBattle(){
   let k = 0;
   for(let i = 0; i < P / 2; i++) first.push(i < byes ? { a: ent[k++], b: null, w: null } : { a: ent[k++], b: ent[k++], w: null });
   const round = shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : x);
-  store.game = { mode:"bat", cat:store.bcat, rounds:[round], r:0, m:0, step:"intro", hist:[] };
+  store.game = { mode:"bat", cat:store.bcat, fmt:store.bfmt, rounds:[round], r:0, m:0, step:"intro", hist:[] };
   seek(); store.game.step = "intro";
   save(); screen = "game"; render();
 }
@@ -451,9 +463,11 @@ function seek(){
   for(let j = 0; j < ws.length; j += 2) nx.push({ a: ws[j], b: ws[j + 1], w: null });
   g.rounds.push(nx); g.r++; g.m = 0; g.step = "intro";
 }
-function choose(side){
+function choose(side, score){
   const g = G(), x = g.rounds[g.r][g.m];
   x.w = side === "a" ? x.a : x.b;
+  if(score) x.score = score;
+  if(g.fmt === "callout") x.callout = true;
   g.hist.push([g.r, g.m]);
   seek(); save(); render();
   if(g.step === "champion") sfx.fanfare(); else if(g.step === "intro") sfx.reveal();
@@ -461,7 +475,7 @@ function choose(side){
 function undoBattle(){
   const g = G(), h = g.hist.pop(); if(!h) return;
   const [r, m] = h;
-  g.rounds.length = r + 1; g.rounds[r][m].w = null;
+  g.rounds.length = r + 1; g.rounds[r][m].w = null; delete g.rounds[r][m].score; delete g.rounds[r][m].pass; delete g.rounds[r][m].callout;
   g.r = r; g.m = m; g.step = "duel";
   save(); sfx.click(); render();
 }
@@ -476,7 +490,7 @@ function renderBattleIntro(){
   const g = G(), cur = g.rounds[g.r], name = roundName(cur.length);
   const duels = cur.filter(x => !x.bye), byes = cur.filter(x => x.bye);
   app.innerHTML = `<section class="screen">
-    <p class="meta">Battle ${(BCATS[g.cat] || BCATS.all).label}, tour ${g.r + 1} sur ${Math.log2(g.rounds[0].length) + 1}</p>
+    <p class="meta">Battle ${(BCATS[g.cat] || BCATS.all).label}, ${BFMTS[g.fmt || "one"].label.toLowerCase()}, tour ${g.r + 1} sur ${Math.log2(g.rounds[0].length) + 1}</p>
     <h1 class="title">${name.replace(" ", "<br>")}</h1>
     <p class="lead">${cur.length === 1 ? "Plus que deux. Un seul repartira avec la couronne." : `${duels.length} duel${duels.length > 1 ? "s" : ""} au programme. Débattez, puis choisissez le gagnant de chaque duel.`}</p>
     <ol class="mlist">${duels.map(x => `<li><span>${esc(x.a)}</span><b>VS</b><span>${esc(x.b)}</span></li>`).join("")}</ol>
@@ -494,7 +508,53 @@ const fighter = (name, side) => `<button class="fighter" data-side="${side}" ari
   <span class="f-mono" aria-hidden="true">${esc([...name][0] || "?")}</span>
   <span class="f-name">${esc(name)}<small>Touche pour le qualifier</small></span></button>`;
 
+// 3 passages : on désigne le gagnant de chaque passage, puis le duel se joue au total
+function renderPasses(){
+  const g = G(), cur = g.rounds[g.r], x = cur[g.m], real = cur.filter(y => !y.bye), num = real.indexOf(x) + 1;
+  const pass = x.pass || (x.pass = []), k = pass.length, A = pass.filter(p => p === "a").length, B = k - A;
+  app.innerHTML = `<section class="screen">
+    <header class="bar"><span>${roundName(cur.length)}</span><span>${cur.length === 1 ? "Le duel final" : `Duel ${num} sur ${real.length}`}</span></header>
+    <p class="meta center">Passage ${Math.min(k + 1, 3)} sur 3</p>
+    <div class="duel">${fighter(x.a, "a")}<span class="vs" aria-hidden="true">${A}-${B}</span>${fighter(x.b, "b")}</div>
+    <p class="hint center">Débattez, puis touchez le gagnant de ce passage.</p>
+    ${k ? `<button class="link" id="unpass">Annuler le dernier passage</button>` : ""}
+    ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier duel</button>` : ""}
+    <button class="link" id="quit">Arrêter le tournoi</button>
+  </section>`;
+  $$(".fighter small").forEach(el => el.textContent = "Gagne ce passage");
+  $$("[data-side]").forEach(b => b.onclick = () => {
+    pass.push(b.dataset.side); sfx.swipe(); save();
+    if(pass.length < 3){ render(); return; }
+    const a = pass.filter(p => p === "a").length, side = a >= 2 ? "a" : "b";
+    $(`[data-side="${side}"]`).classList.add("win"); $(`[data-side="${side === "a" ? "b" : "a"}"]`).classList.add("lose"); sfx.mafia();
+    setTimeout(() => choose(side, { a, b: 3 - a }), reduce() ? 0 : 650);
+  });
+  const up = $("#unpass"); if(up) up.onclick = () => { pass.pop(); save(); sfx.click(); render(); };
+  const u = $("#undo"); if(u) u.onclick = undoBattle;
+  $("#quit").onclick = quitBattle;
+}
+// Call out : on touche celui qui n'a plus rien
+function renderCallout(){
+  const g = G(), cur = g.rounds[g.r], x = cur[g.m], real = cur.filter(y => !y.bye), num = real.indexOf(x) + 1;
+  app.innerHTML = `<section class="screen">
+    <header class="bar"><span>${roundName(cur.length)}</span><span>${cur.length === 1 ? "La finale" : `Duel ${num} sur ${real.length}`}, call out</span></header>
+    <div class="duel">${fighter(x.a, "a")}<span class="vs" aria-hidden="true">VS</span>${fighter(x.b, "b")}</div>
+    <p class="hint center">Envoyez sans vous arrêter. Touchez celui qui n'a plus rien : l'autre se qualifie.</p>
+    ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier duel</button>` : ""}
+    <button class="link" id="quit">Arrêter le tournoi</button>
+  </section>`;
+  $$(".fighter small").forEach(el => el.textContent = "Touche s'il n'a plus rien");
+  $$("[data-side]").forEach(b => b.onclick = () => {
+    const out = b.dataset.side, win = out === "a" ? "b" : "a";
+    b.classList.add("lose"); $(`[data-side="${win}"]`).classList.add("win"); sfx.mafia();
+    setTimeout(() => choose(win), reduce() ? 0 : 650);
+  });
+  const u = $("#undo"); if(u) u.onclick = undoBattle;
+  $("#quit").onclick = quitBattle;
+}
 function renderDuel(){
+  if(G().fmt === "three") return renderPasses();
+  if(G().fmt === "callout") return renderCallout();
   const g = G(), cur = g.rounds[g.r], x = cur[g.m];
   const real = cur.filter(y => !y.bye), num = real.indexOf(x) + 1;
   app.innerHTML = `<section class="screen">
@@ -537,12 +597,12 @@ function renderChampion(){
       <span class="crown" aria-hidden="true">♛</span>
       <p class="meta">Champion ${(BCATS[g.cat] || BCATS.all).label}</p>
       <h1 class="champ-name">${esc(champ)}</h1>
-      <p class="hint">A battu ${esc(runner)} en finale.</p>
+      <p class="hint">A battu ${esc(runner)} en finale${fin.score ? `, ${Math.max(fin.score.a, fin.score.b)} passages à ${Math.min(fin.score.a, fin.score.b)}` : fin.callout ? ", en call out" : ""}.</p>
     </div>
     <h2 class="h2">Le tableau</h2>
     <div class="bracket">${g.rounds.map(rd => `<section><h3>${roundName(rd.length)}</h3><ul>${rd.map(x => x.bye
         ? `<li><span class="w">${esc(x.a)}</span><span class="q">qualifié d'office</span></li>`
-        : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(x.a)}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(x.b)}</span></li>`).join("")}</ul></section>`).join("")}</div>
+        : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(x.a)}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(x.b)}</span>${x.score ? `<span class="q">${x.score.a}-${x.score.b}</span>` : x.callout ? `<span class="q">call out</span>` : ""}</li>`).join("")}</ul></section>`).join("")}</div>
     <button class="btn main" id="again">Nouveau tournoi</button>
     <button class="link" id="undo">Annuler le dernier choix</button>
     <button class="btn ghost" id="home">Retour à l'accueil</button>
