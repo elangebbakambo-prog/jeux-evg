@@ -116,13 +116,21 @@ window.Musique = (() => {
     });
     return apiP;
   }
+  // Sur téléphone (iPhone surtout), le son d'un lecteur intégré ne démarre que si on touche Lecture
+  // dans le lecteur lui-même : on y affiche donc le vrai lecteur SoundCloud.
+  const TOUCH = matchMedia("(pointer: coarse)").matches;
   function style(){
     if(document.getElementById("mus-style")) return;
     const st = document.createElement("style"); st.id = "mus-style";
     st.textContent = `
-.mus-dock{ position:fixed; left:0; right:0; bottom:0; z-index:14; display:flex; align-items:center; gap:10px; padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));
+.mus-dock{ position:fixed; left:0; right:0; bottom:0; z-index:14; display:flex; flex-direction:column; gap:8px; padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));
   background:rgba(22,3,4,.96); border-top:2px solid var(--gold,#F2C14E); color:var(--paper,#F5EBDD); box-shadow:0 -8px 24px rgba(0,0,0,.45); }
 .mus-dock[hidden]{ display:none; }
+.mus-bar{ display:flex; align-items:center; gap:10px; }
+.mus-holder:empty{ display:none; }
+.mus-dock.tall .mus-frame{ position:static; width:100%; height:120px; opacity:1; pointer-events:auto; border-radius:8px; }
+body.has-music.mus-tall{ padding-bottom:214px; }
+body.has-music.mus-tall .play-switch{ bottom:calc(218px + env(safe-area-inset-bottom,0px)); }
 .mus-ico{ flex:0 0 auto; width:38px; height:38px; border-radius:50%; display:grid; place-items:center; background:var(--red,#E1192B); font-weight:800; }
 .mus-dock.on .mus-ico{ animation:musPulse 1s ease-in-out infinite; }
 @keyframes musPulse{ 50%{ transform:scale(1.12); } }
@@ -144,15 +152,18 @@ body.has-music .play-switch{ bottom:calc(84px + env(safe-area-inset-bottom,0px))
     style();
     dock = document.createElement("div");
     dock.className = "mus-dock"; dock.hidden = true; dock.setAttribute("role", "region"); dock.setAttribute("aria-label", "Musique du battle");
+    dock.innerHTML = `<div class="mus-bar"></div><div class="mus-holder"></div>`;
     document.body.appendChild(dock);
   }
   function paint(){
     if(!dock) return;
     const len = load().len;
-    const sub = state === "loading" ? "Chargement…" : state === "error" ? "Lecture impossible : vérifie le lien de la playlist" :
+    const sub = state === "loading" ? (TOUCH && iframe ? "Touche ▶ dans le lecteur juste en dessous" : "Chargement…") : state === "error" ? "Lecture impossible : vérifie le lien de la playlist" :
       state === "playing" ? (len ? `Extrait de ${len >= 60 ? len / 60 + " min" : len + " s"}` : "Morceau entier") : state === "done" ? "Extrait terminé" : CATS[cat] || "";
-    dock.className = "mus-dock" + (state === "playing" ? " on" : "");
-    dock.innerHTML = `<span class="mus-ico" aria-hidden="true">♪</span>
+    const tall = TOUCH && !!iframe;
+    dock.className = "mus-dock" + (state === "playing" ? " on" : "") + (tall ? " tall" : "");
+    document.body.classList.toggle("mus-tall", tall && !dock.hidden);
+    dock.querySelector(".mus-bar").innerHTML = `<span class="mus-ico" aria-hidden="true">♪</span>
       <span class="mus-txt"><b>${state === "idle" ? "Musique du duel" : esc(title || "…")}</b><small>${esc(sub)}</small></span>
       <span class="mus-btns">${state === "playing" ? `<button data-m="stop">Stop</button><button data-m="next" class="main">Autre son</button>`
         : state === "idle" ? `<button data-m="draw" class="main">Tirer un son</button>`
@@ -167,17 +178,18 @@ body.has-music .play-switch{ bottom:calc(84px + env(safe-area-inset-bottom,0px))
     const link = linkFor(cat);
     if(!link){ title = ""; setState("error"); return; }
     clearTimers(); setState("loading");
-    errTimer = setTimeout(() => { if(state === "loading") setState("error"); }, 12000);
+    // Sans lecture au bout de 12 s : sur ordi, le navigateur a sans doute bloqué le son, on repropose le bouton
+    errTimer = setTimeout(() => { if(state === "loading" && !TOUCH){ title = ""; setState("idle"); } }, 12000);
     api().then(() => {
       if(!iframe){
         iframe = document.createElement("iframe");
         iframe.className = "mus-frame"; iframe.allow = "autoplay"; iframe.title = "Lecteur SoundCloud";
         iframe.src = "https://w.soundcloud.com/player/?url=" + encodeURIComponent(link) + "&auto_play=false&visual=false&show_comments=false&hide_related=true&sharing=false&buying=false&download=false";
-        document.body.appendChild(iframe);
+        dock.querySelector(".mus-holder").appendChild(iframe);
         curLink = link;
         widget = window.SC.Widget(iframe);
         const E = window.SC.Widget.Events;
-        widget.bind(E.READY, () => { if(pending) pickAndPlay(); });
+        widget.bind(E.READY, () => { paint(); if(pending) pickAndPlay(); });
         pending = true;
         widget.bind(E.PLAY, onPlay);
         widget.bind(E.FINISH, () => { if(playing){ playing = false; setState("done"); } });
@@ -224,15 +236,18 @@ body.has-music .play-switch{ bottom:calc(84px + env(safe-area-inset-bottom,0px))
   function show(category, key){
     if(!configured()){ hide(); return; }
     build();
-    if(key !== lastKey){ if(widget && playing) widget.pause(); clearTimers(); playing = false; title = ""; state = "idle"; lastKey = key; }
+    const fresh = key !== lastKey;
+    if(fresh){ if(widget && playing) widget.pause(); clearTimers(); playing = false; title = ""; state = "idle"; lastKey = key; }
     cat = category || "all";
     dock.hidden = false; document.body.classList.add("has-music");
     paint();
+    // Nouveau duel : le son part tout seul (sur téléphone, il reste à toucher ▶ dans le lecteur)
+    if(fresh) setTimeout(() => { if(lastKey === key && state === "idle" && !dock.hidden) draw(); }, 300);
   }
   function hide(){
     if(!dock || dock.hidden) return;
     clearTimers(); if(widget && playing) widget.pause(); playing = false;
-    dock.hidden = true; document.body.classList.remove("has-music");
+    dock.hidden = true; document.body.classList.remove("has-music", "mus-tall");
   }
   return { settingsHTML, bindSettings, show, hide, configured };
 })();
