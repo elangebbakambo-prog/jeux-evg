@@ -51,6 +51,13 @@ const write = (k, v) => { try{ v == null ? localStorage.removeItem(k) : localSto
 const newId = () => Math.random().toString(36).slice(2, 10);
 const newCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("");
 const cleanCode = s => String(s || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+const keepFocus = draw => {
+  const a = document.activeElement, id = a && a.tagName === "INPUT" && a.id && app.contains(a) ? a.id : null;
+  const v = id ? a.value : "", s = id ? a.selectionStart : 0, e = id ? a.selectionEnd : 0;
+  draw();
+  const b = id ? document.getElementById(id) : null;
+  if(b && b !== a){ b.value = v; b.focus({ preventScroll: true }); b.setSelectionRange(s, e); }
+};
 
 function askConfirm(text, onYes, yes = "Oui", no = "Annuler"){
   const box = document.createElement("div"); box.className = "ov";
@@ -251,7 +258,7 @@ function onHostMsg(m){
 }
 
 let lastHostKey = null, hostEditing = false;
-function renderHost(){
+function renderHost(){ keepFocus(() => {
   if(hostEditing) return hostSetupInRoom();
   // Le jeu de l'hôte s'affiche seulement quand il a quelque chose à faire ; sinon, retour à l'écran hôte
   if(!PLAY_PHASES.includes(H.phase)) view = "host";
@@ -263,7 +270,7 @@ function renderHost(){
   paintPlay();
   // Musique du battle : barre en bas de l'écran hôte pendant le duel et sa révélation
   if(window.Musique){ if(H.bat && ["duel", "dreveal"].includes(H.phase) && !hostEditing) Musique.show(H.bat.cat, duelKey() + (fmtOf() === "three" ? "-p" + (H.bat.pass || 1) : "")); else Musique.hide(); }
-}
+}); }
 
 // Réglages de la partie : mode, puis nombre de cartes ou taille du tournoi
 function settingsHTML(L){

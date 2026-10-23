@@ -20,6 +20,13 @@ const newId = () => Math.random().toString(36).slice(2, 10);
 const newCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("");
 const cleanCode = s => String(s || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
 const emptyTeam = () => Object.fromEntries(CATS.map(c => [c.id, []]));
+const keepFocus = draw => {
+  const a = document.activeElement, id = a && a.tagName === "INPUT" && a.id && app.contains(a) ? a.id : null;
+  const v = id ? a.value : "", s = id ? a.selectionStart : 0, e = id ? a.selectionEnd : 0;
+  draw();
+  const b = id ? document.getElementById(id) : null;
+  if(b && b !== a){ b.value = v; b.focus({ preventScroll: true }); b.setSelectionRange(s, e); }
+};
 // Les fonctions de script.js lisent S (malus « stats cachées », nom du marié, nombre de tours)
 const setLib = (o) => { S = Object.assign({ blindNow: false, groom: "", rounds: ROUNDS }, o); };
 setLib({});
@@ -167,7 +174,7 @@ function onHostMsg(m){
   }
 }
 
-function renderHost(){
+function renderHost(){ keepFocus(() => {
   // Le jeu de l'hôte s'affiche seulement quand il a quelque chose à faire ; sinon, retour à l'écran hôte
   if(!PLAY_PHASES.includes(H.phase)) view = "host";
   if(view === "play" && hostPlays()){ myTurn() ? paintPlay() : renderPlayer(); return; }
@@ -177,7 +184,7 @@ function renderHost(){
   const k = H.phase + (H.round || 0) + "-" + (H.revealIdx || 0) + "-" + (H.elect ? H.elect.idx : 0) + "-" + (H.startSpin ? H.startSpin.idx : 0) + "-" + (H.spin ? H.spin.stage : 0);
   if(k !== lastHostKey){ window.scrollTo(0, 0); lastHostKey = k; }
   paintPlay();
-}
+}); }
 function closeRoom(){
   askConfirm("Fermer la salle ? La partie sera perdue et les joueurs déconnectés.", () => { send({ t: "closed" }); disconnect(); H = null; write(HOST_KEY, null); renderStart(); }, "Fermer la salle");
 }
