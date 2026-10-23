@@ -118,7 +118,9 @@ window.Musique = (() => {
   }
   // Sur téléphone (iPhone surtout), le son d'un lecteur intégré ne démarre que si on touche Lecture
   // dans le lecteur lui-même : on y affiche donc le vrai lecteur SoundCloud.
-  const TOUCH = matchMedia("(pointer: coarse)").matches;
+  // Pareil pour Safari (Mac et iPhone), qui bloque le son d'un lecteur caché.
+  const SAFARI = /^((?!chrome|chromium|crios|android|edg).)*safari/i.test(navigator.userAgent);
+  const TOUCH = matchMedia("(pointer: coarse)").matches || SAFARI;
   function style(){
     if(document.getElementById("mus-style")) return;
     const st = document.createElement("style"); st.id = "mus-style";
