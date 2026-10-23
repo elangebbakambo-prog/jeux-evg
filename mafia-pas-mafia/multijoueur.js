@@ -222,7 +222,8 @@ function connectHost(){
   if(!ok) renderHost();
 }
 function onHostMsg(m){
-  if(!H || !m.id) return;
+  // Ids become object keys: anything but a newId() string (e.g. "__proto__") would pollute prototypes
+  if(!H || typeof m.id !== "string" || !/^[a-z0-9]{1,8}$/.test(m.id)) return;
   if(m.t === "hello"){
     const name = String(m.name || "").trim().slice(0, 24) || "Joueur";
     const p = H.players.find(x => x.id === m.id);
