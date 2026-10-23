@@ -255,7 +255,7 @@ function renderHost(){
   if(hostEditing) return hostSetupInRoom();
   // Le jeu de l'hôte s'affiche seulement quand il a quelque chose à faire ; sinon, retour à l'écran hôte
   if(!PLAY_PHASES.includes(H.phase)) view = "host";
-  if(view === "play" && hostPlays()){ renderPlayer(); return; }
+  if(view === "play" && hostPlays()){ swiping() ? paintPlay() : renderPlayer(); return; }
   ({ setup: hostSetup, lobby: hostLobby, vote: hostVote, reveal: hostReveal, end: hostEnd,
      bintro: hostBatIntro, duel: hostDuel, dreveal: hostDuelReveal, champion: hostChampion })[H.phase]();
   const k = H.phase + (H.revealIdx || 0) + (H.bat ? duelKey() : "");
@@ -685,6 +685,7 @@ const P = { id: null, code: "", name: "", st: null, votes: [], sig: "", hostOnli
 { const me = read(ME_KEY); P.id = (me && me.id) || newId(); }
 const saveMe = () => write(ME_KEY, { id: P.id, code: P.code, name: P.name });
 const sigOf = cards => (cards || []).join("|");
+const swiping = () => !!P.st && P.st.phase === "vote" && P.votes.length < (P.st.cards || []).length;
 let waitTimer = null;
 
 function renderJoin(){
@@ -714,7 +715,7 @@ function joinRoom(){
   history.replaceState(null, "", location.pathname + "?salle=" + P.code);
   renderPlayer();
   const ok = connect(P.code, P.id, { role: "player", name: P.name }, onPlayerMsg, ps => {
-    P.hostOnline = !!ps.host; renderPlayer();
+    P.hostOnline = !!ps.host; if(!swiping()) renderPlayer();
   }, () => sendP({ t: "hello", id: P.id, name: P.name }));
   if(!ok){ P.msg = "Connexion impossible. Vérifie ta connexion internet, puis réessaie."; renderJoin(); return; }
   clearTimeout(waitTimer);
@@ -730,11 +731,13 @@ function onPlayerMsg(m){
   if(role === "host" && !hostPlays()) return;
   if(m.to && m.to !== P.id) return;
   if(m.t === "state"){
-    const first = !P.st;
+    const first = !P.st, was = swiping(), sig = P.sig;
     P.st = m;
     if(m.phase === "vote"){ const s = sigOf(m.cards); if(s !== P.sig){ P.sig = s; P.votes = []; } }
     if(m.duel && (!P.dv || P.dv.key !== m.duel.key)) P.dv = { key: m.duel.key, side: null };
     if(first) sfx.join();
+    // playerSwipe must not show anything other players change: re-rendering it here cancels an in-progress drag
+    if(was && swiping() && m.phase === "vote" && sigOf(m.cards) === sig){ paintPlay(); return; }
     renderPlayer(); return;
   }
   if(m.t === "resume"){

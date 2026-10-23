@@ -170,7 +170,7 @@ function onHostMsg(m){
 function renderHost(){
   // Le jeu de l'hôte s'affiche seulement quand il a quelque chose à faire ; sinon, retour à l'écran hôte
   if(!PLAY_PHASES.includes(H.phase)) view = "host";
-  if(view === "play" && hostPlays()){ renderPlayer(); return; }
+  if(view === "play" && hostPlays()){ myTurn() ? paintPlay() : renderPlayer(); return; }
   setLib({ groom: H.groom, rounds: H.rounds });
   ({ setup: hostSetup, lobby: hostLobby, startSpin: hostStartSpin, draft: hostDraft, show: hostShow, spin: hostSpin,
      revealTeams: hostRevealHandoff, reveal: hostReveal, election: hostElection, final: hostFinal })[H.phase]();
@@ -477,7 +477,7 @@ function joinRoom(){
   role = "player"; saveMe(); P.st = null; P.waited = false;
   history.replaceState(null, "", location.pathname + "?salle=" + P.code);
   renderPlayer();
-  const ok = connect(P.code, P.id, { role: "player", name: P.name }, onPlayerMsg, ps => { P.hostOnline = !!ps.host; renderPlayer(); },
+  const ok = connect(P.code, P.id, { role: "player", name: P.name }, onPlayerMsg, ps => { P.hostOnline = !!ps.host; if(!myTurn()) renderPlayer(); },
     () => sendP({ t: "hello", id: P.id, name: P.name }));
   if(!ok){ P.msg = "Connexion impossible. Vérifie ta connexion internet, puis réessaie."; renderJoin(); return; }
   clearTimeout(waitTimer);
@@ -493,9 +493,10 @@ function onPlayerMsg(m){
   if(role === "host" && !hostPlays()) return;
   if(m.to && m.to !== P.id) return;
   if(m.t === "state"){
-    const first = !P.st; P.st = m;
+    const first = !P.st, was = myTurn(), ph = P.st && P.st.phase, rd = P.st && P.st.round; P.st = m;
     if(m.phase === "lobby" || m.phase === "startSpin"){ P.hand = null; P.sent = ""; }
     if(first) sfx.click();
+    if(was && myTurn() && m.phase === ph && m.round === rd){ paintPlay(); return; }
     renderPlayer(); return;
   }
   if(m.t === "hand"){
