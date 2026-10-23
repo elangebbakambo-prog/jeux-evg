@@ -243,8 +243,9 @@ body.has-music .play-switch{ bottom:calc(84px + env(safe-area-inset-bottom,0px))
     cat = category || "all";
     dock.hidden = false; document.body.classList.add("has-music");
     paint();
-    // Nouveau duel : le son part tout seul (sur téléphone, il reste à toucher ▶ dans le lecteur)
-    if(fresh) setTimeout(() => { if(lastKey === key && state === "idle" && !dock.hidden) draw(); }, 300);
+    // Nouveau duel ou nouveau passage : le son change tout de suite, dans le même clic
+    // (lancé pendant le clic, il a le plus de chances d'être autorisé par le navigateur)
+    if(fresh) draw();
   }
   function hide(){
     if(!dock || dock.hidden) return;
