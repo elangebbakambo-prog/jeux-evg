@@ -137,7 +137,7 @@ function render(){
   const key = screen + (store.game ? [store.game.step, store.game.turn, store.game.revealIdx, store.game.r, store.game.m].join("-") : "");
   if(key !== lastScreen){ window.scrollTo(0,0); lastScreen = key; }
   // Musique du battle (version hébergée seulement : commun/musique.js)
-  if(window.Musique){ const g = store.game; if(screen === "game" && g && g.mode === "bat" && g.step === "duel") Musique.show(g.cat, g.r + "-" + g.m + "-" + g.hist.length); else Musique.hide(); }
+  if(window.Musique){ const g = store.game; if(screen === "game" && g && g.mode === "bat" && g.step === "duel") Musique.show(g.cat, g.r + "-" + g.m + "-" + g.hist.length + (g.fmt === "three" ? "-p" + Math.min(((g.rounds[g.r][g.m] || {}).pass || []).length, 2) : "")); else Musique.hide(); }
 }
 const players = () => store.players.map(n => n.trim()).filter(Boolean);
 const M = () => MODES[store.mode];
