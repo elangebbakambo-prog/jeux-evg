@@ -295,8 +295,19 @@ function hostDraft(){
       <span class="bar" aria-hidden="true"><i style="width:${d ? 100 : o ? 50 : 8}%"></i></span>
       <span class="ct">${d ? "✓" : o ? "Deck" : "Booster"}</span></li>`; }).join("")}</ul>
     <p class="hint">La présentation du tour démarre toute seule quand tout le monde a validé son deck.</p>
+    ${H.players.filter(p => !H.decks[p.id]).map(p => `<button class="link" data-auto="${esc(p.id)}">Valider à la place de ${esc(p.name)}</button>`).join("")}
     ${closeLink}
   </section>`;
+  qa("[data-auto]").forEach(b => b.onclick = () => {
+    const id = b.dataset.auto;
+    askConfirm(`Valider le deck de ${pName(id)} à sa place ? Ses cartes seront placées au mieux d'après les stats.`, () => {
+      const h = H && H.hands && H.hands[id]; if(!h) return;
+      const assign = {}, used = new Set();
+      h.cards.flatMap(c => CATS.map(cat => [c, cat])).sort((x, y) => catScore(y[0], y[1]) - catScore(x[0], x[1]))
+        .forEach(([c, cat]) => { if(assign[cat.id] == null && !used.has(c.id)){ assign[cat.id] = c.id; used.add(c.id); } });
+      onHostMsg({ t: "deck", id, n: h.n, assign });
+    }, "Valider");
+  });
   bindClose();
 }
 
@@ -546,7 +557,7 @@ function playerWatch(){
   const st = P.st, ph = st.phase;
   const done = st.status ? Object.values(st.status).filter(s => s.done).length : 0;
   const title = { startSpin: "Roulette<br>des jokers", draft: "Deck<br>envoyé", show: "Présen&shy;tation", spin: "Roulettes", revealTeams: "Révélation", reveal: "Révélation", election: "Élections", final: "Le<br>podium" }[ph] || "Regarde l'écran";
-  const text = ph === "draft" ? (P.hand ? `${done} sur ${st.players.length} ont validé. La présentation commence dès que tout le monde a fini.` : "Ton booster arrive…")
+  const text = ph === "draft" ? (P.hand || myDone() ? `${done} sur ${st.players.length} ont validé. La présentation commence dès que tout le monde a fini.` : "Ton booster arrive…")
     : ph === "startSpin" ? "L'hôte fait tourner la roulette : chacun gagne un joker de départ."
     : ph === "show" ? `Tour ${st.round} : l'hôte révèle les choix de chacun. Prépare tes arguments.`
     : ph === "spin" ? "Bonus pour la meilleure équipe, malus pour la moins bonne."
