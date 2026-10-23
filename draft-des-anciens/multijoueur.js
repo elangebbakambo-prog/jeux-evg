@@ -497,6 +497,7 @@ function leaveRoom(msg){
   renderJoin();
 }
 function onPlayerMsg(m){
+  // Broadcast is unauthenticated: any player can forge these messages, so every field reaching innerHTML goes through esc()
   if(role === "host" && !hostPlays()) return;
   if(m.to && m.to !== P.id) return;
   if(m.t === "state"){
@@ -565,9 +566,9 @@ function playerWatch(){
   const st = P.st, ph = st.phase;
   const done = st.status ? Object.values(st.status).filter(s => s.done).length : 0;
   const title = { startSpin: "Roulette<br>des jokers", draft: "Deck<br>envoyé", show: "Présen&shy;tation", spin: "Roulettes", revealTeams: "Révélation", reveal: "Révélation", election: "Élections", final: "Le<br>podium" }[ph] || "Regarde l'écran";
-  const text = ph === "draft" ? (P.hand || myDone() ? `${done} sur ${st.players.length} ont validé. La présentation commence dès que tout le monde a fini.` : "Ton booster arrive…")
+  const text = ph === "draft" ? (P.hand || myDone() ? `${done} sur ${esc(st.players.length)} ont validé. La présentation commence dès que tout le monde a fini.` : "Ton booster arrive…")
     : ph === "startSpin" ? "L'hôte fait tourner la roulette : chacun gagne un joker de départ."
-    : ph === "show" ? `Tour ${st.round} : l'hôte révèle les choix de chacun. Prépare tes arguments.`
+    : ph === "show" ? `Tour ${esc(st.round)} : l'hôte révèle les choix de chacun. Prépare tes arguments.`
     : ph === "spin" ? "Bonus pour la meilleure équipe, malus pour la moins bonne."
     : ph === "revealTeams" || ph === "reveal" ? `Révélation de l'équipe de ${esc(st.revealName || "")}.`
     : ph === "election" ? `Meilleure équipe ${esc(st.electCat || "")} : débattez, puis votez sur l'écran.`
@@ -585,7 +586,7 @@ function playerWatch(){
 function playerBooster(){
   const h = P.hand, kind = h.kind;
   app.innerHTML = `<section class="screen handoff">
-    <p class="meta">${esc(P.name)}, tour ${P.st.round + 1} sur ${P.st.rounds}</p>
+    <p class="meta">${esc(P.name)}, tour ${esc(P.st.round + 1)} sur ${esc(P.st.rounds)}</p>
     ${kind === "cursed" ? `<p class="note bad">Booster maudit : que des cartes faibles.</p>` : ""}
     ${kind === "legend" ? `<p class="note good">Booster Légendaire : que des cartes fortes !</p>` : ""}
     ${kind === "relance" ? `<p class="note good">Joker Relance : voici un tout nouveau booster.</p>` : ""}
@@ -606,7 +607,7 @@ function playerBooster(){
 function playerFlip(){
   const h = P.hand;
   app.innerHTML = `<section class="screen">
-    <header class="bar"><span>${esc(P.name)}</span><span>Tour ${P.st.round + 1}/${P.st.rounds}</span></header>
+    <header class="bar"><span>${esc(P.name)}</span><span>Tour ${esc(P.st.round + 1)}/${esc(P.st.rounds)}</span></header>
     <p class="hint">Touche chaque carte pour la retourner.</p>
     <div class="hand">${h.cards.map((c, i) => `<button class="flipwrap ${dealAnim ? "deal" : ""}" style="--d:${i}" data-flip="${i}" aria-label="Retourner la carte ${i + 1}">
       <span class="flipper ${P.flipped[i] ? "on" : ""}">${cardHTML(c, { cls: "front" + (h.blind ? " blind" : "") })}${backHTML()}</span></button>`).join("")}</div>
@@ -634,7 +635,7 @@ function playerPick(){
     : !allFilled ? "Touche une carte de ta collection, puis un emplacement du deck."
     : "Deck complet. Touche un emplacement pour retirer une carte, ou valide.";
   app.innerHTML = `<section class="screen">
-    <header class="bar"><span>${esc(P.name)}</span><span>Tour ${P.st.round + 1}/${P.st.rounds}</span></header>
+    <header class="bar"><span>${esc(P.name)}</span><span>Tour ${esc(P.st.round + 1)}/${esc(P.st.rounds)}</span></header>
     ${blind ? `<p class="note bad">Malus stats cachées : tu places tes cartes sans voir les stats ni la rareté.</p>` : ""}
     <div class="deck-panel">
       <div class="deck-head"><span class="deck-title">Ton deck</span><span class="deck-avg" title="Score moyen du deck">${blind ? "?" : avg}<small>score moyen</small></span></div>
@@ -655,7 +656,7 @@ function playerPick(){
     <div class="coll-head"><span class="deck-title">Ta collection</span><span class="meta">${free.length} carte${free.length > 1 ? "s" : ""}</span></div>
     ${P.jokers.length ? `<div class="jokers">${P.jokers.map((t, i) => `<button class="jk" data-jk="${i}">Joker ${JOKERS[t].name}</button>`).join("")}</div>` : ""}
     ${!blind && free.length ? filterHTML(free) : ""}
-    <div class="coll">${applyFilter(free).map(c => miniHTML(c, { badge: domainOn !== "all" ? catScore(c, CATS.find(k => k.id === domainOn)) : null, tag: "button", cls: P.sel === c.id ? "sel" : "", attrs: `data-card="${c.id}" aria-pressed="${P.sel === c.id}"` })).join("")
+    <div class="coll">${applyFilter(free).map(c => miniHTML(c, { badge: domainOn !== "all" ? catScore(c, CATS.find(k => k.id === domainOn)) : null, tag: "button", cls: P.sel === c.id ? "sel" : "", attrs: `data-card="${esc(c.id)}" aria-pressed="${P.sel === c.id}"` })).join("")
       || `<p class="hint">${free.length ? "Aucune carte de ce niveau dans ta main." : "Toutes tes cartes sont dans le deck."}</p>`}</div>
     <button class="btn main" id="ok" ${allFilled ? "" : "disabled"}>Valider mon deck</button>
     ${teamBox()}
