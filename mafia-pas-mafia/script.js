@@ -448,6 +448,7 @@ const PRIME_CHANCE = .25;
 const withPrime = x => { if(x.b !== null && x.pa === undefined){ x.pa = Math.random() < PRIME_CHANCE; x.pb = Math.random() < PRIME_CHANCE; } return x; };
 const nm = (x, s) => x[s] + (x["p" + s] ? " (prime)" : "");
 function startBattle(){
+  if(window.Musique) Musique.reset(); // nouveau tournoi : tous les sons peuvent revenir
   const all = shuffle(battlePool(store.bcat, store.dancers.map(d => d.text)));
   const n = store.bsize ? Math.min(store.bsize, all.length) : all.length;
   const ent = all.slice(0, n);

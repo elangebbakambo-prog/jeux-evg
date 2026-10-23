@@ -61,16 +61,26 @@ window.Musique = (() => {
   // (ceux de la catégorie, sinon tous). All style pioche dans tout.
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const defaults = c => c === "all" || !(SONS[c] || []).length ? Object.values(SONS).flat() : SONS[c];
-  let lastLink = "";
+  // Sons déjà joués pendant le tournoi en cours : ils ne reviennent pas avant le prochain tournoi.
+  // { one: [liens de sons joués], sets: { lienPlaylist: [numéros joués], … }, size: { lienPlaylist: nombre de sons } }
+  const USED_KEY = "battle-musique-joues";
+  function used(){ let u = null; try{ u = JSON.parse(localStorage.getItem(USED_KEY)); }catch(e){} return Object.assign({ one: [], sets: {}, size: {}, ids: [] }, u || {}); }
+  function saveUsed(u){ try{ localStorage.setItem(USED_KEY, JSON.stringify(u)); }catch(e){} }
+  function reset(){ saveUsed({ one: [], sets: {}, size: {}, ids: [] }); }
+  const isSet = l => /\/sets\//.test(l);
+  const setDone = (u, l) => u.size[l] != null && (u.sets[l] || []).length >= u.size[l];
   function linkFor(cat){
     const L = load().links;
-    if(okLink(L[cat])) return clean(L[cat]);
-    if(okLink(L.all)) return clean(L.all);
-    const any = Object.values(L).filter(okLink);
-    if(any.length) return clean(pick(any));
-    const d = defaults(cat); if(!d.length) return "";
-    let l = pick(d); if(l === lastLink && d.length > 1) l = pick(d.filter(x => x !== lastLink));
-    return lastLink = l;
+    let pool = [cat, "all"].map(k => L[k]).filter(okLink).map(clean).slice(0, 1);
+    if(!pool.length) pool = Object.values(L).filter(okLink).map(clean);
+    if(!pool.length) pool = defaults(cat);
+    if(!pool.length) return "";
+    const u = used();
+    let left = pool.filter(l => isSet(l) ? !setDone(u, l) : !u.one.includes(l));
+    if(!left.length){ // tout a été joué : on repart de zéro pour cette liste
+      pool.forEach(l => { u.one = u.one.filter(x => x !== l); delete u.sets[l]; }); saveUsed(u); left = pool;
+    }
+    return pick(left);
   }
   const configured = () => load().on && (Object.values(load().links).some(okLink) || Object.values(SONS).flat().length > 0);
 
@@ -204,19 +214,30 @@ body.has-music .play-switch{ bottom:calc(84px + env(safe-area-inset-bottom,0px))
   function pickAndPlay(){
     pending = false;
     widget.getSounds(list => {
-      const n = (list || []).length;
+      const n = (list || []).length, u = used();
       wantSeek = true;
-      if(n > 1){ // playlist : un morceau au hasard, différent du précédent
-        let i = Math.floor(Math.random() * n); if(i === lastIdx) i = (i + 1 + Math.floor(Math.random() * (n - 1))) % n;
-        lastIdx = i; widget.skip(i);
+      if(n > 1){ // playlist : un morceau au hasard parmi ceux pas encore joués dans ce tournoi
+        u.size[curLink] = n;
+        let done = u.sets[curLink] || [];
+        if(done.length >= n) done = [];
+        // ni déjà tiré dans cette playlist, ni déjà joué ailleurs (un même son peut être seul et dans une playlist)
+        let free = [...Array(n).keys()].filter(i => !done.includes(i) && !(list[i] && u.ids.includes(list[i].id)));
+        if(!free.length) free = [...Array(n).keys()].filter(i => !done.includes(i));
+        const i = free[Math.floor(Math.random() * free.length)];
+        u.sets[curLink] = done.concat(i); saveUsed(u);
+        widget.skip(i);
       }
-      else { widget.seekTo(0); widget.play(); }
+      else {
+        if(!u.one.includes(curLink)){ u.one.push(curLink); saveUsed(u); }
+        widget.seekTo(0); widget.play();
+      }
     });
   }
   function onPlay(){
     widget.getCurrentSound(s => {
       if(!s) return;
       title = (s.title || "Son") + (s.user && s.user.username ? " · " + s.user.username : "");
+      if(s.id){ const u = used(); if(!u.ids.includes(s.id)){ u.ids.push(s.id); saveUsed(u); } }
       playing = true; clearTimeout(errTimer); setState("playing");
       const len = load().len, dur = s.duration || 0;
       if(wantSeek){
@@ -252,5 +273,5 @@ body.has-music .play-switch{ bottom:calc(84px + env(safe-area-inset-bottom,0px))
     clearTimers(); if(widget && playing) widget.pause(); playing = false;
     dock.hidden = true; document.body.classList.remove("has-music", "mus-tall");
   }
-  return { settingsHTML, bindSettings, show, hide, configured };
+  return { settingsHTML, bindSettings, show, hide, configured, reset };
 })();

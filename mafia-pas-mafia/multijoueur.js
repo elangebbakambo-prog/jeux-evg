@@ -485,6 +485,7 @@ const PRIME_CHANCE = .25;
 const withPrime = x => { if(x.b !== null && x.pa === undefined){ x.pa = Math.random() < PRIME_CHANCE; x.pb = Math.random() < PRIME_CHANCE; } return x; };
 const nm = (x, s) => x[s] + (x["p" + s] ? " (prime)" : "");
 function startBattleH(){
+  if(window.Musique) Musique.reset(); // nouveau tournoi : tous les sons peuvent revenir
   const all = shuffle(listOf(lists(), "bat")), n = H.bsize ? Math.min(H.bsize, all.length) : all.length, ent = all.slice(0, n);
   // Taille du tableau = puissance de 2 ; les places vides sont des exempts (qualifiés d'office)
   let N = 1; while(N < n) N *= 2;
