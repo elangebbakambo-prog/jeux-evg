@@ -443,6 +443,10 @@ function renderReveal(){
 // Nom d'un tour selon son nombre de duels
 const roundName = n => ({ 1:"Finale", 2:"Demi-finales", 4:"Quarts de finale", 8:"Huitièmes de finale", 16:"Seizièmes de finale", 32:"32es de finale", 64:"64es de finale" })[n] || `Tour de ${n * 2}`;
 
+// Des fois, un danseur est jugé dans sa version « prime » (son meilleur niveau) : affiché « Nom (prime) »
+const PRIME_CHANCE = .25;
+const withPrime = x => { if(x.b !== null && x.pa === undefined){ x.pa = Math.random() < PRIME_CHANCE; x.pb = Math.random() < PRIME_CHANCE; } return x; };
+const nm = (x, s) => x[s] + (x["p" + s] ? " (prime)" : "");
 function startBattle(){
   const all = shuffle(battlePool(store.bcat, store.dancers.map(d => d.text)));
   const n = store.bsize ? Math.min(store.bsize, all.length) : all.length;
@@ -452,7 +456,7 @@ function startBattle(){
   const byes = P - n, first = [];
   let k = 0;
   for(let i = 0; i < P / 2; i++) first.push(i < byes ? { a: ent[k++], b: null, w: null } : { a: ent[k++], b: ent[k++], w: null });
-  const round = shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : x);
+  const round = shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : withPrime(x));
   store.game = { mode:"bat", cat:store.bcat, fmt:store.bfmt, rounds:[round], r:0, m:0, step:"intro", hist:[] };
   seek(); store.game.step = "intro";
   save(); screen = "game"; render();
@@ -464,7 +468,7 @@ function seek(){
   const ws = cur.map(x => x.w);
   if(ws.length === 1){ g.step = "champion"; return; }
   const nx = [];
-  for(let j = 0; j < ws.length; j += 2) nx.push({ a: ws[j], b: ws[j + 1], w: null });
+  for(let j = 0; j < ws.length; j += 2) nx.push(withPrime({ a: ws[j], b: ws[j + 1], w: null }));
   g.rounds.push(nx); g.r++; g.m = 0; g.step = "intro";
 }
 function choose(side, score){
@@ -497,8 +501,8 @@ function renderBattleIntro(){
     <p class="meta">Battle ${(BCATS[g.cat] || BCATS.all).label}, ${BFMTS[g.fmt || "one"].label.toLowerCase()}, tour ${g.r + 1} sur ${Math.log2(g.rounds[0].length) + 1}</p>
     <h1 class="title">${name.replace(" ", "<br>")}</h1>
     <p class="lead">${cur.length === 1 ? "Plus que deux. Un seul repartira avec la couronne." : `${duels.length} duel${duels.length > 1 ? "s" : ""} au programme. Débattez, puis choisissez le gagnant de chaque duel.`}</p>
-    <ol class="mlist">${duels.map(x => `<li><span>${esc(x.a)}</span><b>VS</b><span>${esc(x.b)}</span></li>`).join("")}</ol>
-    ${byes.length ? `<p class="hint">Qualifié${byes.length > 1 ? "s" : ""} d'office pour le tour suivant : ${byes.map(x => esc(x.a)).join(", ")}.</p>` : ""}
+    <ol class="mlist">${duels.map(x => `<li><span>${esc(nm(x, "a"))}</span><b>VS</b><span>${esc(nm(x, "b"))}</span></li>`).join("")}</ol>
+    ${byes.length ? `<p class="hint">Qualifié${byes.length > 1 ? "s" : ""} d'office pour le tour suivant : ${byes.map(x => esc(nm(x, "a"))).join(", ")}.</p>` : ""}
     <button class="btn main" id="go">${cur.length === 1 ? "Lancer la finale" : "Lancer les duels"}</button>
     ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier choix</button>` : ""}
     <button class="link" id="quit">Arrêter le tournoi</button>
@@ -519,7 +523,7 @@ function renderPasses(){
   app.innerHTML = `<section class="screen">
     <header class="bar"><span>${roundName(cur.length)}</span><span>${cur.length === 1 ? "Le duel final" : `Duel ${num} sur ${real.length}`}</span></header>
     <p class="meta center">Passage ${Math.min(k + 1, 3)} sur 3</p>
-    <div class="duel">${fighter(x.a, "a")}<span class="vs" aria-hidden="true">${A}-${B}</span>${fighter(x.b, "b")}</div>
+    <div class="duel">${fighter(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">${A}-${B}</span>${fighter(nm(x, "b"), "b")}</div>
     <p class="hint center">Débattez, puis touchez le gagnant de ce passage.</p>
     ${k ? `<button class="link" id="unpass">Annuler le dernier passage</button>` : ""}
     ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier duel</button>` : ""}
@@ -542,7 +546,7 @@ function renderCallout(){
   const g = G(), cur = g.rounds[g.r], x = cur[g.m], real = cur.filter(y => !y.bye), num = real.indexOf(x) + 1;
   app.innerHTML = `<section class="screen">
     <header class="bar"><span>${roundName(cur.length)}</span><span>${cur.length === 1 ? "La finale" : `Duel ${num} sur ${real.length}`}, call out</span></header>
-    <div class="duel">${fighter(x.a, "a")}<span class="vs" aria-hidden="true">VS</span>${fighter(x.b, "b")}</div>
+    <div class="duel">${fighter(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">VS</span>${fighter(nm(x, "b"), "b")}</div>
     <p class="hint center">Envoyez sans vous arrêter. Touchez celui qui n'a plus rien : l'autre se qualifie.</p>
     ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier duel</button>` : ""}
     <button class="link" id="quit">Arrêter le tournoi</button>
@@ -563,7 +567,7 @@ function renderDuel(){
   const real = cur.filter(y => !y.bye), num = real.indexOf(x) + 1;
   app.innerHTML = `<section class="screen">
     <header class="bar"><span>${roundName(cur.length)}</span><span>${cur.length === 1 ? "Le duel final" : `Duel ${num} sur ${real.length}`}</span></header>
-    <div class="duel">${fighter(x.a, "a")}<span class="vs" aria-hidden="true">VS</span>${fighter(x.b, "b")}</div>
+    <div class="duel">${fighter(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">VS</span>${fighter(nm(x, "b"), "b")}</div>
     <p class="hint center">Débattez, puis touchez le gagnant.</p>
     <button class="btn ghost" id="coin">Pas d'accord ? Pile ou face</button>
     ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier choix</button>` : ""}
@@ -605,8 +609,8 @@ function renderChampion(){
     </div>
     <h2 class="h2">Le tableau</h2>
     <div class="bracket">${g.rounds.map(rd => `<section><h3>${roundName(rd.length)}</h3><ul>${rd.map(x => x.bye
-        ? `<li><span class="w">${esc(x.a)}</span><span class="q">qualifié d'office</span></li>`
-        : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(x.a)}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(x.b)}</span>${x.score ? `<span class="q">${x.score.a}-${x.score.b}</span>` : x.callout ? `<span class="q">call out</span>` : ""}</li>`).join("")}</ul></section>`).join("")}</div>
+        ? `<li><span class="w">${esc(nm(x, "a"))}</span><span class="q">qualifié d'office</span></li>`
+        : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(nm(x, "a"))}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(nm(x, "b"))}</span>${x.score ? `<span class="q">${x.score.a}-${x.score.b}</span>` : x.callout ? `<span class="q">call out</span>` : ""}</li>`).join("")}</ul></section>`).join("")}</div>
     <button class="btn main" id="again">Nouveau tournoi</button>
     <button class="link" id="undo">Annuler le dernier choix</button>
     <button class="btn ghost" id="home">Retour à l'accueil</button>

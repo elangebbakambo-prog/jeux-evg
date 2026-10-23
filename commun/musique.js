@@ -12,6 +12,35 @@ window.Musique = (() => {
   const KEY = "battle-musique";
   const CATS = { all: "All style", hiphop: "Hip hop", popping: "Popping" };
   const LENS = [[30, "30 s"], [45, "45 s"], [60, "1 min"], [0, "Entier"]];
+  // Sons par défaut (trouvés sur SoundCloud depuis la playlist « Training » d'Elange).
+  // Un lien « /sets/ » est une playlist : le lecteur y tire un morceau au hasard.
+  const SONS = {
+    hiphop: [
+      "https://soundcloud.com/keltheartist/facebook",
+      "https://soundcloud.com/keltheartist/too-flyyy-doechii-flip",
+      "https://soundcloud.com/keltheartist/genie",
+      "https://soundcloud.com/keltheartist/sets/no-ls",
+      "https://soundcloud.com/randytchik/airmax-w-leonoxis-gab-v-jd",
+      "https://soundcloud.com/randytchik/patapim",
+      "https://soundcloud.com/randytchik/le-lac-des-cygnes",
+      "https://soundcloud.com/tellaxthemonster/i-am-music-evil-tellax",
+      "https://soundcloud.com/michael-camino-650943282/save-my-people-through-the-music",
+      "https://soundcloud.com/wassim-ramdani-38095672/wass-p-m-p-m-1",
+      "https://soundcloud.com/storyteller2k/jude2k-airbang-5",
+      "https://soundcloud.com/storyteller2k/sets/realboss2k",
+      "https://soundcloud.com/storyteller2k/bigkiss-o4newg-star-edition-1",
+      "https://soundcloud.com/storyteller2k/moonagi-full-liberation-on-bandcamp",
+      "https://soundcloud.com/z_zeti_z/no-effort",
+      "https://soundcloud.com/creatxrhowyoudothat/da-don-b4",
+      "https://soundcloud.com/stanso-beats/brand-new-fizzycal-beats-x-stanso",
+      "https://soundcloud.com/gabriel-viurna/n-y-s",
+      "https://soundcloud.com/ferdijan-dudaj-505544900/dfusion-beyound-doubt-majid",
+      "https://soundcloud.com/ferdijan-dudaj-505544900/dfusion-circle-undergrund-ukay-diablo",
+      "https://soundcloud.com/monteosthisyou/durag-activity",
+      "https://soundcloud.com/diogo-nery-619586774/battle-bad-doyah-x-majid-3"
+    ],
+    popping: []
+  };
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 
   /* ---------- Réglages (gardés sur l'appareil hôte) ---------- */
@@ -28,15 +57,22 @@ window.Musique = (() => {
   function save(c){ try{ localStorage.setItem(KEY, JSON.stringify(c)); }catch(e){} }
   const okLink = s => /^https:\/\/(www\.|m\.)?soundcloud\.com\/[^\s]+/.test(String(s || "").trim());
   const clean = s => String(s || "").trim().replace(/^https:\/\/m\.soundcloud\.com/, "https://soundcloud.com").split("?")[0];
-  // Playlist pour une catégorie : la sienne, sinon celle d'All style, sinon n'importe laquelle
+  // Son ou playlist pour une catégorie : le lien collé par l'hôte, sinon les sons par défaut
+  // (ceux de la catégorie, sinon tous). All style pioche dans tout.
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const defaults = c => c === "all" || !(SONS[c] || []).length ? Object.values(SONS).flat() : SONS[c];
+  let lastLink = "";
   function linkFor(cat){
     const L = load().links;
     if(okLink(L[cat])) return clean(L[cat]);
     if(okLink(L.all)) return clean(L.all);
     const any = Object.values(L).filter(okLink);
-    return any.length ? clean(any[Math.floor(Math.random() * any.length)]) : "";
+    if(any.length) return clean(pick(any));
+    const d = defaults(cat); if(!d.length) return "";
+    let l = pick(d); if(l === lastLink && d.length > 1) l = pick(d.filter(x => x !== lastLink));
+    return lastLink = l;
   }
-  const configured = () => load().on && Object.values(load().links).some(okLink);
+  const configured = () => load().on && (Object.values(load().links).some(okLink) || Object.values(SONS).flat().length > 0);
 
   function settingsHTML(){
     const c = load();
@@ -44,7 +80,7 @@ window.Musique = (() => {
     <div class="seg two" role="group" aria-label="Musique pendant les duels">
       <button type="button" data-mus-on="1" aria-pressed="${c.on}">Avec musique</button>
       <button type="button" data-mus-on="0" aria-pressed="${!c.on}">Sans musique</button></div>
-    ${c.on ? `<p class="hint">Colle le lien d'une playlist SoundCloud (dans SoundCloud : « … », puis Partager, puis Copier le lien). Si une catégorie n'a pas de playlist, celle d'All style est utilisée.</p>
+    ${c.on ? `<p class="hint">Déjà prêt : ${SONS.hiphop.length} sons hip hop choisis dans ta playlist « Training ». Tu n'as rien à coller. Pour utiliser une autre playlist SoundCloud, colle son lien ci-dessous (« … », Partager, Copier le lien).</p>
     ${Object.entries(CATS).map(([k, l]) => `<label class="mus-row"><span>${l}</span>
       <input class="field solo" data-mus-link="${k}" inputmode="url" autocomplete="off" placeholder="https://soundcloud.com/…" value="${esc(c.links[k] || "")}">
       <small class="mus-check" data-mus-check="${k}">${c.links[k] ? (okLink(c.links[k]) ? "Lien OK" : lnkHint(c.links[k])) : ""}</small></label>`).join("")}
@@ -133,8 +169,7 @@ body.has-music .play-switch{ bottom:calc(84px + env(safe-area-inset-bottom,0px))
     clearTimers(); setState("loading");
     errTimer = setTimeout(() => { if(state === "loading") setState("error"); }, 12000);
     api().then(() => {
-      if(!iframe || curLink !== link){
-        if(iframe) iframe.remove();
+      if(!iframe){
         iframe = document.createElement("iframe");
         iframe.className = "mus-frame"; iframe.allow = "autoplay"; iframe.title = "Lecteur SoundCloud";
         iframe.src = "https://w.soundcloud.com/player/?url=" + encodeURIComponent(link) + "&auto_play=false&visual=false&show_comments=false&hide_related=true&sharing=false&buying=false&download=false";
@@ -142,14 +177,18 @@ body.has-music .play-switch{ bottom:calc(84px + env(safe-area-inset-bottom,0px))
         curLink = link;
         widget = window.SC.Widget(iframe);
         const E = window.SC.Widget.Events;
-        widget.bind(E.READY, () => pickAndPlay());
+        widget.bind(E.READY, () => { if(pending) pickAndPlay(); });
+        pending = true;
         widget.bind(E.PLAY, onPlay);
         widget.bind(E.FINISH, () => { if(playing){ playing = false; setState("done"); } });
         widget.bind(E.ERROR, () => setState("error"));
-      } else pickAndPlay();
+      } else if(curLink !== link){ curLink = link; pending = true; widget.load(link, { auto_play: false, show_comments: false, hide_related: true, visual: false, callback: () => pickAndPlay() }); }
+      else pickAndPlay();
     }).catch(() => setState("error"));
   }
+  let pending = false;
   function pickAndPlay(){
+    pending = false;
     widget.getSounds(list => {
       const n = (list || []).length;
       wantSeek = true;

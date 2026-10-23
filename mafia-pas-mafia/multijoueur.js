@@ -480,13 +480,17 @@ const curDuel = () => H.bat.rounds[H.bat.r][H.bat.m];
 const duelKey = () => H.bat ? String(H.bat.seq || 0) : ""; // change à chaque nouveau duel, même rejoué
 const duelLabel = () => { const cur = H.bat.rounds[H.bat.r], real = cur.filter(y => !y.bye); return cur.length === 1 ? "Le duel final" : `Duel ${real.indexOf(curDuel()) + 1} sur ${real.length}`; };
 
+// Des fois, un danseur est jugé dans sa version « prime » (son meilleur niveau) : affiché « Nom (prime) »
+const PRIME_CHANCE = .25;
+const withPrime = x => { if(x.b !== null && x.pa === undefined){ x.pa = Math.random() < PRIME_CHANCE; x.pb = Math.random() < PRIME_CHANCE; } return x; };
+const nm = (x, s) => x[s] + (x["p" + s] ? " (prime)" : "");
 function startBattleH(){
   const all = shuffle(listOf(lists(), "bat")), n = H.bsize ? Math.min(H.bsize, all.length) : all.length, ent = all.slice(0, n);
   // Taille du tableau = puissance de 2 ; les places vides sont des exempts (qualifiés d'office)
   let N = 1; while(N < n) N *= 2;
   const byes = N - n, first = []; let k = 0;
   for(let i = 0; i < N / 2; i++) first.push(i < byes ? { a: ent[k++], b: null, w: null } : { a: ent[k++], b: ent[k++], w: null });
-  H.bat = { cat: H.bcat || "all", fmt: H.bfmt || "one", rounds: [shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : x)], r: 0, m: 0, hist: [] };
+  H.bat = { cat: H.bcat || "all", fmt: H.bfmt || "one", rounds: [shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : withPrime(x))], r: 0, m: 0, hist: [] };
   H.cards = []; H.votes = {}; H.dvotes = {};
   seekH(); H.phase = "bintro";
   saveH(); broadcast(); sfx.reveal(); renderHost();
@@ -499,7 +503,7 @@ function seekH(){
   const ws = cur.map(x => x.w);
   if(ws.length === 1) return "champion";
   const nx = [];
-  for(let j = 0; j < ws.length; j += 2) nx.push({ a: ws[j], b: ws[j + 1], w: null });
+  for(let j = 0; j < ws.length; j += 2) nx.push(withPrime({ a: ws[j], b: ws[j + 1], w: null }));
   B.rounds.push(nx); B.r++; B.m = 0; return "bintro";
 }
 function chooseH(side){
@@ -529,10 +533,10 @@ function countSides(upTo){
 }
 function batPublic(){
   const B = H.bat, cur = B.rounds[B.r], o = { battle: true, cat: catLabel(B.cat) };
-  if(H.phase === "bintro") o.bintro = { name: roundName(cur.length), duels: cur.filter(x => !x.bye).map(x => [x.a, x.b]), byes: cur.filter(x => x.bye).map(x => x.a) };
+  if(H.phase === "bintro") o.bintro = { name: roundName(cur.length), duels: cur.filter(x => !x.bye).map(x => [nm(x, "a"), nm(x, "b")]), byes: cur.filter(x => x.bye).map(x => x.a) };
   if(H.phase === "duel" || H.phase === "dreveal"){
     const x = curDuel();
-    o.duel = { key: duelKey(), a: x.a, b: x.b, round: roundName(cur.length), label: duelLabel(), fmt: fmtOf() };
+    o.duel = { key: duelKey(), a: nm(x, "a"), b: nm(x, "b"), round: roundName(cur.length), label: duelLabel(), fmt: fmtOf() };
     o.voted = Object.keys(H.dvotes);
   }
   if(H.phase === "dreveal"){
@@ -552,8 +556,8 @@ function hostBatIntro(){
     <p class="meta">Battle ${catLabel(B.cat)}, tour ${B.r + 1} sur ${Math.log2(B.rounds[0].length) + 1}</p>
     <h1 class="title">${name.replace(" ", "<br>")}</h1>
     <p class="lead">${cur.length === 1 ? "Plus que deux. Un seul repartira avec la couronne." : `${duels.length} duel${duels.length > 1 ? "s" : ""} au programme. À chaque duel, chacun vote sur son téléphone.`}</p>
-    <ol class="mlist">${duels.map(x => `<li><span>${esc(x.a)}</span><b>VS</b><span>${esc(x.b)}</span></li>`).join("")}</ol>
-    ${byes.length ? `<p class="hint">Qualifié${byes.length > 1 ? "s" : ""} d'office pour le tour suivant : ${byes.map(x => esc(x.a)).join(", ")}.</p>` : ""}
+    <ol class="mlist">${duels.map(x => `<li><span>${esc(nm(x, "a"))}</span><b>VS</b><span>${esc(nm(x, "b"))}</span></li>`).join("")}</ol>
+    ${byes.length ? `<p class="hint">Qualifié${byes.length > 1 ? "s" : ""} d'office pour le tour suivant : ${byes.map(x => esc(nm(x, "a"))).join(", ")}.</p>` : ""}
     <button class="btn main" id="go">${cur.length === 1 ? "Lancer la finale" : "Lancer le premier duel"}</button>
     ${undoLink()}
     <button class="link" id="close">Fermer la salle</button>
@@ -569,16 +573,16 @@ function hostCallout(){
   const x = curDuel();
   app.innerHTML = `<section class="screen">
     <header class="bar"><span>${roundName(H.bat.rounds[H.bat.r].length)}</span><span>${duelLabel()}, call out</span></header>
-    <div class="duel">${fighterH(x.a, "a")}<span class="vs" aria-hidden="true">VS</span>${fighterH(x.b, "b")}</div>
+    <div class="duel">${fighterH(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">VS</span>${fighterH(nm(x, "b"), "b")}</div>
     <p class="lead center">Envoyez sans vous arrêter. Le premier qui n'a plus rien perd.</p>
     <h2 class="h2">Qui n'a plus rien ?</h2>
-    <div class="vote2"><button class="btn ghost" data-out="a">${esc(x.a)}</button><button class="btn ghost" data-out="b">${esc(x.b)}</button></div>
+    <div class="vote2"><button class="btn ghost" data-out="a">${esc(nm(x, "a"))}</button><button class="btn ghost" data-out="b">${esc(nm(x, "b"))}</button></div>
     ${undoLink()}
     <button class="link" id="close">Fermer la salle</button>
   </section>`;
   $$("[data-out]").forEach(b => b.onclick = () => {
     const out = b.dataset.out, win = out === "a" ? "b" : "a";
-    askConfirm(`${out === "a" ? x.a : x.b} n'a plus rien ? ${win === "a" ? x.a : x.b} se qualifie.`, () => chooseH(win), "Confirmer");
+    askConfirm(`${out === "a" ? nm(x, "a") : nm(x, "b")} n'a plus rien ? ${win === "a" ? nm(x, "a") : nm(x, "b")} se qualifie.`, () => chooseH(win), "Confirmer");
   });
   bindBatLinks();
 }
@@ -587,7 +591,7 @@ function hostDuel(){
   const x = curDuel(), nV = Object.keys(H.dvotes).length, N = H.players.length, all = N > 0 && H.players.every(p => H.dvotes[p.id]);
   app.innerHTML = `<section class="screen">
     <header class="bar"><span>${roundName(H.bat.rounds[H.bat.r].length)}</span><span>${duelLabel()}</span></header>
-    <div class="duel">${fighterH(x.a, "a")}<span class="vs" aria-hidden="true">VS</span>${fighterH(x.b, "b")}</div>
+    <div class="duel">${fighterH(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">VS</span>${fighterH(nm(x, "b"), "b")}</div>
     <p class="lead center">${all ? "Tout le monde a voté." : `Votez sur vos téléphones. ${nV} vote${nV > 1 ? "s" : ""} sur ${N}.`}</p>
     <ul class="roster">${H.players.map(p => `<li class="${H.dvotes[p.id] ? "" : "off"}"><span class="dot" aria-hidden="true"></span>${esc(p.name)}${H.dvotes[p.id] ? " ✓" : ""}</li>`).join("")}</ul>
     <button class="btn main" id="go" ${all ? "" : "disabled"}>Révéler les votes</button>
@@ -610,19 +614,19 @@ function hostDuelReveal(){
     .map(id => `<li class="${id === last ? "pop" : ""}">${esc(playerName(id))}</li>`).join("") || `<li class="none">Personne</li>`;
   app.innerHTML = `<section class="screen">
     <header class="bar"><span>${roundName(H.bat.rounds[H.bat.r].length)}</span><span>${duelLabel()}</span></header>
-    <div class="duel">${fighterH(x.a, "a", (done && lead === "a" ? "win" : done && lead === "b" ? "lose" : "") + (lead === "a" && !done ? " hot" : ""))}
+    <div class="duel">${fighterH(nm(x, "a"), "a", (done && lead === "a" ? "win" : done && lead === "b" ? "lose" : "") + (lead === "a" && !done ? " hot" : ""))}
       <span class="vs" aria-hidden="true">${sc.a}-${sc.b}</span>
-      ${fighterH(x.b, "b", (done && lead === "b" ? "win" : done && lead === "a" ? "lose" : "") + (lead === "b" && !done ? " hot" : ""))}</div>
-    ${three ? (last ? `<p class="big-reveal" aria-live="polite"><strong>${esc(playerName(last))}</strong> : ${esc(x.a)} <strong>${passVote(H.dvotes[last])} - ${3 - passVote(H.dvotes[last])}</strong> ${esc(x.b)}</p>` : `<p class="hint center">${tot} vote${tot > 1 ? "s" : ""} à révéler, un par un. Le score est le total des passages.</p>`)
-    : last ? `<p class="big-reveal" aria-live="polite"><strong>${esc(playerName(last))}</strong> ${H.dvotes[last] === "t" ? "a voté <strong>égalité</strong>" : `a voté <strong>${esc(H.dvotes[last] === "a" ? x.a : x.b)}</strong>`}</p>` : `<p class="hint center">${tot} vote${tot > 1 ? "s" : ""} à révéler, un par un.</p>`}
+      ${fighterH(nm(x, "b"), "b", (done && lead === "b" ? "win" : done && lead === "a" ? "lose" : "") + (lead === "b" && !done ? " hot" : ""))}</div>
+    ${three ? (last ? `<p class="big-reveal" aria-live="polite"><strong>${esc(playerName(last))}</strong> : ${esc(nm(x, "a"))} <strong>${passVote(H.dvotes[last])} - ${3 - passVote(H.dvotes[last])}</strong> ${esc(nm(x, "b"))}</p>` : `<p class="hint center">${tot} vote${tot > 1 ? "s" : ""} à révéler, un par un. Le score est le total des passages.</p>`)
+    : last ? `<p class="big-reveal" aria-live="polite"><strong>${esc(playerName(last))}</strong> ${H.dvotes[last] === "t" ? "a voté <strong>égalité</strong>" : `a voté <strong>${esc(H.dvotes[last] === "a" ? nm(x, "a") : nm(x, "b"))}</strong>`}</p>` : `<p class="hint center">${tot} vote${tot > 1 ? "s" : ""} à révéler, un par un.</p>`}
     ${three ? `<ul class="pass-list">${H.order.slice(0, H.shown).map(id => { const v = passVote(H.dvotes[id]); return `<li class="${id === last ? "pop" : ""}"><span>${esc(playerName(id))}</span><b>${v} - ${3 - v}</b></li>`; }).join("")}</ul>`
-    : `<div class="who three"><div class="y"><h3>${esc(x.a)}</h3><ul>${col("a")}</ul></div><div class="t"><h3>Égalité</h3><ul>${col("t")}</ul></div><div class="n"><h3>${esc(x.b)}</h3><ul>${col("b")}</ul></div></div>`}
+    : `<div class="who three"><div class="y"><h3>${esc(nm(x, "a"))}</h3><ul>${col("a")}</ul></div><div class="t"><h3>Égalité</h3><ul>${col("t")}</ul></div><div class="n"><h3>${esc(nm(x, "b"))}</h3><ul>${col("b")}</ul></div></div>`}
     ${!done ? `<button class="btn main" id="next">${H.shown ? "Vote suivant" : "Révéler le premier vote"}</button>
       <button class="link" id="all">Tout révéler d'un coup</button>`
-    : lead ? `<p class="lead center"><strong>${esc(lead === "a" ? x.a : x.b)}</strong> gagne ${Math.max(sc.a, sc.b)} à ${Math.min(sc.a, sc.b)}${three ? " (total des passages)" : ""}${sc.t ? `, avec ${sc.t} vote${sc.t > 1 ? "s" : ""} égalité` : ""}.</p>
-      <button class="btn main" id="win">Qualifier ${esc(lead === "a" ? x.a : x.b)}</button>`
+    : lead ? `<p class="lead center"><strong>${esc(lead === "a" ? nm(x, "a") : nm(x, "b"))}</strong> gagne ${Math.max(sc.a, sc.b)} à ${Math.min(sc.a, sc.b)}${three ? " (total des passages)" : ""}${sc.t ? `, avec ${sc.t} vote${sc.t > 1 ? "s" : ""} égalité` : ""}.</p>
+      <button class="btn main" id="win">Qualifier ${esc(lead === "a" ? nm(x, "a") : nm(x, "b"))}</button>`
     : `<p class="lead center">Égalité ${sc.a} partout${sc.t ? `, et ${sc.t} vote${sc.t > 1 ? "s" : ""} égalité` : ""}. Débattez, puis choisissez, ou laissez le hasard décider.</p>
-      <div class="vote2"><button class="btn ghost" data-pick="a">${esc(x.a)}</button><button class="btn ghost" data-pick="b">${esc(x.b)}</button></div>
+      <div class="vote2"><button class="btn ghost" data-pick="a">${esc(nm(x, "a"))}</button><button class="btn ghost" data-pick="b">${esc(nm(x, "b"))}</button></div>
       <button class="btn ghost" id="coin">Pile ou face</button>`}
     ${undoLink()}
     <button class="link" id="close">Fermer la salle</button>
@@ -657,8 +661,8 @@ function hostChampion(){
     </div>
     <h2 class="h2">Le tableau</h2>
     <div class="bracket">${B.rounds.map(rd => `<section><h3>${roundName(rd.length)}</h3><ul>${rd.map(x => x.bye
-        ? `<li><span class="w">${esc(x.a)}</span><span class="q">qualifié d'office</span></li>`
-        : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(x.a)}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(x.b)}</span>${sc(x)}</li>`).join("")}</ul></section>`).join("")}</div>
+        ? `<li><span class="w">${esc(nm(x, "a"))}</span><span class="q">qualifié d'office</span></li>`
+        : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(nm(x, "a"))}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(nm(x, "b"))}</span>${sc(x)}</li>`).join("")}</ul></section>`).join("")}</div>
     <button class="btn main" id="again">Nouveau tournoi avec les mêmes joueurs</button>
     <button class="btn ghost" id="mode">Changer de mode</button>
     ${undoLink()}
