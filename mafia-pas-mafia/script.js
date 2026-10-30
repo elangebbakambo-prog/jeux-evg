@@ -39,7 +39,7 @@ const battlePool = (cat, names) => { const c = BCATS[cat] || BCATS.all; if(!c.na
 const ROULETTE_KEY = "battle-roulette";
 const ROULETTE_DEFAUT = {
   popping: ["Funk", "G-Funk", "Electro Funk", "P-Funk", "Popping Beats", "RnB"],
-  hiphop:  ["Boom Bap", "New Jack", "RnB"]
+  hiphop:  ["Boom Bap", "New Jack Swing", "New School", "RnB"]
 };
 function rouletteLoad(){
   let c = null;
