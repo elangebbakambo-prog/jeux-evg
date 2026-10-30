@@ -20,6 +20,13 @@ const newId = () => Math.random().toString(36).slice(2, 10);
 const newCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("");
 const cleanCode = s => String(s || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
 const emptyTeam = () => Object.fromEntries(CATS.map(c => [c.id, []]));
+const keepFocus = draw => {
+  const a = document.activeElement, id = a && a.tagName === "INPUT" && a.id && app.contains(a) ? a.id : null;
+  const v = id ? a.value : "", s = id ? a.selectionStart : 0, e = id ? a.selectionEnd : 0;
+  draw();
+  const b = id ? document.getElementById(id) : null;
+  if(b && b !== a){ b.value = v; b.focus({ preventScroll: true }); b.setSelectionRange(s, e); }
+};
 // Les fonctions de script.js lisent S (malus « stats cachées », nom du marié, nombre de tours)
 const setLib = (o) => { S = Object.assign({ blindNow: false, groom: "", rounds: ROUNDS }, o); };
 setLib({});
@@ -167,17 +174,17 @@ function onHostMsg(m){
   }
 }
 
-function renderHost(){
+function renderHost(){ keepFocus(() => {
   // Le jeu de l'hôte s'affiche seulement quand il a quelque chose à faire ; sinon, retour à l'écran hôte
   if(!PLAY_PHASES.includes(H.phase)) view = "host";
-  if(view === "play" && hostPlays()){ renderPlayer(); return; }
+  if(view === "play" && hostPlays()){ myTurn() ? paintPlay() : renderPlayer(); return; }
   setLib({ groom: H.groom, rounds: H.rounds });
   ({ setup: hostSetup, lobby: hostLobby, startSpin: hostStartSpin, draft: hostDraft, show: hostShow, spin: hostSpin,
      revealTeams: hostRevealHandoff, reveal: hostReveal, election: hostElection, final: hostFinal })[H.phase]();
   const k = H.phase + (H.round || 0) + "-" + (H.revealIdx || 0) + "-" + (H.elect ? H.elect.idx : 0) + "-" + (H.startSpin ? H.startSpin.idx : 0) + "-" + (H.spin ? H.spin.stage : 0);
   if(k !== lastHostKey){ window.scrollTo(0, 0); lastHostKey = k; }
   paintPlay();
-}
+}); }
 function closeRoom(){
   askConfirm("Fermer la salle ? La partie sera perdue et les joueurs déconnectés.", () => { send({ t: "closed" }); disconnect(); H = null; write(HOST_KEY, null); renderStart(); }, "Fermer la salle");
 }
@@ -295,8 +302,19 @@ function hostDraft(){
       <span class="bar" aria-hidden="true"><i style="width:${d ? 100 : o ? 50 : 8}%"></i></span>
       <span class="ct">${d ? "✓" : o ? "Deck" : "Booster"}</span></li>`; }).join("")}</ul>
     <p class="hint">La présentation du tour démarre toute seule quand tout le monde a validé son deck.</p>
+    ${H.players.filter(p => !H.decks[p.id]).map(p => `<button class="link" data-auto="${esc(p.id)}">Valider à la place de ${esc(p.name)}</button>`).join("")}
     ${closeLink}
   </section>`;
+  qa("[data-auto]").forEach(b => b.onclick = () => {
+    const id = b.dataset.auto;
+    askConfirm(`Valider le deck de ${pName(id)} à sa place ? Ses cartes seront placées au mieux d'après les stats.`, () => {
+      const h = H && H.hands && H.hands[id]; if(!h) return;
+      const assign = {}, used = new Set();
+      h.cards.flatMap(c => CATS.map(cat => [c, cat])).sort((x, y) => catScore(y[0], y[1]) - catScore(x[0], x[1]))
+        .forEach(([c, cat]) => { if(assign[cat.id] == null && !used.has(c.id)){ assign[cat.id] = c.id; used.add(c.id); } });
+      onHostMsg({ t: "deck", id, n: h.n, assign });
+    }, "Valider");
+  });
   bindClose();
 }
 
@@ -466,7 +484,7 @@ function joinRoom(){
   role = "player"; saveMe(); P.st = null; P.waited = false;
   history.replaceState(null, "", location.pathname + "?salle=" + P.code);
   renderPlayer();
-  const ok = connect(P.code, P.id, { role: "player", name: P.name }, onPlayerMsg, ps => { P.hostOnline = !!ps.host; renderPlayer(); },
+  const ok = connect(P.code, P.id, { role: "player", name: P.name }, onPlayerMsg, ps => { P.hostOnline = !!ps.host; if(!myTurn()) renderPlayer(); },
     () => sendP({ t: "hello", id: P.id, name: P.name }));
   if(!ok){ P.msg = "Connexion impossible. Vérifie ta connexion internet, puis réessaie."; renderJoin(); return; }
   clearTimeout(waitTimer);
@@ -482,9 +500,10 @@ function onPlayerMsg(m){
   if(role === "host" && !hostPlays()) return;
   if(m.to && m.to !== P.id) return;
   if(m.t === "state"){
-    const first = !P.st; P.st = m;
+    const first = !P.st, was = myTurn(), ph = P.st && P.st.phase, rd = P.st && P.st.round; P.st = m;
     if(m.phase === "lobby" || m.phase === "startSpin"){ P.hand = null; P.sent = ""; }
     if(first) sfx.click();
+    if(was && myTurn() && m.phase === ph && m.round === rd){ paintPlay(); return; }
     renderPlayer(); return;
   }
   if(m.t === "hand"){
@@ -546,7 +565,7 @@ function playerWatch(){
   const st = P.st, ph = st.phase;
   const done = st.status ? Object.values(st.status).filter(s => s.done).length : 0;
   const title = { startSpin: "Roulette<br>des jokers", draft: "Deck<br>envoyé", show: "Présen&shy;tation", spin: "Roulettes", revealTeams: "Révélation", reveal: "Révélation", election: "Élections", final: "Le<br>podium" }[ph] || "Regarde l'écran";
-  const text = ph === "draft" ? (P.hand ? `${done} sur ${st.players.length} ont validé. La présentation commence dès que tout le monde a fini.` : "Ton booster arrive…")
+  const text = ph === "draft" ? (P.hand || myDone() ? `${done} sur ${st.players.length} ont validé. La présentation commence dès que tout le monde a fini.` : "Ton booster arrive…")
     : ph === "startSpin" ? "L'hôte fait tourner la roulette : chacun gagne un joker de départ."
     : ph === "show" ? `Tour ${st.round} : l'hôte révèle les choix de chacun. Prépare tes arguments.`
     : ph === "spin" ? "Bonus pour la meilleure équipe, malus pour la moins bonne."
