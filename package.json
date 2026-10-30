@@ -1,0 +1,12 @@
+{
+  "name": "jeux-evg",
+  "private": true,
+  "description": "Jeux de soirée de l'EVG. Le site n'a besoin d'aucune installation : ce fichier sert seulement aux tests automatiques.",
+  "scripts": {
+    "test": "playwright test",
+    "test:cdn": "CHECK_CDN=1 playwright test tests/securite.spec.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
