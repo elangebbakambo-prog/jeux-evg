@@ -206,7 +206,7 @@ body.has-music .play-switch{ bottom:calc(84px + env(safe-area-inset-bottom,0px))
         widget.bind(E.PLAY, onPlay);
         widget.bind(E.FINISH, () => { if(playing){ playing = false; setState("done"); } });
         widget.bind(E.ERROR, () => setState("error"));
-      } else if(curLink !== link){ curLink = link; pending = true; widget.load(link, { auto_play: false, show_comments: false, hide_related: true, visual: false, callback: () => pickAndPlay() }); }
+      } else if(curLink !== link){ curLink = link; pending = true; widget.load(link, { auto_play: false, show_comments: false, hide_related: true, visual: false, callback: () => { if(pending) pickAndPlay(); } }); }
       else pickAndPlay();
     }).catch(() => setState("error"));
   }
