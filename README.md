@@ -40,3 +40,16 @@ Un double-clic sur `index.html` marche aussi, sans extension.
 - La connexion est réglée dans `config.js` (URL du projet et clé **publishable**, jamais la clé secrète).
 - Tous les joueurs doivent être dans la salle avant le lancement. Si un téléphone se recharge ou perd le réseau, il reprend là où il en était.
 - Ça ne marche que sur le site hébergé ou en local avec Live Server, pas en ouvrant le fichier par double-clic.
+
+## Tests automatiques
+
+À chaque push et à chaque pull request, GitHub lance les tests (onglet **Actions**, et ✅ ou ❌ en bas de chaque PR). Un ❌ veut dire qu'une modification a cassé quelque chose : ne pas fusionner avant de comprendre pourquoi. En cas d'échec, le rapport avec captures d'écran est téléchargeable dans l'onglet Actions (« rapport-tests »).
+
+Ce qui est vérifié (`tests/`) :
+
+- `mafia.spec.js` : de vraies parties de Mafia ou pas mafia (Situations, Danseurs, Battle dans chaque catégorie et chaque format, All Style Bad, roulette, annuler, rechargement de la page).
+- `autres-jeux.spec.js` : un « joueur robot » touche les boutons des trois jeux pendant des centaines d'étapes et vérifie qu'aucune erreur n'apparaît.
+- `multijoueur.spec.js` : les pages multijoueur s'ouvrent sans planter.
+- `securite.spec.js` : aucune erreur de syntaxe, aucune clé secrète Supabase dans le code, scripts des CDN verrouillés par une empreinte `integrity` (et empreintes vérifiées en ligne), versions anti-cache cohérentes.
+
+Pour les lancer sur ton ordi : `npm install`, `npx playwright install chromium`, puis `npm test`.

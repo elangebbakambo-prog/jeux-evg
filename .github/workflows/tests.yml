@@ -1,0 +1,42 @@
+# Tests automatiques : à chaque push et à chaque pull request, GitHub joue aux jeux
+# dans un navigateur et vérifie la sécurité. Résultat : ✅ ou ❌ dans la PR.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Le minimum de droits : ce workflow lit le code, il n'écrit rien
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Jouer aux jeux et vérifier la sécurité
+        run: npx playwright test
+        env:
+          CHECK_CDN: "1"
+      - name: Rapport (captures d'écran des échecs)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-tests
+          path: playwright-report/
+          retention-days: 7
