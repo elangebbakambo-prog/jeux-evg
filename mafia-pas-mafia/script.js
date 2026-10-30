@@ -25,10 +25,42 @@ const POPPING_NAMES = ["Poppin J", "Missile", "Joël Brown", "Ness", "Dokyun", "
 const BCATS = {
   all:     { label:"All style", names:null },
   hiphop:  { label:"Hip hop",   names:HIPHOP_NAMES },
-  popping: { label:"Popping",   names:POPPING_NAMES }
+  popping: { label:"Popping",   names:POPPING_NAMES },
+  bad:     { label:"All Style Bad", names:null, bad:true }
 };
+// All Style Bad : un tournoi Popping, puis un tournoi Hip hop, puis une grande finale
+// entre les deux champions.
+const BAD_PHASES = [ { cat:"popping", label:"Popping" }, { cat:"hiphop", label:"Hip hop" } ];
 // Danseurs du tournoi selon la catégorie, parmi la liste de « Préparer »
 const battlePool = (cat, names) => { const c = BCATS[cat] || BCATS.all; if(!c.names) return names; const set = new Set(c.names.map(n => n.toLowerCase())); return names.filter(n => set.has(n.toLowerCase())); };
+
+// Roulette de style : quand on joue sans musique, un bouton tire un style à imposer
+// pour le duel (le nom s'affiche, aucun son). Styles modifiables dans les réglages.
+const ROULETTE_KEY = "battle-roulette";
+const ROULETTE_DEFAUT = {
+  popping: ["Funk", "Boogaloo", "Dubstep", "Hip hop", "House", "Afro", "Reggae", "Acapella / beatbox"],
+  hiphop:  ["Boom bap", "New jack", "Trap", "Afro", "Dancehall", "House", "Reggae", "RnB"]
+};
+function rouletteLoad(){
+  let c = null;
+  try{ c = JSON.parse(localStorage.getItem(ROULETTE_KEY)); }catch(e){}
+  c = c || {};
+  return {
+    popping: Array.isArray(c.popping) && c.popping.length ? c.popping : ROULETTE_DEFAUT.popping.slice(),
+    hiphop:  Array.isArray(c.hiphop)  && c.hiphop.length  ? c.hiphop  : ROULETTE_DEFAUT.hiphop.slice()
+  };
+}
+function rouletteSave(c){ try{ localStorage.setItem(ROULETTE_KEY, JSON.stringify(c)); }catch(e){} }
+// Popping et Hip hop ont leur liste ; All style et la grande finale réunissent les deux
+const rouletteStyles = cat => { const c = rouletteLoad(); return c[cat] || [...new Set([...c.popping, ...c.hiphop])]; };
+// Réglages de la roulette (accueil du Battle, visibles quand on joue sans musique)
+const rouletteSettingsHTML = () => { const c = rouletteLoad(); return `<h2 class="h2">Roulette de style</h2>
+    <p class="hint">Sans musique, un bouton « Lancer la roulette » apparaît pendant les duels : il tire un style à imposer aux danseurs (le nom s'affiche, pas de son). Un style par ligne.</p>
+    ${[["popping", "Popping"], ["hiphop", "Hip hop"]].map(([k, l]) => `<label class="mus-row"><span>${l}</span>
+      <textarea class="field solo" data-roul="${k}" rows="4" placeholder="Un style par ligne">${esc(c[k].join("\n"))}</textarea></label>`).join("")}
+    <p class="hint">All style et la grande finale du All Style Bad tirent dans les deux listes.</p>`; };
+// Sans musique : pas de lecteur, ou l'hôte a choisi « Sans musique »
+const noMusic = () => !window.Musique || !Musique.configured();
 const DANCERS_VERSION = 5;
 // Formats d'un duel du Battle
 const BFMTS = {
@@ -150,7 +182,11 @@ const deckSize = () => Math.min(store.size || list().length, list().length);
 /* ---------- Accueil ---------- */
 function renderHome(){
   const exs = list().filter(q => q.ex).length, n = list().length, m = M();
-  const nb = battlePool(store.bcat, store.dancers.map(d => d.text)).length;
+  const names = store.dancers.map(d => d.text);
+  const nPop = battlePool("popping", names).length, nHip = battlePool("hiphop", names).length;
+  const isBad = store.bcat === "bad";
+  const nb = isBad ? Math.min(nPop, nHip) : battlePool(store.bcat, names).length;
+  const catCount = k => k === "bad" ? `${nPop} + ${nHip}` : battlePool(k, names).length;
   app.innerHTML = `<section class="screen">
     <h1 class="title">Mafia<br><em>ou pas</em><br>mafia</h1>
     <p class="lead">${store.mode === "bat" ? "Le mode Battle : vos danseurs s'affrontent en tournoi, duel après duel, jusqu'à ce qu'il n'en reste qu'un." : "Chacun glisse les cartes en secret : à droite c'est mafia, à gauche ça passe. Ensuite on révèle les votes carte par carte, et chacun doit se justifier."}</p>
@@ -162,19 +198,22 @@ function renderHome(){
     ${store.mode === "bat" ? `
     <h2 class="h2">Catégorie</h2>
     <div class="seg" role="group" aria-label="Catégorie du battle">${Object.entries(BCATS).map(([k,c]) =>
-      `<button data-bcat="${k}" aria-pressed="${store.bcat === k}">${c.label}<br><small>${battlePool(k, store.dancers.map(d => d.text)).length} danseurs</small></button>`).join("")}</div>
+      `<button data-bcat="${k}" aria-pressed="${store.bcat === k}">${c.label}<br><small>${catCount(k)} danseurs</small></button>`).join("")}</div>
+    ${isBad ? `<p class="hint">All Style Bad : un tournoi Popping, puis un tournoi Hip hop. Les deux champions s'affrontent ensuite en grande finale.</p>` : ""}
     <h2 class="h2">Format des duels</h2>
     <div class="seg" role="group" aria-label="Format des duels">${Object.entries(BFMTS).map(([k,f]) =>
       `<button data-bfmt="${k}" aria-pressed="${store.bfmt === k}">${f.label}</button>`).join("")}</div>
     <p class="hint">${BFMTS[store.bfmt].hint}</p>
     <h2 class="h2">Taille du tournoi</h2>
     <div class="seg four" role="group" aria-label="Nombre de danseurs dans le tournoi">${[[4,"4"],[8,"8"],[16,"16"],[0,"Tous"]].map(([k,l]) =>
-      `<button data-bsize="${k}" aria-pressed="${store.bsize === k}">${l}<br><small>${k ? roundName(k / 2) : nb + " danseurs"}</small></button>`).join("")}</div>
+      `<button data-bsize="${k}" aria-pressed="${store.bsize === k}">${l}<br><small>${k ? roundName(k / 2) : (isBad ? `${nPop} + ${nHip}` : nb) + " danseurs"}</small></button>`).join("")}</div>
+    ${isBad ? `<p class="hint">La taille vaut pour chacun des deux tournois.</p>` : ""}
     <div class="stat"><span><strong>Danseurs prêts</strong><br><span class="hint">${exs ? `Dont ${exs} exemple${exs > 1 ? "s" : ""} à remplacer.` : "Tous ajoutés par vous."}</span></span><b>${n}</b></div>
     <button class="btn gold" id="bank">Préparer les danseurs</button>
     <p class="hint">Les catégories Hip hop et Popping prennent leurs danseurs dans cette liste. Un danseur ajouté à la main ne joue qu'en All style.</p>
     ${window.Musique ? Musique.settingsHTML() : ""}
-    <button class="btn main" id="start" ${nb >= 2 ? "" : "disabled"}>Lancer le tournoi</button>
+    ${noMusic() ? rouletteSettingsHTML() : ""}
+    <button class="btn main" id="start" ${nb >= 2 ? "" : "disabled"}>${isBad ? "Lancer le All Style Bad" : "Lancer le tournoi"}</button>
   </section>` : `
     <h2 class="h2">Joueurs</h2>
     <ol class="players">${store.players.map((p,i) => `<li>
@@ -189,6 +228,9 @@ function renderHome(){
     <button class="btn main" id="start" ${n && players().length >= 2 ? "" : "disabled"}>Lancer la partie</button>
   </section>`}`;
   if(window.Musique) Musique.bindSettings(app, render);
+  $$("[data-roul]").forEach(ta => ta.oninput = () => {
+    const c = rouletteLoad(); c[ta.dataset.roul] = ta.value.split("\n").map(s => s.trim()).filter(Boolean); rouletteSave(c);
+  });
   $$("[data-bfmt]").forEach(b => b.onclick = () => { store.bfmt = b.dataset.bfmt; save(); sfx.click(); render(); });
   $$("[data-bcat]").forEach(b => b.onclick = () => { store.bcat = b.dataset.bcat; save(); sfx.click(); render(); });
   $$("[data-bsize]").forEach(b => b.onclick = () => { store.bsize = +b.dataset.bsize; save(); sfx.click(); render(); });
@@ -449,7 +491,41 @@ const withPrime = x => { if(x.b !== null && x.pa === undefined){ x.pa = Math.ran
 const nm = (x, s) => x[s] + (x["p" + s] ? " (prime)" : "");
 function startBattle(){
   if(window.Musique) Musique.reset(); // nouveau tournoi : tous les sons peuvent revenir
-  const all = shuffle(battlePool(store.bcat, store.dancers.map(d => d.text)));
+  if(store.bcat === "bad"){
+    const ph = BAD_PHASES[0];
+    store.game = { mode:"bat", cat:ph.cat, fmt:store.bfmt, rounds:[firstRound(battlePool(ph.cat, store.dancers.map(d => d.text)))], r:0, m:0, step:"intro", hist:[],
+      bad:{ phase:0, champs:[], done:[] } };
+  } else {
+    store.game = { mode:"bat", cat:store.bcat, fmt:store.bfmt, rounds:[firstRound(battlePool(store.bcat, store.dancers.map(d => d.text)))], r:0, m:0, step:"intro", hist:[] };
+  }
+  seek(); store.game.step = "intro";
+  save(); screen = "game"; render();
+}
+// All Style Bad : la phase en cours est finie, on lance la suivante (ou la grande finale)
+function badNext(){
+  const g = G(), b = g.bad, champ = g.rounds[g.r][0].w;
+  b.champs.push(champ); b.done.push(g.rounds);
+  b.phase++;
+  if(b.phase < BAD_PHASES.length){
+    const ph = BAD_PHASES[b.phase];
+    // Un danseur peut être dans les deux catégories : le champion déjà qualifié ne rejoue pas
+    let pool = battlePool(ph.cat, store.dancers.map(d => d.text));
+    const sans = pool.filter(n => !b.champs.some(c => c.toLowerCase() === n.toLowerCase()));
+    if(sans.length >= 2) pool = sans;
+    g.cat = ph.cat; g.rounds = [firstRound(pool)];
+  } else {
+    g.cat = "all"; g.rounds = [[withPrime({ a: b.champs[0], b: b.champs[1], w: null })]];
+  }
+  g.r = 0; g.m = 0; g.hist = [];
+  seek(); g.step = "intro";
+  save(); render(); sfx.reveal();
+}
+const isGrandFinal = g => !!(g.bad && g.bad.phase >= BAD_PHASES.length);
+const rname = (g, cur) => isGrandFinal(g) ? "Grande finale" : roundName(cur.length);
+const battleLabel = g => g.bad ? (isGrandFinal(g) ? "All Style Bad, grande finale" : `All Style Bad, tournoi ${BAD_PHASES[g.bad.phase].label}`) : `Battle ${(BCATS[g.cat] || BCATS.all).label}`;
+// Premier tour d'un tournoi
+function firstRound(pool){
+  const all = shuffle(pool);
   const n = store.bsize ? Math.min(store.bsize, all.length) : all.length;
   const ent = all.slice(0, n);
   // Taille du tableau = puissance de 2 ; les places vides sont des exempts (qualifiés d'office)
@@ -457,17 +533,14 @@ function startBattle(){
   const byes = P - n, first = [];
   let k = 0;
   for(let i = 0; i < P / 2; i++) first.push(i < byes ? { a: ent[k++], b: null, w: null } : { a: ent[k++], b: ent[k++], w: null });
-  const round = shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : withPrime(x));
-  store.game = { mode:"bat", cat:store.bcat, fmt:store.bfmt, rounds:[round], r:0, m:0, step:"intro", hist:[] };
-  seek(); store.game.step = "intro";
-  save(); screen = "game"; render();
+  return shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : withPrime(x));
 }
 // Passe au prochain duel à jouer, ou au tour suivant quand le tour est fini
 function seek(){
   const g = G(), cur = g.rounds[g.r], i = cur.findIndex(x => x.w == null);
   if(i >= 0){ g.m = i; return; }
   const ws = cur.map(x => x.w);
-  if(ws.length === 1){ g.step = "champion"; return; }
+  if(ws.length === 1){ g.step = g.bad && !isGrandFinal(g) ? "phaseEnd" : "champion"; return; }
   const nx = [];
   for(let j = 0; j < ws.length; j += 2) nx.push(withPrime({ a: ws[j], b: ws[j + 1], w: null }));
   g.rounds.push(nx); g.r++; g.m = 0; g.step = "intro";
@@ -479,12 +552,12 @@ function choose(side, score){
   if(g.fmt === "callout") x.callout = true;
   g.hist.push([g.r, g.m]);
   seek(); save(); render();
-  if(g.step === "champion") sfx.fanfare(); else if(g.step === "intro") sfx.reveal();
+  if(g.step === "champion" || g.step === "phaseEnd") sfx.fanfare(); else if(g.step === "intro") sfx.reveal();
 }
 function undoBattle(){
   const g = G(), h = g.hist.pop(); if(!h) return;
   const [r, m] = h;
-  g.rounds.length = r + 1; g.rounds[r][m].w = null; delete g.rounds[r][m].score; delete g.rounds[r][m].pass; delete g.rounds[r][m].callout;
+  g.rounds.length = r + 1; g.rounds[r][m].w = null; delete g.rounds[r][m].score; delete g.rounds[r][m].pass; delete g.rounds[r][m].callout; delete g.rounds[r][m].style;
   g.r = r; g.m = m; g.step = "duel";
   save(); sfx.click(); render();
 }
@@ -492,19 +565,47 @@ const quitBattle = () => askConfirm("Arrêter le tournoi ? Le tableau sera perdu
 
 function renderBattle(){
   const g = G();
-  ({ intro:renderBattleIntro, duel:renderDuel, champion:renderChampion })[g.step]();
+  ({ intro:renderBattleIntro, duel:renderDuel, champion:renderChampion, phaseEnd:renderPhaseEnd })[g.step]();
+}
+
+// Tableau d'un tournoi (écrans de fin)
+const bracketHTML = (rounds, finalName) => `<div class="bracket">${rounds.map(rd => `<section><h3>${finalName && rd.length === 1 ? finalName : roundName(rd.length)}</h3><ul>${rd.map(x => x.bye
+    ? `<li><span class="w">${esc(nm(x, "a"))}</span><span class="q">qualifié d'office</span></li>`
+    : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(nm(x, "a"))}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(nm(x, "b"))}</span>${x.score ? `<span class="q">${x.score.a}-${x.score.b}</span>` : x.callout ? `<span class="q">call out</span>` : ""}${x.style ? `<span class="q">${esc(x.style)}</span>` : ""}</li>`).join("")}</ul></section>`).join("")}</div>`;
+const finalLine = fin => fin.score ? `, ${Math.max(fin.score.a, fin.score.b)} passages à ${Math.min(fin.score.a, fin.score.b)}` : fin.callout ? ", en call out" : "";
+
+// All Style Bad : fin d'un des deux tournois
+function renderPhaseEnd(){
+  const g = G(), b = g.bad, ph = BAD_PHASES[b.phase], fin = g.rounds[g.r][0], champ = fin.w, runner = fin.w === fin.a ? fin.b : fin.a;
+  const last = b.phase + 1 >= BAD_PHASES.length;
+  app.innerHTML = `<section class="screen">
+    <div class="champ">
+      <span class="crown" aria-hidden="true">♛</span>
+      <p class="meta">All Style Bad, champion ${ph.label}</p>
+      <h1 class="champ-name">${esc(champ)}</h1>
+      <p class="hint">A battu ${esc(runner)} en finale${finalLine(fin)}. ${last ? `Il affronte ${esc(b.champs[0])}, champion ${BAD_PHASES[0].label}, en grande finale.` : `Qualifié pour la grande finale.`}</p>
+    </div>
+    <h2 class="h2">Le tableau ${ph.label}</h2>
+    ${bracketHTML(g.rounds)}
+    <button class="btn main" id="next">${last ? "Lancer la grande finale" : `Lancer le tournoi ${BAD_PHASES[b.phase + 1].label}`}</button>
+    <button class="link" id="undo">Annuler le dernier choix</button>
+    <button class="link" id="quit">Arrêter le tournoi</button>
+  </section>`;
+  $("#next").onclick = badNext;
+  $("#undo").onclick = undoBattle;
+  $("#quit").onclick = quitBattle;
 }
 
 function renderBattleIntro(){
-  const g = G(), cur = g.rounds[g.r], name = roundName(cur.length);
+  const g = G(), cur = g.rounds[g.r], name = rname(g, cur);
   const duels = cur.filter(x => !x.bye), byes = cur.filter(x => x.bye);
   app.innerHTML = `<section class="screen">
-    <p class="meta">Battle ${(BCATS[g.cat] || BCATS.all).label}, ${BFMTS[g.fmt || "one"].label.toLowerCase()}, tour ${g.r + 1} sur ${Math.log2(g.rounds[0].length) + 1}</p>
+    <p class="meta">${battleLabel(g)}, ${BFMTS[g.fmt || "one"].label.toLowerCase()}, tour ${g.r + 1} sur ${Math.log2(g.rounds[0].length) + 1}</p>
     <h1 class="title">${name.replace(" ", "<br>")}</h1>
-    <p class="lead">${cur.length === 1 ? "Plus que deux. Un seul repartira avec la couronne." : `${duels.length} duel${duels.length > 1 ? "s" : ""} au programme. Débattez, puis choisissez le gagnant de chaque duel.`}</p>
+    <p class="lead">${isGrandFinal(g) ? `Le champion ${BAD_PHASES[0].label} contre le champion ${BAD_PHASES[1].label}. Un seul repartira avec la couronne.` : cur.length === 1 ? "Plus que deux. Un seul repartira avec la couronne." : `${duels.length} duel${duels.length > 1 ? "s" : ""} au programme. Débattez, puis choisissez le gagnant de chaque duel.`}</p>
     <ol class="mlist">${duels.map(x => `<li><span>${esc(nm(x, "a"))}</span><b>VS</b><span>${esc(nm(x, "b"))}</span></li>`).join("")}</ol>
     ${byes.length ? `<p class="hint">Qualifié${byes.length > 1 ? "s" : ""} d'office pour le tour suivant : ${byes.map(x => esc(nm(x, "a"))).join(", ")}.</p>` : ""}
-    <button class="btn main" id="go">${cur.length === 1 ? "Lancer la finale" : "Lancer les duels"}</button>
+    <button class="btn main" id="go">${isGrandFinal(g) ? "Lancer la grande finale" : cur.length === 1 ? "Lancer la finale" : "Lancer les duels"}</button>
     ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier choix</button>` : ""}
     <button class="link" id="quit">Arrêter le tournoi</button>
   </section>`;
@@ -513,6 +614,26 @@ function renderBattleIntro(){
   $("#quit").onclick = quitBattle;
 }
 
+// Roulette de style pendant un duel sans musique. Le style tiré reste attaché au duel.
+const roulHTML = x => noMusic() ? `<div class="roul" aria-live="polite">
+    <p class="roul-txt">${x.style ? `<small>Style imposé</small><b>${esc(x.style)}</b>` : `<small>Bonus sans musique</small><b>Roulette de style</b>`}</p>
+    <button class="btn ghost" id="roul">${x.style ? "Relancer la roulette" : "Lancer la roulette"}</button></div>` : "";
+function bindRoul(x){
+  const btn = $("#roul"); if(!btn) return;
+  btn.onclick = () => {
+    const styles = rouletteStyles(G().cat); if(!styles.length) return;
+    const pick = styles[Math.floor(Math.random() * styles.length)];
+    const box = $(".roul"), txt = box.querySelector(".roul-txt");
+    const show = (st, lbl) => { txt.innerHTML = `<small>${lbl}</small><b>${esc(st)}</b>`; };
+    const done = () => { x.style = pick; save(); if(!box.isConnected) return; box.classList.remove("spin"); show(pick, "Style imposé"); btn.textContent = "Relancer la roulette"; btn.disabled = false; sfx.reveal(); };
+    btn.disabled = true;
+    if(reduce() || styles.length < 2){ done(); return; }
+    box.classList.add("spin");
+    let t = 0, d = 60, i = Math.floor(Math.random() * styles.length);
+    while(t < 1800){ const st = styles[i++ % styles.length]; setTimeout(() => { if(box.isConnected){ show(st, "La roulette tourne…"); sfx.click(); } }, t); t += d; d *= 1.13; }
+    setTimeout(done, t + 120);
+  };
+}
 const fighter = (name, side) => `<button class="fighter" data-side="${side}" aria-label="Faire gagner ${esc(name)}">
   <span class="f-mono" aria-hidden="true">${esc([...name][0] || "?")}</span>
   <span class="f-name">${esc(name)}<small>Touche pour le qualifier</small></span></button>`;
@@ -522,9 +643,10 @@ function renderPasses(){
   const g = G(), cur = g.rounds[g.r], x = cur[g.m], real = cur.filter(y => !y.bye), num = real.indexOf(x) + 1;
   const pass = x.pass || (x.pass = []), k = pass.length, A = pass.filter(p => p === "a").length, B = k - A;
   app.innerHTML = `<section class="screen">
-    <header class="bar"><span>${roundName(cur.length)}</span><span>${cur.length === 1 ? "Le duel final" : `Duel ${num} sur ${real.length}`}</span></header>
+    <header class="bar"><span>${rname(g, cur)}</span><span>${cur.length === 1 ? "Le duel final" : `Duel ${num} sur ${real.length}`}</span></header>
     <p class="meta center">Passage ${Math.min(k + 1, 3)} sur 3</p>
     <div class="duel">${fighter(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">${A}-${B}</span>${fighter(nm(x, "b"), "b")}</div>
+    ${roulHTML(x)}
     <p class="hint center">Débattez, puis touchez le gagnant de ce passage.</p>
     ${k ? `<button class="link" id="unpass">Annuler le dernier passage</button>` : ""}
     ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier duel</button>` : ""}
@@ -540,14 +662,16 @@ function renderPasses(){
   });
   const up = $("#unpass"); if(up) up.onclick = () => { pass.pop(); save(); sfx.click(); render(); };
   const u = $("#undo"); if(u) u.onclick = undoBattle;
+  bindRoul(x);
   $("#quit").onclick = quitBattle;
 }
 // Call out : on touche celui qui n'a plus rien
 function renderCallout(){
   const g = G(), cur = g.rounds[g.r], x = cur[g.m], real = cur.filter(y => !y.bye), num = real.indexOf(x) + 1;
   app.innerHTML = `<section class="screen">
-    <header class="bar"><span>${roundName(cur.length)}</span><span>${cur.length === 1 ? "La finale" : `Duel ${num} sur ${real.length}`}, call out</span></header>
+    <header class="bar"><span>${rname(g, cur)}</span><span>${cur.length === 1 ? "La finale" : `Duel ${num} sur ${real.length}`}, call out</span></header>
     <div class="duel">${fighter(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">VS</span>${fighter(nm(x, "b"), "b")}</div>
+    ${roulHTML(x)}
     <p class="hint center">Envoyez sans vous arrêter. Touchez celui qui n'a plus rien : l'autre se qualifie.</p>
     ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier duel</button>` : ""}
     <button class="link" id="quit">Arrêter le tournoi</button>
@@ -559,6 +683,7 @@ function renderCallout(){
     setTimeout(() => choose(win), reduce() ? 0 : 650);
   });
   const u = $("#undo"); if(u) u.onclick = undoBattle;
+  bindRoul(x);
   $("#quit").onclick = quitBattle;
 }
 function renderDuel(){
@@ -567,8 +692,9 @@ function renderDuel(){
   const g = G(), cur = g.rounds[g.r], x = cur[g.m];
   const real = cur.filter(y => !y.bye), num = real.indexOf(x) + 1;
   app.innerHTML = `<section class="screen">
-    <header class="bar"><span>${roundName(cur.length)}</span><span>${cur.length === 1 ? "Le duel final" : `Duel ${num} sur ${real.length}`}</span></header>
+    <header class="bar"><span>${rname(g, cur)}</span><span>${cur.length === 1 ? "Le duel final" : `Duel ${num} sur ${real.length}`}</span></header>
     <div class="duel">${fighter(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">VS</span>${fighter(nm(x, "b"), "b")}</div>
+    ${roulHTML(x)}
     <p class="hint center">Débattez, puis touchez le gagnant.</p>
     <button class="btn ghost" id="coin">Pas d'accord ? Pile ou face</button>
     ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier choix</button>` : ""}
@@ -596,23 +722,24 @@ function renderDuel(){
     setTimeout(() => { fa.classList.remove("hot"); fb.classList.remove("hot"); busy = false; win(side); }, steps[steps.length - 1][0] + 350);
   };
   const u = $("#undo"); if(u) u.onclick = undoBattle;
+  bindRoul(x);
   $("#quit").onclick = quitBattle;
 }
 
 function renderChampion(){
-  const g = G(), fin = g.rounds[g.r][0], champ = fin.w, runner = fin.w === fin.a ? fin.b : fin.a;
+  const g = G(), fin = g.rounds[g.r][0], champ = fin.w, runner = fin.w === fin.a ? fin.b : fin.a, b = g.bad;
+  const from = n => b ? (BAD_PHASES[b.champs.indexOf(n)] || {}).label || "" : "";
   app.innerHTML = `<section class="screen">
     <div class="champ">
       <span class="crown" aria-hidden="true">♛</span>
-      <p class="meta">Champion ${(BCATS[g.cat] || BCATS.all).label}</p>
+      <p class="meta">Champion ${b ? "All Style Bad" : (BCATS[g.cat] || BCATS.all).label}</p>
       <h1 class="champ-name">${esc(champ)}</h1>
-      <p class="hint">A battu ${esc(runner)} en finale${fin.score ? `, ${Math.max(fin.score.a, fin.score.b)} passages à ${Math.min(fin.score.a, fin.score.b)}` : fin.callout ? ", en call out" : ""}.</p>
+      <p class="hint">${b ? `Champion ${from(champ)}, a battu ${esc(runner)} (champion ${from(runner)}) en grande finale${finalLine(fin)}.` : `A battu ${esc(runner)} en finale${finalLine(fin)}.`}</p>
     </div>
-    <h2 class="h2">Le tableau</h2>
-    <div class="bracket">${g.rounds.map(rd => `<section><h3>${roundName(rd.length)}</h3><ul>${rd.map(x => x.bye
-        ? `<li><span class="w">${esc(nm(x, "a"))}</span><span class="q">qualifié d'office</span></li>`
-        : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(nm(x, "a"))}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(nm(x, "b"))}</span>${x.score ? `<span class="q">${x.score.a}-${x.score.b}</span>` : x.callout ? `<span class="q">call out</span>` : ""}</li>`).join("")}</ul></section>`).join("")}</div>
-    <button class="btn main" id="again">Nouveau tournoi</button>
+    ${b ? `${bracketHTML(g.rounds, "Grande finale")}
+    ${b.done.map((rounds, i) => `<h2 class="h2">Le tableau ${BAD_PHASES[i].label}</h2>${bracketHTML(rounds)}`).join("")}`
+      : `<h2 class="h2">Le tableau</h2>${bracketHTML(g.rounds)}`}
+    <button class="btn main" id="again">${b ? "Nouveau All Style Bad" : "Nouveau tournoi"}</button>
     <button class="link" id="undo">Annuler le dernier choix</button>
     <button class="btn ghost" id="home">Retour à l'accueil</button>
   </section>`;
