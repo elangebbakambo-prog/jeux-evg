@@ -35,3 +35,8 @@ test("Chaque danseur Hip hop et Popping est dans la liste complète", () => {
   const all = new Set(solo.dancers.map(n => n.toLowerCase()));
   expect([...solo.hiphop, ...solo.popping].filter(n => !all.has(n.toLowerCase()))).toEqual([]);
 });
+
+test("All style = Hip hop + Popping, ni plus ni moins", () => {
+  const union = [...new Set([...solo.hiphop, ...solo.popping].map(n => n.toLowerCase()))].sort();
+  expect(solo.dancers.map(n => n.toLowerCase()).sort()).toEqual(union);
+});
