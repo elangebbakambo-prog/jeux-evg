@@ -38,7 +38,7 @@ const battlePool = (cat, names) => { const c = BCATS[cat] || BCATS.all; if(!c.na
 // pour le duel (le nom s'affiche, aucun son). Styles modifiables dans les réglages.
 const ROULETTE_KEY = "battle-roulette";
 const ROULETTE_DEFAUT = {
-  popping: ["Funk", "Boogaloo", "Dubstep", "Hip hop", "House", "Afro", "Reggae", "Acapella / beatbox"],
+  popping: ["Funk", "G-Funk", "Electro Funk", "P-Funk", "Popping Beats", "RnB"],
   hiphop:  ["Boom bap", "New jack", "Trap", "Afro", "Dancehall", "House", "Reggae", "RnB"]
 };
 function rouletteLoad(){
