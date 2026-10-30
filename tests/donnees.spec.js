@@ -36,7 +36,11 @@ test("Chaque danseur Hip hop et Popping est dans la liste complète", () => {
   expect([...solo.hiphop, ...solo.popping].filter(n => !all.has(n.toLowerCase()))).toEqual([]);
 });
 
-test("All style = Hip hop + Popping, ni plus ni moins", () => {
-  const union = [...new Set([...solo.hiphop, ...solo.popping].map(n => n.toLowerCase()))].sort();
-  expect(solo.dancers.map(n => n.toLowerCase()).sort()).toEqual(union);
+// Le mode Danseurs garde la liste complète ; le Battle All style prend Hip hop + Popping, ni plus ni moins
+test("Battle All style = Hip hop + Popping ; mode Danseurs = liste complète", async ({ page }) => {
+  const union = new Set([...solo.hiphop, ...solo.popping].map(n => n.toLowerCase())).size;
+  await page.goto("/mafia-pas-mafia/index.html");
+  await page.click('[data-mode="bat"]');
+  await expect(page.locator('[data-bcat="all"] small')).toHaveText(`${union} danseurs`);
+  await expect(page.locator('[data-mode="dan"] small')).toHaveText(`${solo.dancers.length} danseurs`);
 });

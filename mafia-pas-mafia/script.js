@@ -17,13 +17,13 @@ const EXAMPLES = [
   "Mettre la vidéo d'un autre danseur en story sans le créditer.",
   "Partir de l'EVG avant le dernier verre « parce que demain je bosse »."
 ].map(text => ({ text, ex:true }));
-// Danseurs des modes Danseurs et Battle : All style = Hip hop + Popping, ni plus ni moins
-const DANCER_NAMES = ["Alex the Cage", "Andrey Stylez", "April", "Batalla", "Deadhomies", "Delannotche", "Dereck", "Doyah", "Drop", "Dyken", "Erine", "Evion", "Forge", "Icee", "Jean-Michel Cruel", "Jimmy Yudat", "Junior", "Krissy", "Kuty", "Laura Nala", "Lilkens", "Lindsay", "Lossejoint", "Lumi", "Ma2t", "Mels", "Miguel", "Missile", "Nastya", "Ness", "Nicurl", "Odilon", "Pakissi", "Physs", "Reverse", "Rochka", "Rubix", "Sam Yudat", "Spider", "Willis", "Daren", "Xelyna", "Ziko", "Niako", "Kery", "Twizy", "Capjay", "Poppin J", "Joël Brown", "Dokyun", "Hozin", "Hoan", "Nikki Pop", "Slimboogie", "Greenteck", "Franqey", "Nelson", "Cinthia", "Sonya", "Eun-G", "Riha", "Nuria", "Lady C", "Ryu", "Sacha", "Paris", "Leila", "Bougito", "Creesto", "Iron Mike", "Linda", "Future", "Junior Boogaloo", "Marta", "Super Dino", "Lemzo", "Gucchon", "Kei", "Breeze Lee", "Précise", "Jrock", "Jiggy Jaya", "Kinho", "Trakinas", "Jaygee", "Glory", "Jeff West Gang", "Poppin C", "Chams", "Kryss Boogie", "Jerems"];
+// Danseurs du mode Danseurs (liste complète). Le Battle All style, lui, prend seulement Hip hop + Popping.
+const DANCER_NAMES = ["Ismaël", "Elange", "Vita", "Julie", "Dimust", "Aline", "Jikay", "Soyuz", "Yoh", "Kodi", "Dialo", "Ronyl", "Sobek", "Marie", "Ughost", "Viro", "Clément", "Suki", "Leah", "Noth", "Imou", "Semoss", "Lumi", "Paul (Meute Céleste)", "Evion", "Joann", "Youyou", "Missile", "Pakissi", "Richard Pop", "Ziko", "Forge", "Ma2t", "Hervé", "Ness", "Erine", "Spider", "Kuty", "Laura Nala", "Rubix", "Hamza", "Drop", "Poppin J", "Lossejoint", "Delannotche", "Mels", "Junior", "Miguel", "Xelyna", "Dyken", "Odilon", "Deadhomies", "Jean-Michel Cruel", "Willis", "Nastya", "Batalla", "Andrey Stylez", "Rochka", "Alex the Cage", "Icee", "Sam Yudat", "Lindsay", "Nicurl", "April", "Reverse", "Dereck", "Krissy", "Doyah", "Physs", "Jimmy Yudat", "Lilkens", "Joël Brown", "Dokyun", "Hozin", "Hoan", "Nikki Pop", "Slimboogie", "Greenteck", "Franqey", "Nelson", "Cinthia", "Sonya", "Eun-G", "Riha", "Nuria", "Lady C", "Ryu", "Sacha", "Paris", "Leila", "Bougito", "Creesto", "Iron Mike", "Linda", "Future", "Junior Boogaloo", "Super Dino", "Lemzo", "Gucchon", "Kei", "Breeze Lee", "Précise", "Jrock", "Jiggy Jaya", "Kinho", "Trakinas", "Jaygee", "Glory", "Jeff West Gang", "Poppin C", "Chams", "Kryss Boogie", "Jerems", "Daren", "Niako", "Kery", "Twizy", "Capjay", "Marta"];
 // Catégories du mode Battle. Un danseur peut être dans plusieurs catégories.
 const HIPHOP_NAMES = ["Alex the Cage", "Andrey Stylez", "April", "Batalla", "Deadhomies", "Delannotche", "Dereck", "Doyah", "Drop", "Dyken", "Erine", "Evion", "Forge", "Icee", "Jean-Michel Cruel", "Jimmy Yudat", "Junior", "Krissy", "Kuty", "Laura Nala", "Lilkens", "Lindsay", "Lossejoint", "Lumi", "Ma2t", "Mels", "Miguel", "Missile", "Nastya", "Ness", "Nicurl", "Odilon", "Pakissi", "Physs", "Reverse", "Rochka", "Rubix", "Sam Yudat", "Spider", "Willis", "Daren", "Xelyna", "Ziko", "Niako", "Kery", "Twizy", "Capjay"];
 const POPPING_NAMES = ["Poppin J", "Missile", "Joël Brown", "Ness", "Dokyun", "Hozin", "Hoan", "Nikki Pop", "Slimboogie", "Greenteck", "Franqey", "Nelson", "Cinthia", "Sonya", "Eun-G", "Riha", "Nuria", "Lady C", "Ryu", "Sacha", "Paris", "Leila", "Bougito", "Creesto", "Iron Mike", "Linda", "Future", "Junior Boogaloo", "Marta", "Super Dino", "Lemzo", "Gucchon", "Kei", "Breeze Lee", "Précise", "Jrock", "Jiggy Jaya", "Kinho", "Trakinas", "Jaygee", "Glory", "Jeff West Gang", "Poppin C", "Chams", "Kryss Boogie", "Jerems"];
 const BCATS = {
-  all:     { label:"All style", names:null },
+  all:     { label:"All style", names:null, union:true },
   hiphop:  { label:"Hip hop",   names:HIPHOP_NAMES },
   popping: { label:"Popping",   names:POPPING_NAMES },
   bad:     { label:"All Style Bad", names:null, bad:true }
@@ -32,7 +32,14 @@ const BCATS = {
 // entre les deux champions.
 const BAD_PHASES = [ { cat:"popping", label:"Popping" }, { cat:"hiphop", label:"Hip hop" } ];
 // Danseurs du tournoi selon la catégorie, parmi la liste de « Préparer »
-const battlePool = (cat, names) => { const c = BCATS[cat] || BCATS.all; if(!c.names) return names; const set = new Set(c.names.map(n => n.toLowerCase())); return names.filter(n => set.has(n.toLowerCase())); };
+const battlePool = (cat, names) => {
+  const c = BCATS[cat] || BCATS.all;
+  const low = n => n.toLowerCase();
+  // All style : les danseurs Hip hop + Popping, et ceux ajoutés à la main (absents des listes officielles)
+  if(c.union){ const set = new Set([...HIPHOP_NAMES, ...POPPING_NAMES].map(low)), off = new Set(DANCER_NAMES.map(low)); return names.filter(n => set.has(low(n)) || !off.has(low(n))); }
+  if(!c.names) return names;
+  const set = new Set(c.names.map(low)); return names.filter(n => set.has(low(n)));
+};
 
 // Roulette de style : quand on joue sans musique, un bouton tire un style à imposer
 // pour le duel (le nom s'affiche, aucun son). Styles modifiables dans les réglages.
@@ -101,8 +108,6 @@ function load(){
   // Nouvelle liste officielle : on remplace les anciens exemples, et on garde les danseurs ajoutés à la main
   if((st.dancersVersion || 1) < DANCERS_VERSION){
     const renamed = ["roehka", "rrubix", "demannotche"]; // anciennes orthographes, remplacées par Rochka, Rubix et Delannotche
-    // anciens danseurs de la liste officielle, retirés en version 6 : ce ne sont pas des ajouts à la main
-    renamed.push(...["ismaël", "elange", "vita", "julie", "dimust", "aline", "jikay", "soyuz", "yoh", "kodi", "dialo", "ronyl", "sobek", "marie", "ughost", "viro", "clément", "suki", "leah", "noth", "imou", "semoss", "paul (meute céleste)", "joann", "youyou", "richard pop", "hervé", "hamza"]);
     const mine = st.dancers.filter(d => !d.ex && !renamed.includes(d.text.toLowerCase()) && !DANCER_NAMES.some(n => n.toLowerCase() === d.text.toLowerCase()));
     st.dancers = EXAMPLE_DANCERS.slice().concat(mine);
     st.dancersVersion = DANCERS_VERSION;
@@ -212,7 +217,7 @@ function renderHome(){
     ${isBad ? `<p class="hint">La taille vaut pour chacun des deux tournois.</p>` : ""}
     <div class="stat"><span><strong>Danseurs prêts</strong><br><span class="hint">${exs ? `Dont ${exs} exemple${exs > 1 ? "s" : ""} à remplacer.` : "Tous ajoutés par vous."}</span></span><b>${n}</b></div>
     <button class="btn gold" id="bank">Préparer les danseurs</button>
-    <p class="hint">Les catégories Hip hop et Popping prennent leurs danseurs dans cette liste. Un danseur ajouté à la main ne joue qu'en All style.</p>
+    <p class="hint">All style = les danseurs Hip hop + Popping. Un danseur ajouté à la main joue seulement en All style.</p>
     ${window.Musique ? Musique.settingsHTML() : ""}
     ${noMusic() ? rouletteSettingsHTML() : ""}
     <button class="btn main" id="start" ${nb >= 2 ? "" : "disabled"}>${isBad ? "Lancer le All Style Bad" : "Lancer le tournoi"}</button>
