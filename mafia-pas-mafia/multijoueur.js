@@ -16,7 +16,7 @@ const MODES = {
 };
 // Catégories du mode Battle (listes dans donnees.js). Un danseur peut être dans plusieurs catégories.
 const BCATS = {
-  all:     { label: "All style", names: null },
+  all:     { label: "All style", names: null, union: true },
   hiphop:  { label: "Hip hop",   names: DATA.hiphop || [] },
   popping: { label: "Popping",   names: DATA.popping || [] }
 };
@@ -24,7 +24,11 @@ const BCATS = {
 const EXTRA_KEY = "mafia-multi-extra";
 const extras = () => { const e = read(EXTRA_KEY); return Array.isArray(e) ? e : []; };
 const battlePool = (cat, names) => {
-  const c = BCATS[cat] || BCATS.all; if(!c.names) return names;
+  const c = BCATS[cat] || BCATS.all;
+  // All style : Hip hop + Popping, plus les danseurs ajoutés à la main (absents de la liste officielle)
+  if(c.union){ const set = new Set([...(DATA.hiphop || []), ...(DATA.popping || [])].map(n => n.toLowerCase())), off = new Set((DATA.dancers || []).map(n => n.toLowerCase()));
+    return names.filter(n => set.has(n.toLowerCase()) || !off.has(n.toLowerCase())); }
+  if(!c.names) return names;
   const set = new Set(c.names.concat(extras().filter(e => e.cats.includes(cat)).map(e => e.name)).map(n => n.toLowerCase()));
   return names.filter(n => set.has(n.toLowerCase()));
 };
@@ -73,8 +77,8 @@ function lists(){
   const st = read(STORE_KEY);
   return {
     sit: st && st.bank && st.bank.length ? st.bank.map(q => q.text) : DATA.situations,
-    // liste de « Préparer » seulement si elle est à jour (version 5 : catégories Hip hop et Popping)
-    dan: withExtras(st && st.dancers && st.dancers.length && (st.dancersVersion || 1) >= 5 ? st.dancers.map(q => q.text) : DATA.dancers)
+    // liste de « Préparer » seulement si elle est à jour (version 6 : nouvelle liste Hip hop)
+    dan: withExtras(st && st.dancers && st.dancers.length && (st.dancersVersion || 1) >= 6 ? st.dancers.map(q => q.text) : DATA.dancers)
   };
 }
 function withExtras(names){
