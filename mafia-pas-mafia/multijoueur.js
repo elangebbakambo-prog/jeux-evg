@@ -222,7 +222,8 @@ function connectHost(){
   if(!ok) renderHost();
 }
 function onHostMsg(m){
-  if(!H || !m.id) return;
+  // Ids become object keys: anything but a newId() string (e.g. "__proto__") would pollute prototypes
+  if(!H || typeof m.id !== "string" || !/^[a-z0-9]{1,8}$/.test(m.id)) return;
   if(m.t === "hello"){
     const name = String(m.name || "").trim().slice(0, 24) || "Joueur";
     const p = H.players.find(x => x.id === m.id);
@@ -735,6 +736,7 @@ function leaveRoom(msg){
   renderJoin();
 }
 function onPlayerMsg(m){
+  // Broadcast is unauthenticated: any player can forge these messages, so every field reaching innerHTML goes through esc()
   if(role === "host" && !hostPlays()) return;
   if(m.to && m.to !== P.id) return;
   if(m.t === "state"){
@@ -876,7 +878,7 @@ function playerReveal(){
   app.innerHTML = `<section class="screen handoff">
     <p class="meta">Regarde l'écran hôte</p>
     <article class="verdict ${P.st.mode === "dan" ? "dancer" : ""}">
-      <span class="c-head"><span>${MODES[P.st.mode].card}</span><span class="c-file">N° ${pad((r.i || 0) + 1)}</span></span>
+      <span class="c-head"><span>${MODES[P.st.mode].card}</span><span class="c-file">N° ${esc(pad((r.i || 0) + 1))}</span></span>
       <span class="${P.st.mode === "dan" ? "c-name" : "c-text"}">${esc(r.text || "")}</span>
       <p class="big-verdict ${cls}">${word}</p>
     </article>
@@ -961,7 +963,7 @@ function playerDuelDone(){
       <p class="meta">${esc(d.label)}</p>
       <h1 class="big">Vote<br>envoyé</h1>
       <p>Tu as voté <span class="mine y">${esc(myVoteLabel(d))}</span></p>
-      <p class="hint">${n} sur ${N} ont voté. Regarde l'écran hôte pour la révélation.</p></div>
+      <p class="hint">${esc(n)} sur ${esc(N)} ont voté. Regarde l'écran hôte pour la révélation.</p></div>
     <button class="undo-btn" id="change"><span aria-hidden="true">↶</span> Changer mon vote</button>
     ${leaveLink}
   </section>`;
@@ -973,8 +975,8 @@ function playerDuelReveal(){
   const mine = P.dv && P.dv.key === d.key ? myVoteLabel(d) : null;
   app.innerHTML = `<section class="screen handoff">
     <p class="meta">Regarde l'écran hôte</p>
-    <h1 class="big">${esc(d.a)}<br><span class="score-line">${sc.a} - ${sc.b}</span><br>${esc(d.b)}</h1>
-    <p class="hint">${d.fmt === "three" ? "Total des passages. " : ""}${shown.length} vote${shown.length > 1 ? "s" : ""} révélé${shown.length > 1 ? "s" : ""} sur ${st.total || 0}${sc.t ? `, dont ${sc.t} égalité` : ""}.</p>
+    <h1 class="big">${esc(d.a)}<br><span class="score-line">${esc(sc.a)} - ${esc(sc.b)}</span><br>${esc(d.b)}</h1>
+    <p class="hint">${d.fmt === "three" ? "Total des passages. " : ""}${esc(shown.length)} vote${shown.length > 1 ? "s" : ""} révélé${shown.length > 1 ? "s" : ""} sur ${esc(st.total || 0)}${sc.t ? `, dont ${esc(sc.t)} égalité` : ""}.</p>
     ${mine ? `<p>Tu as voté <span class="mine y">${esc(mine)}</span></p>` : ""}
     ${leaveLink}
   </section>`;
