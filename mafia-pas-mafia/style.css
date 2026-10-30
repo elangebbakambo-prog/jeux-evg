@@ -178,3 +178,12 @@ textarea.field.short{ min-height:0; }
 .sound-btn[aria-pressed="false"]{ border-color:var(--muted); color:var(--muted); }
 
 @media (prefers-reduced-motion: reduce){ .big-verdict, .award, .champ{ animation:none; } .split span, .fighter{ transition:none; } }
+
+/* Roulette de style (All Style Bad et battles sans musique) */
+.roul{ display:flex; flex-direction:column; gap:10px; margin-top:6px; background:var(--bg2); border-radius:12px; padding:12px 14px; border-left:6px solid var(--gold); }
+.roul-txt{ margin:0; display:flex; flex-direction:column; align-items:center; text-align:center; }
+.roul-txt small{ color:var(--muted); font-size:.85rem; }
+.roul-txt b{ font-family:var(--display); font-weight:400; font-size:2rem; line-height:1.1; color:var(--gold); }
+.roul.spin .roul-txt b{ color:var(--paper); }
+textarea[data-roul]{ width:100%; resize:vertical; }
+.mus-row{ display:grid; gap:4px; margin-bottom:6px; } .mus-row > span{ font-weight:800; }
