@@ -87,7 +87,7 @@ test("Préparer : ajouter puis supprimer des danseurs", async ({ page }) => {
 });
 
 // Chaque catégorie x chaque format, tournoi de 4 : rien ne doit planter
-for(const cat of ["all", "hiphop", "popping"]){
+for(const cat of ["all", "hiphop", "popping", "anciens"]){
   for(const fmt of ["one", "three", "callout"]){
     test(`Battle ${cat}, format ${fmt} : tournoi complet`, async ({ page }) => {
       const erreurs = await ouvrir(page, URL);
@@ -139,5 +139,37 @@ test("Roulette de style : seulement sans musique", async ({ page }) => {
   await page.click("#start"); await page.click("#go");
   await expect(page.locator("#roul")).toHaveCount(0);
   await page.click('[data-side="a"]'); // sans plantage avec la musique (SoundCloud coupé pendant les tests)
+  expect(erreurs).toEqual([]);
+});
+
+test("Les anciens : le tournoi se joue avec les danseurs hors Hip hop et Popping", async ({ page }) => {
+  const erreurs = await ouvrir(page, URL);
+  const anciens = await page.evaluate(() => window.MAFIA_DATA.anciens);
+  await page.click('[data-mode="bat"]'); await page.click('[data-bcat="anciens"]'); await page.click('[data-bfmt="one"]'); await page.click('[data-bsize="8"]');
+  await expect(page.locator('[data-bcat="anciens"] small')).toHaveText(`${anciens.length} danseurs`);
+  await page.click("#start");
+  const noms = (await page.locator(".mlist span").allTextContents()).map(n => n.replace(" (prime)", ""));
+  expect(noms).toHaveLength(8);
+  for(const n of noms) expect(anciens).toContain(n);
+  expect(erreurs).toEqual([]);
+});
+
+test("All Style Bad : annuler revient à la fin du tournoi précédent", async ({ page }) => {
+  const erreurs = await ouvrir(page, URL, { reglages: SANS_MUSIQUE });
+  await page.click('[data-mode="bat"]'); await page.click('[data-bcat="bad"]'); await page.click('[data-bfmt="one"]'); await page.click('[data-bsize="4"]');
+  await page.click("#start");
+  // Tournoi Popping jusqu'à son champion
+  while(!(await page.locator("#next").isVisible())){
+    if(await page.locator("#go").isVisible()) await page.click("#go"); else await page.click('[data-side="a"]');
+  }
+  const champPop = await page.locator(".champ-name").textContent();
+  await page.click("#next"); // tournoi Hip hop
+  await expect(page.locator(".meta")).toContainText("tournoi Hip hop");
+  await page.click("#undo"); // retour à la fin du tournoi Popping
+  await expect(page.locator(".champ .meta")).toContainText("champion Popping");
+  await expect(page.locator(".champ-name")).toHaveText(champPop);
+  await page.click("#undo"); // puis la finale Popping se rejoue
+  await expect(page.locator("header.bar")).toContainText("Finale");
+  await expect(page.locator('[data-side="a"]')).toBeVisible();
   expect(erreurs).toEqual([]);
 });

@@ -1,6 +1,10 @@
-// Listes de départ du mode multijoueur.
-// Si le jeu a déjà été ouvert sur l'écran hôte, ce sont les listes de « Préparer » qui sont utilisées.
-// Pense à garder ces listes identiques à celles de script.js.
+// Listes de départ de Mafia ou pas mafia, partagées par la version un téléphone (index.html)
+// et la version multijoueur (multijoueur.html) : c'est le SEUL endroit où les modifier.
+// Si le jeu a déjà été ouvert sur un appareil, ce sont les listes de « Préparer » qui sont utilisées.
+//   situations : exemples du mode Situations
+//   dancers    : liste complète du mode Danseurs (tout danseur d'une catégorie doit y être)
+//   hiphop, popping, anciens : catégories du mode Battle (un danseur peut être dans plusieurs)
+//   All style = Hip hop + Popping ; All Style Bad = tournoi Popping, tournoi Hip hop, grande finale
 window.MAFIA_DATA = {
   situations: [
   "Annuler le battle une heure avant pour aller à un date.",
@@ -18,5 +22,6 @@ window.MAFIA_DATA = {
   ],
   dancers: ["Ismaël", "Elange", "Vita", "Julie", "Dimust", "Aline", "Jikay", "Soyuz", "Yoh", "Kodi", "Dialo", "Ronyl", "Sobek", "Marie", "Ughost", "Viro", "Clément", "Suki", "Leah", "Noth", "Imou", "Semoss", "Lumi", "Paul (Meute Céleste)", "Evion", "Joann", "Youyou", "Missile", "Pakissi", "Richard Pop", "Ziko", "Forge", "Ma2t", "Hervé", "Ness", "Erine", "Spider", "Kuty", "Laura Nala", "Rubix", "Hamza", "Drop", "Poppin J", "Lossejoint", "Delannotche", "Mels", "Junior", "Miguel", "Xelyna", "Dyken", "Odilon", "Deadhomies", "Jean-Michel Cruel", "Willis", "Nastya", "Batalla", "Andrey Stylez", "Rochka", "Alex the Cage", "Icee", "Sam Yudat", "Lindsay", "Nicurl", "April", "Reverse", "Dereck", "Krissy", "Doyah", "Physs", "Jimmy Yudat", "Lilkens", "Joël Brown", "Dokyun", "Hozin", "Hoan", "Nikki Pop", "Slimboogie", "Greenteck", "Franqey", "Nelson", "Cinthia", "Sonya", "Eun-G", "Riha", "Nuria", "Lady C", "Ryu", "Sacha", "Paris", "Leila", "Bougito", "Creesto", "Iron Mike", "Linda", "Future", "Junior Boogaloo", "Super Dino", "Lemzo", "Gucchon", "Kei", "Breeze Lee", "Précise", "Jrock", "Jiggy Jaya", "Kinho", "Trakinas", "Jaygee", "Glory", "Jeff West Gang", "Poppin C", "Chams", "Kryss Boogie", "Jerems", "Daren", "Niako", "Kery", "Twizy", "Capjay", "Marta"],
   hiphop: ["Alex the Cage", "Andrey Stylez", "April", "Batalla", "Deadhomies", "Delannotche", "Dereck", "Doyah", "Drop", "Dyken", "Erine", "Evion", "Forge", "Icee", "Jean-Michel Cruel", "Jimmy Yudat", "Junior", "Krissy", "Kuty", "Laura Nala", "Lilkens", "Lindsay", "Lossejoint", "Lumi", "Ma2t", "Mels", "Miguel", "Missile", "Nastya", "Ness", "Nicurl", "Odilon", "Pakissi", "Physs", "Reverse", "Rochka", "Rubix", "Sam Yudat", "Spider", "Willis", "Daren", "Xelyna", "Ziko", "Niako", "Kery", "Twizy", "Capjay"],
-  popping: ["Poppin J", "Missile", "Joël Brown", "Ness", "Dokyun", "Hozin", "Hoan", "Nikki Pop", "Slimboogie", "Greenteck", "Franqey", "Nelson", "Cinthia", "Sonya", "Eun-G", "Riha", "Nuria", "Lady C", "Ryu", "Sacha", "Paris", "Leila", "Bougito", "Creesto", "Iron Mike", "Linda", "Future", "Junior Boogaloo", "Marta", "Super Dino", "Lemzo", "Gucchon", "Kei", "Breeze Lee", "Précise", "Jrock", "Jiggy Jaya", "Kinho", "Trakinas", "Jaygee", "Glory", "Jeff West Gang", "Poppin C", "Chams", "Kryss Boogie", "Jerems"]
+  popping: ["Poppin J", "Missile", "Joël Brown", "Ness", "Dokyun", "Hozin", "Hoan", "Nikki Pop", "Slimboogie", "Greenteck", "Franqey", "Nelson", "Cinthia", "Sonya", "Eun-G", "Riha", "Nuria", "Lady C", "Ryu", "Sacha", "Paris", "Leila", "Bougito", "Creesto", "Iron Mike", "Linda", "Future", "Junior Boogaloo", "Marta", "Super Dino", "Lemzo", "Gucchon", "Kei", "Breeze Lee", "Précise", "Jrock", "Jiggy Jaya", "Kinho", "Trakinas", "Jaygee", "Glory", "Jeff West Gang", "Poppin C", "Chams", "Kryss Boogie", "Jerems"],
+  anciens: ["Ismaël", "Elange", "Vita", "Julie", "Dimust", "Aline", "Jikay", "Soyuz", "Yoh", "Kodi", "Dialo", "Ronyl", "Sobek", "Marie", "Ughost", "Viro", "Clément", "Suki", "Leah", "Noth", "Imou", "Semoss", "Paul (Meute Céleste)", "Joann", "Youyou", "Richard Pop", "Hervé", "Hamza"]
 };
