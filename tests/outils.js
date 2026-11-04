@@ -54,4 +54,57 @@ async function explorer(page, { etapes = 150, graine = 1 } = {}){
   return vus;
 }
 
-module.exports = { ouvrir, explorer };
+// Salle en ligne sans internet : un faux Supabase Realtime relie plusieurs téléphones.
+// Chaque téléphone a son propre navigateur (stockage séparé) ; les messages passent par les tests.
+const FAUX_SUPABASE = () => {
+  const chans = {};
+  window.__busIn = m => { const c = chans[m.name]; if(c) c._in(m); };
+  window.supabase = { createClient: () => ({
+    channel(name, { config }){
+      const key = config.presence.key, handlers = {}, pres = {};
+      let me = null;
+      const fire = (k, arg) => (handlers[k] || []).forEach(f => f(arg));
+      const ch = {
+        on(type, f, fn){ (handlers[type + ":" + f.event] = handlers[type + ":" + f.event] || []).push(fn); return ch; },
+        subscribe(cb){ chans[name] = ch; setTimeout(() => cb("SUBSCRIBED"), 5); return ch; },
+        async track(meta){ me = meta; pres[key] = [meta]; window.__bus({ name, k: "p", key, meta, ask: true }); fire("presence:sync"); },
+        send({ payload }){ window.__bus({ name, k: "b", payload }); },
+        presenceState(){ return Object.assign({}, pres); },
+        _in(m){
+          if(m.k === "b") fire("broadcast:msg", { payload: JSON.parse(JSON.stringify(m.payload)) });
+          if(m.k === "p"){ if(m.meta) pres[m.key] = [m.meta]; else delete pres[m.key]; fire("presence:sync"); if(m.ask && me) window.__bus({ name, k: "p", key, meta: me }); }
+        },
+        _close(){ window.__bus({ name, k: "p", key, meta: null }); delete chans[name]; }
+      };
+      return ch;
+    },
+    removeChannel(ch){ if(ch && ch._close) ch._close(); }
+  }) };
+};
+// Ouvre n téléphones reliés entre eux. Renvoie [{ page, erreurs }]
+async function telephones(browser, n, { reglages } = {}){
+  const pages = [], out = [];
+  for(let i = 0; i < n; i++){
+    const ctx = await browser.newContext({ ...require("@playwright/test").devices["Pixel 7"], reducedMotion: "reduce", baseURL: "http://localhost:8123" });
+    const page = await ctx.newPage(), erreurs = [];
+    page.on("pageerror", e => erreurs.push(e.message));
+    await page.route(/^https?:\/\/(?!localhost)/, r => r.abort());
+    await page.exposeBinding("__bus", async ({ page: from }, m) => {
+      for(const p of pages) if(p !== from && !p.isClosed()) p.evaluate(x => window.__busIn && window.__busIn(x), m).catch(() => {});
+    });
+    await page.addInitScript(FAUX_SUPABASE);
+    if(reglages && i === 0) await page.addInitScript(r => { if(!sessionStorage.getItem("init")){ sessionStorage.setItem("init", "1"); for(const [k, v] of Object.entries(r)) localStorage.setItem(k, JSON.stringify(v)); } }, reglages);
+    pages.push(page); out.push({ page, erreurs });
+  }
+  return out;
+}
+// Le code de la salle affiché sur l'écran hôte
+const codeSalle = async page => (await page.locator(".room .code").textContent()).trim();
+async function rejoindre(page, chemin, code, nom){
+  await page.goto(chemin + "?salle=" + code);
+  await page.fill("#name", nom);
+  await page.click("#go");
+}
+const sansCdn = e => e.filter(x => !/supabase|QRCode/i.test(x));
+
+module.exports = { ouvrir, explorer, telephones, codeSalle, rejoindre, sansCdn };

@@ -240,7 +240,8 @@ function publicState(){
   const st = { t: "state", code: H.code, phase: H.phase, mode: H.mode, players: H.players.map(p => ({ id: p.id, name: p.name })),
     progress: Object.fromEntries(H.players.map(p => [p.id, doneCount(p.id)])), total: H.cards.length };
   if(H.phase === "vote") st.cards = H.cards;
-  if(H.phase === "reveal"){ const i = H.revealIdx, t = tallyH(i); st.reveal = { i, text: H.cards[i], y: t.y, n: t.n }; }
+  if(H.phase === "reveal"){ const i = H.revealIdx, t = tallyH(i); st.reveal = { i, text: H.cards[i], y: t.y, n: t.n, total: H.cards.length }; }
+  if(H.phase === "end" && H.cards.length) st.end = endData();
   if(H.bat && ["bintro", "duel", "dreveal", "phaseEnd", "champion"].includes(H.phase)) Object.assign(st, batPublic());
   return st;
 }
@@ -472,7 +473,8 @@ function hostReveal(){
   };
 }
 
-function hostEnd(){
+// Titres de fin et classement des cartes : sur l'écran hôte et sur chaque téléphone
+function endData(){
   const N = H.cards.length, ids = voters();
   const P2 = ids.map(id => ({ id, name: playerName(id), v: H.votes[id] || [] }));
   const mafiaCount = p => p.v.filter(x => x === true).length;
@@ -489,14 +491,18 @@ function hostEnd(){
   const pct = i => tot(i) ? Math.round(tallyH(i).y.length / tot(i) * 100) : 0;
   const order = H.cards.map((c, i) => [i, pct(i)]).sort((a, b) => b[1] - a[1]);
   const divisive = H.cards.map((c, i) => [i, Math.abs(tallyH(i).y.length - tallyH(i).n.length)]).sort((a, b) => a[1] - b[1])[0][0];
+  return { awards, divisive: H.cards[divisive], order: order.map(([i, v]) => [H.cards[i], v]) };
+}
+const endHTML = (d, mode) => `<div class="awards">${d.awards.map(([ico, t, p, why, gold], k) => `<div class="award ${gold ? "gold" : ""}" style="--d:${k}"><span class="ico" aria-hidden="true">${esc(ico)}</span>
+      <p><span class="t">${esc(t)}</span><strong>${esc(p)}</strong><span class="why">${esc(why)}</span></p></div>`).join("")}</div>
+    <h2 class="h2">${mode === "dan" ? "Le danseur" : "Le dossier"} qui a le plus divisé</h2>
+    <p class="note">${esc(d.divisive)}</p>
+    <h2 class="h2">Du plus mafia au moins mafia</h2>
+    <ol class="top-list">${d.order.map(([c, v]) => `<li><span class="pc">${esc(v)} %</span><span>${esc(c)}</span></li>`).join("")}</ol>`;
+function hostEnd(){
   app.innerHTML = `<section class="screen">
     <h1 class="title">Les<br>titres</h1>
-    <div class="awards">${awards.map(([ico, t, p, why, gold], k) => `<div class="award ${gold ? "gold" : ""}" style="--d:${k}"><span class="ico" aria-hidden="true">${ico}</span>
-      <p><span class="t">${t}</span><strong>${esc(p)}</strong><span class="why">${esc(why)}</span></p></div>`).join("")}</div>
-    <h2 class="h2">${H.mode === "dan" ? "Le danseur" : "Le dossier"} qui a le plus divisé</h2>
-    <p class="note">${esc(H.cards[divisive])}</p>
-    <h2 class="h2">Du plus mafia au moins mafia</h2>
-    <ol class="top-list">${order.map(([i, v]) => `<li><span class="pc">${v} %</span><span>${esc(H.cards[i])}</span></li>`).join("")}</ol>
+    ${endHTML(endData(), H.mode)}
     <button class="btn main" id="again">Rejouer avec les mêmes joueurs</button>
     <button class="btn ghost" id="mode">Changer de mode ou de cartes</button>
     <button class="link" id="close">Fermer la salle</button>
@@ -634,7 +640,12 @@ function batPublic(){
     o.shown = H.order.slice(0, H.shown).map(id => ({ name: playerName(id), side: H.dvotes[id] }));
     o.total = H.order.length; o.score = countSides(H.shown);
   }
-  if(H.phase === "champion" || H.phase === "phaseEnd"){ const f = B.rounds[B.r][0]; o.champ = f.w; o.runner = f.w === f.a ? f.b : f.a; }
+  if(H.phase === "champion" || H.phase === "phaseEnd"){ const f = B.rounds[B.r][0]; o.champ = f.w; o.runner = f.w === f.a ? f.b : f.a;
+    // Tableaux pour les téléphones : le tournoi en cours, et ceux déjà finis du All Style Bad
+    const pack = rounds => rounds.map(rd => rd.map(x => ({ a: nm(x, "a"), b: x.bye ? null : nm(x, "b"), w: x.w === x.a ? "a" : "b",
+      q: x.score ? `${x.score.a}-${x.score.b}` : x.callout ? "call out" : "", st: x.style || "" })));
+    o.brackets = [{ label: H.phase === "phaseEnd" ? `Le tableau ${BAD_PHASES[B.bad.phase].label}` : B.bad ? "Grande finale" : "Le tableau", rounds: pack(B.rounds) }]
+      .concat(H.phase === "champion" && B.bad ? B.bad.done.map((r, i) => ({ label: `Le tableau ${BAD_PHASES[i].label}`, rounds: pack(r) })) : []); }
   if(H.phase === "phaseEnd"){ o.phaseLabel = BAD_PHASES[B.bad.phase].label; o.last = B.bad.phase + 1 >= BAD_PHASES.length; }
   return o;
 }
@@ -1013,17 +1024,24 @@ function playerDone(){
   $("#undo").onclick = undoMine;
   bindLeave();
 }
+const namesLi = (arr, other) => arr.length ? arr.map(p => `<li class="${arr.length === 1 && other.length > 1 ? "alone" : ""}">${esc(p)}</li>`).join("") : `<li class="none">Personne</li>`;
 function playerReveal(){
-  const r = P.st.reveal || {}, y = r.y || [], n = r.n || [], [cls, word] = verdictWord(y.length, n.length);
+  const r = P.st.reveal || {}, y = Array.isArray(r.y) ? r.y : [], n = Array.isArray(r.n) ? r.n : [], [cls, word] = verdictWord(y.length, n.length);
   const mine = y.includes(P.name) ? ["y", "Mafia"] : n.includes(P.name) ? ["n", "Pas mafia"] : null;
-  app.innerHTML = `<section class="screen handoff">
-    <p class="meta">Regarde l'écran hôte</p>
+  const md = MODES[P.st.mode] || MODES.sit;
+  app.innerHTML = `<section class="screen">
+    <header class="bar"><span>Verdict</span><span>${esc(md.card)} ${esc((r.i || 0) + 1)}${r.total ? ` sur ${esc(r.total)}` : ""}</span></header>
     <article class="verdict ${P.st.mode === "dan" ? "dancer" : ""}">
-      <span class="c-head"><span>${MODES[P.st.mode].card}</span><span class="c-file">N° ${esc(pad((r.i || 0) + 1))}</span></span>
+      <span class="c-head"><span>${esc(md.card)}</span><span class="c-file">N° ${esc(pad((r.i || 0) + 1))}</span></span>
       <span class="${P.st.mode === "dan" ? "c-name" : "c-text"}">${esc(r.text || "")}</span>
       <p class="big-verdict ${cls}">${word}</p>
+      <div class="split" aria-label="${y.length} Mafia, ${n.length} Pas mafia">
+        <span class="y" style="flex-grow:${y.length || .0001}">${y.length ? y.length + " Mafia" : ""}</span>
+        <span class="n" style="flex-grow:${n.length || .0001}">${n.length ? n.length + " Pas mafia" : ""}</span>
+      </div>
+      <div class="who"><div class="y"><h3>Mafia</h3><ul>${namesLi(y, n)}</ul></div><div class="n"><h3>Pas mafia</h3><ul>${namesLi(n, y)}</ul></div></div>
     </article>
-    ${mine ? `<p>Tu as voté <span class="mine ${mine[0]}">${mine[1]}</span></p>` : ""}
+    ${mine ? `<p class="center">Tu as voté <span class="mine ${mine[0]}">${mine[1]}</span></p>` : ""}
     ${leaveLink}
   </section>`;
   bindLeave();
@@ -1119,22 +1137,33 @@ function playerDuelDone(){
   bindLeave();
 }
 function playerDuelReveal(){
-  const st = P.st, d = st.duel, sc = st.score || { a: 0, b: 0 }, shown = st.shown || [];
+  const st = P.st, d = st.duel, sc = st.score || { a: 0, b: 0 }, shown = Array.isArray(st.shown) ? st.shown : [];
   const mine = P.dv && P.dv.key === d.key ? myVoteLabel(d) : null;
-  app.innerHTML = `<section class="screen handoff">
-    <p class="meta">Regarde l'écran hôte</p>
-    <h1 class="big">${esc(d.a)}<br><span class="score-line">${esc(sc.a)} - ${esc(sc.b)}</span><br>${esc(d.b)}</h1>
-    <p class="hint">${d.fmt === "three" ? "Total des passages. " : ""}${esc(shown.length)} vote${shown.length > 1 ? "s" : ""} révélé${shown.length > 1 ? "s" : ""} sur ${esc(st.total || 0)}${sc.t ? `, dont ${esc(sc.t)} égalité` : ""}.</p>
-    ${mine ? `<p>Tu as voté <span class="mine y">${esc(mine)}</span></p>` : ""}
+  const col = side => namesLi(shown.filter(v => v.side === side).map(v => v.name), []);
+  const list = d.fmt === "three"
+    ? `<ul class="pass-list">${shown.map(v => { const p = passVote(v.side); return p === null ? "" : `<li><span>${esc(v.name)}</span><b>${p} - ${3 - p}</b></li>`; }).join("")}</ul>`
+    : `<div class="who three"><div class="y"><h3>${esc(d.a)}</h3><ul>${col("a")}</ul></div><div class="t"><h3>Égalité</h3><ul>${col("t")}</ul></div><div class="n"><h3>${esc(d.b)}</h3><ul>${col("b")}</ul></div></div>`;
+  app.innerHTML = `<section class="screen">
+    <header class="bar"><span>${esc(d.round)}</span><span>${esc(d.label)}</span></header>
+    <h1 class="big center">${esc(d.a)}<br><span class="score-line">${esc(sc.a)} - ${esc(sc.b)}</span><br>${esc(d.b)}</h1>
+    ${styleP(d)}
+    <p class="hint center">${d.fmt === "three" ? "Total des passages. " : ""}${esc(shown.length)} vote${shown.length > 1 ? "s" : ""} révélé${shown.length > 1 ? "s" : ""} sur ${esc(st.total || 0)}${sc.t ? `, dont ${esc(sc.t)} égalité` : ""}.</p>
+    ${shown.length ? list : ""}
+    ${mine ? `<p class="center">Tu as voté <span class="mine y">${esc(mine)}</span></p>` : ""}
     ${leaveLink}
   </section>`;
   bindLeave();
 }
+// Tableaux du tournoi sur le téléphone (données du réseau : tout passe par esc())
+const bracketsP = st => (Array.isArray(st.brackets) ? st.brackets : []).map(b => `<h2 class="h2">${esc(b.label)}</h2><div class="bracket">${(b.rounds || []).map(rd => `<section><h3>${esc(roundName(rd.length))}</h3><ul>${rd.map(x => x.b == null
+    ? `<li><span class="w">${esc(x.a)}</span><span class="q">qualifié d'office</span></li>`
+    : `<li><span class="${x.w === "a" ? "w" : "l"}">${esc(x.a)}</span><b>VS</b><span class="${x.w === "b" ? "w" : "l"}">${esc(x.b)}</span>${x.q ? ` <small>${esc(x.q)}</small>` : ""}${x.st ? ` <small>${esc(x.st)}</small>` : ""}</li>`).join("")}</ul></section>`).join("")}</div>`).join("");
 function playerPhaseEnd(){
   app.innerHTML = `<section class="screen handoff">
     <div class="champ"><span class="crown" aria-hidden="true">♛</span><p class="meta">All Style Bad, champion ${esc(P.st.phaseLabel || "")}</p>
       <h1 class="champ-name">${esc(P.st.champ || "")}</h1><p class="hint">A battu ${esc(P.st.runner || "")} en finale. Qualifié pour la grande finale.</p></div>
     <p class="hint">${P.st.last ? "La grande finale arrive sur ton téléphone dès que l'hôte la lance." : "Le tournoi suivant arrive sur ton téléphone dès que l'hôte le lance."}</p>
+    ${bracketsP(P.st)}
     ${leaveLink}
   </section>`;
   bindLeave();
@@ -1143,16 +1172,20 @@ function playerChampion(){
   app.innerHTML = `<section class="screen handoff">
     <div class="champ"><span class="crown" aria-hidden="true">♛</span><p class="meta">Champion ${esc(P.st.cat || "du tournoi")}</p>
       <h1 class="champ-name">${esc(P.st.champ || "")}</h1><p class="hint">A battu ${esc(P.st.runner || "")} en finale.</p></div>
+    ${bracketsP(P.st)}
     <p class="hint">Si l'hôte relance un tournoi, il s'affichera ici tout seul.</p>
     ${leaveLink}
   </section>`;
   bindLeave();
 }
 function playerEnd(){
-  app.innerHTML = `<section class="screen handoff">
-    <div class="wait"><p class="meta">Salle ${esc(P.code)}</p>
-      <h1 class="big">Les<br>titres</h1>
-      <p class="hint">Regarde l'écran hôte. Si l'hôte relance une partie, elle s'affichera ici toute seule.</p></div>
+  const d = P.st.end;
+  const ok = d && Array.isArray(d.awards) && Array.isArray(d.order);
+  app.innerHTML = `<section class="screen">
+    <p class="meta">Salle ${esc(P.code)}</p>
+    <h1 class="title">Les<br>titres</h1>
+    ${ok ? endHTML(d, P.st.mode) : ""}
+    <p class="hint">Si l'hôte relance une partie, elle s'affichera ici toute seule.</p>
     ${leaveLink}
   </section>`;
   bindLeave();

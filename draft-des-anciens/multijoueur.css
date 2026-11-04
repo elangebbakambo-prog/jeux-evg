@@ -4,3 +4,7 @@
 .my-jokers{ display:flex; flex-wrap:wrap; gap:8px; }
 .my-jokers span{ background:var(--ink); color:var(--gold); border:2px solid var(--gold); border-radius:999px; padding:6px 12px; font-weight:800; font-size:.85rem; }
 .player-card-wrap{ display:flex; justify-content:center; }
+/* Catégories déjà remportées, sur les téléphones */
+.won{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.won li{ display:flex; justify-content:space-between; gap:12px; background:var(--bg2); border-radius:10px; padding:8px 12px; }
+.won b{ color:var(--gold); }

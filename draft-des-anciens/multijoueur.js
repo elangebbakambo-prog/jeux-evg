@@ -115,7 +115,25 @@ function publicState(){
   if(H.phase === "draft") st.status = Object.fromEntries(H.players.map(p => [p.id, { opened: !!H.opened[p.id], done: !!H.decks[p.id] }]));
   if(H.phase === "reveal" || H.phase === "revealTeams") st.revealName = H.players[H.revealIdx] ? H.players[H.revealIdx].name : "";
   if(H.phase === "election") st.electCat = CATS[H.elect.idx].label;
+  // Résultats affichés aussi sur chaque téléphone
+  if(H.phase === "show" && H.show){ const r = H.round - 1;
+    st.show = H.players.slice(0, H.show.revealed).map(p => ({ name: p.name, cards: roundCards(asPlayer(p.id), r).map(x => ({ cat: x.cat.id, card: x.card })) })); }
+  if(H.phase === "spin" && H.spin){ const sp = H.spin;
+    st.spin = { winner: pName(sp.winner), loser: pName(sp.loser), results: sp.wheels.slice(0, sp.stage + (sp.spun ? 1 : 0)).map((w, i) => {
+      const k = w.keys[w.pick], d = i === 0 ? JOKERS[k] : MALUS[k];
+      return { good: i === 0, who: i === 0 ? pName(sp.winner) : pName(sp.loser), name: d.name, text: d.text }; }) }; }
+  if(H.phase === "reveal") st.revealTeam = H.teams[H.players[H.revealIdx].id];
+  if(H.elect && ["election", "final"].includes(H.phase)) st.won = CATS.filter(c => H.elect.winners[c.id] != null).map(c => [c.label, pName(H.elect.winners[c.id])]);
+  if(H.phase === "final") st.final = finalData();
   return st;
+}
+// Podium (nombre de catégories remportées, puis tours gagnés) et classement d'après les stats
+function finalData(){
+  const W = H.elect.winners;
+  const podium = H.players.map(p => ({ name: p.name, cats: CATS.filter(c => W[c.id] === p.id).map(c => c.label), rounds: H.roundWins[p.id] || 0 }))
+    .sort((a, b) => b.cats.length - a.cats.length || b.rounds - a.rounds);
+  const totals = H.players.map(p => [p.name, CATS.reduce((sum, cat) => sum + H.teams[p.id][cat.id].reduce((s, c) => s + catScore(c, cat), 0), 0)]).sort((a, b) => b[1] - a[1]);
+  return { podium, totals };
 }
 const broadcast = () => send(publicState());
 const sendMine = id => send({ t: "mine", to: id, team: H.teams[id], jokers: H.jokers[id] || [] });
@@ -339,7 +357,7 @@ function hostShow(){
     ${closeLink}
   </section>`;
   const more = q("#more");
-  if(more) more.onclick = () => { T.revealed++; saveH(); renderHost(); setTimeout(() => { const a = qa(".final-team"); if(a.length) a[a.length - 1].scrollIntoView({ behavior: "smooth", block: "start" }); }, 30); };
+  if(more) more.onclick = () => { T.revealed++; saveH(); broadcast(); renderHost(); setTimeout(() => { const a = qa(".final-team"); if(a.length) a[a.length - 1].scrollIntoView({ behavior: "smooth", block: "start" }); }, 30); };
   qa("[data-win]").forEach(b => b.onclick = () => { T.winner = b.dataset.win; if(T.loser === T.winner) T.loser = null; saveH(); renderHost(); });
   qa("[data-lose]").forEach(b => b.onclick = () => { T.loser = b.dataset.lose; if(T.winner === T.loser) T.winner = null; saveH(); renderHost(); q("#validate").scrollIntoView({ block: "center" }); });
   const h = q("#hint"); if(h) h.onclick = () => { T.statsHint = true; saveH(); renderHost(); };
@@ -367,10 +385,10 @@ function hostSpin(){
   </section>`;
   if(sp.spun) placeWheel(wh);
   const sb2 = q("#spin");
-  if(sb2) sb2.onclick = () => { sb2.disabled = true; spinWheel(wh, () => { sp.spun = true; saveH(); renderHost(); sp.stage === 0 ? sfx.win() : sfx.malus(); }); };
+  if(sb2) sb2.onclick = () => { sb2.disabled = true; spinWheel(wh, () => { sp.spun = true; saveH(); broadcast(); renderHost(); sp.stage === 0 ? sfx.win() : sfx.malus(); }); };
   const nx = q("#next");
   if(nx) nx.onclick = () => {
-    if(!last){ sp.stage++; sp.spun = false; saveH(); renderHost(); return; }
+    if(!last){ sp.stage++; sp.spun = false; saveH(); broadcast(); renderHost(); return; }
     // Applique le bonus et le malus, puis distribue les boosters du tour suivant
     const w = sp.wheels;
     H.jokers[sp.winner].push(w[0].keys[w[0].pick]);
@@ -428,18 +446,18 @@ function hostElection(){
   };
 }
 let showStats = false;
+// Podium, sur l'écran hôte et sur chaque téléphone
+const podiumHTML = podium => `<ol class="ranking">${podium.map((x, i) => `<li><span class="pos">${i + 1}</span>
+      <span class="nm">${esc(x.name)}<small class="sub">${x.cats.length ? esc(x.cats.join(", ")) : "Aucune catégorie"} · ${esc(x.rounds)} tour${x.rounds > 1 ? "s" : ""} gagné${x.rounds > 1 ? "s" : ""}</small></span>
+      <span class="sc">${esc(x.cats.length)}</span></li>`).join("")}</ol>`;
+const totalsHTML = totals => `<ol class="ranking">${totals.map(([n, sc], i) => `<li><span class="pos">${i + 1}</span><span class="nm">${esc(n)}</span><span class="sc">${esc(sc)}</span></li>`).join("")}</ol>`;
 function hostFinal(){
-  const W = H.elect.winners;
-  const podium = H.players.map(p => ({ name: p.name, cats: CATS.filter(c => W[c.id] === p.id).map(c => c.label), rounds: H.roundWins[p.id] || 0 }))
-    .sort((a, b) => b.cats.length - a.cats.length || b.rounds - a.rounds);
-  const totals = H.players.map(p => [p.name, CATS.reduce((sum, cat) => sum + H.teams[p.id][cat.id].reduce((s, c) => s + catScore(c, cat), 0), 0)]).sort((a, b) => b[1] - a[1]);
+  const { podium, totals } = finalData();
   app.innerHTML = `<section class="screen">
     <h1 class="title">Le<br>podium</h1>
-    <ol class="ranking">${podium.map((x, i) => `<li><span class="pos">${i + 1}</span>
-      <span class="nm">${esc(x.name)}<small class="sub">${x.cats.length ? esc(x.cats.join(", ")) : "Aucune catégorie"} · ${x.rounds} tour${x.rounds > 1 ? "s" : ""} gagné${x.rounds > 1 ? "s" : ""}</small></span>
-      <span class="sc">${x.cats.length}</span></li>`).join("")}</ol>
+    ${podiumHTML(podium)}
     <p class="hint">Le chiffre à droite est le nombre de catégories remportées. En cas d'égalité, les tours gagnés départagent.</p>
-    ${showStats ? `<h2 class="h2">Selon les stats</h2><ol class="ranking">${totals.map(([n, sc], i) => `<li><span class="pos">${i + 1}</span><span class="nm">${esc(n)}</span><span class="sc">${sc}</span></li>`).join("")}</ol>`
+    ${showStats ? `<h2 class="h2">Selon les stats</h2>${totalsHTML(totals)}`
       : `<button class="btn ghost" id="rank">Comparer avec le classement des stats</button>`}
     <h2 class="h2">Toutes les équipes</h2>
     ${H.players.map(p => `<article class="final-team"><h2>${esc(p.name)}</h2>${teamHTML(asPlayer(p.id), false)}</article>`).join("")}
@@ -574,9 +592,11 @@ function playerWatch(){
     : ph === "revealTeams" || ph === "reveal" ? `Révélation de l'équipe de ${esc(st.revealName || "")}.`
     : ph === "election" ? `Meilleure équipe ${esc(st.electCat || "")} : débattez, puis votez sur l'écran.`
     : "La partie est terminée. Regarde le podium sur l'écran hôte.";
-  app.innerHTML = `<section class="screen handoff">
-    <div class="wait"><span class="pulse" aria-hidden="true"></span><p class="meta">Regarde l'écran hôte</p>
-      <h1 class="big">${title}</h1><p class="hint">${text}</p></div>
+  const res = watchResults(st);
+  app.innerHTML = `<section class="screen ${res && ph !== "spin" ? "" : "handoff"}">
+    <div class="wait">${res ? "" : `<span class="pulse" aria-hidden="true"></span>`}<p class="meta">${ph === "final" ? "Fin de la partie" : "Aussi sur l'écran hôte"}</p>
+      <h1 class="big">${title}</h1>${ph === "final" ? "" : `<p class="hint">${text}</p>`}</div>
+    ${res}
     ${myJokers()}
     ${teamBox()}
     ${leaveLink}
@@ -584,6 +604,25 @@ function playerWatch(){
   bindLeave();
 }
 
+// Ce que l'hôte révèle, affiché aussi sur le téléphone (les données viennent du réseau : tout passe par esc())
+function watchResults(st){
+  const catOf = id => CATS.find(c => c.id === id);
+  const safeCard = c => c && typeof c === "object" ? cardHTML(c) : "";
+  if(st.phase === "show" && Array.isArray(st.show)) return st.show.map(p => `<article class="final-team"><h2>${esc(p.name)}</h2>
+      <div class="hand row">${(p.cards || []).map(x => { const cat = catOf(x.cat); return cat && x.card ? `<div class="labeled" style="--cat:${cat.color}">
+        <span class="lab">${esc(cat.label)}${isExpert(x.card, cat) ? " ★ Expert" : ""}</span>${safeCard(x.card)}</div>` : ""; }).join("")}</div></article>`).join("");
+  if(st.phase === "spin" && st.spin) return `<p class="hint">Meilleure équipe : <b>${esc(st.spin.winner)}</b>. Moins bonne : <b>${esc(st.spin.loser)}</b>.</p>
+      ${(st.spin.results || []).map(r => `<p class="note ${r.good ? "good" : "bad"}">${esc(r.who)} ${r.good ? "gagne le joker" : "prend le malus"} ${esc(r.name)}. ${esc(r.text)}</p>`).join("")}`;
+  if(st.phase === "reveal" && st.revealTeam && typeof st.revealTeam === "object"){
+    const team = Object.fromEntries(CATS.map(c => [c.id, Array.isArray(st.revealTeam[c.id]) ? st.revealTeam[c.id] : []]));
+    return teamHTML({ team }, false); }
+  const won = Array.isArray(st.won) && st.won.length ? `<h2 class="h2">Catégories remportées</h2><ul class="won">${st.won.map(([c, n]) => `<li><span>${esc(c)}</span><b>${esc(n)}</b></li>`).join("")}</ul>` : "";
+  if(st.phase === "election") return won;
+  if(st.phase === "final" && st.final) return `${podiumHTML(st.final.podium || [])}
+      <p class="hint">Le chiffre à droite est le nombre de catégories remportées.</p>${won}
+      <details class="note"><summary>Selon les stats</summary>${totalsHTML(st.final.totals || [])}</details>`;
+  return "";
+}
 function playerBooster(){
   const h = P.hand, kind = h.kind;
   app.innerHTML = `<section class="screen handoff">

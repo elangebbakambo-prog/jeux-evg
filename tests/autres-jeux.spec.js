@@ -29,7 +29,7 @@ test("Le menu ouvre chaque jeu, et chaque jeu a un bouton pour revenir au menu",
   await page.route(/^https?:\/\/(?!localhost)/, r => r.abort());
   await page.goto("/index.html");
   const liens = await page.locator(".games a").evaluateAll(as => as.map(a => a.getAttribute("href")));
-  expect(liens).toHaveLength(5);
+  expect(liens).toHaveLength(6);
   for(const href of liens){
     await page.goto("/" + href);
     await expect(page.locator("#app")).not.toBeEmpty();

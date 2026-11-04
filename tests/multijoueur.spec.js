@@ -3,7 +3,7 @@
 const { test, expect } = require("@playwright/test");
 const { ouvrir } = require("./outils");
 
-for(const url of ["/mafia-pas-mafia/multijoueur.html", "/draft-des-anciens/multijoueur.html"]){
+for(const url of ["/mafia-pas-mafia/multijoueur.html", "/draft-des-anciens/multijoueur.html", "/qui-a-dit-ca/multijoueur.html"]){
   test(`${url} s'ouvre sans erreur`, async ({ page }) => {
     const erreurs = await ouvrir(page, url);
     await expect(page.locator("#app button").first()).toBeVisible();
