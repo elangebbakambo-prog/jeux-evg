@@ -64,3 +64,6 @@ body.has-play{ padding-bottom:84px; }
 .play-switch.todo{ background:var(--gold); color:var(--ink); animation:nudge 1.2s ease-in-out infinite; }
 @keyframes nudge{ 50%{ transform:translateX(-50%) scale(1.06); } }
 @media (prefers-reduced-motion: reduce){ .play-switch.todo{ animation:none; } }
+
+/* Laisse la place à la pastille de connexion et au bouton du son, en haut de l'écran */
+body > #app{ padding-top:58px; }

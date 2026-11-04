@@ -485,5 +485,14 @@ const hostPlays = () => role === "host" && !!H && !!H.me;
 function sendP(m){ if(role === "host"){ if(hostPlays()) setTimeout(() => onHostMsg(m), 0); } else send(m); }
 function deliverLocal(){ /* l'hôte voit tout sur son propre écran */ }
 
+// Revenir au menu des jeux depuis une salle (lien ajouté par commun/menu-salle.js)
+window.EVG_QUITTER = retour => {
+  if(role === "host" && H && H.phase && H.phase !== "setup")
+    return askConfirm("Fermer la salle et revenir au menu des jeux ? Les joueurs seront déconnectés.", () => { send({ t: "closed" }); disconnect(); write(HOST_KEY, null); retour(); }, "Fermer et revenir");
+  if(role === "player" && P.code)
+    return askConfirm("Quitter la salle et revenir au menu des jeux ?", () => { sendP({ t: "leave", id: P.id }); disconnect(); write(ME_KEY, { id: P.id, name: P.name }); retour(); }, "Quitter");
+  retour();
+};
+
 boot();
 })();
