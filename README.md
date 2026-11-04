@@ -2,6 +2,8 @@
 
 Trois jeux de soirée à jouer sur un seul téléphone, en HTML, CSS et JavaScript, sans framework ni serveur.
 
+Le **menu** (`index.html` à la racine) mène aux trois jeux, sur un téléphone ou en ligne. Chaque jeu a un bouton « Menu des jeux » en haut à gauche pour y revenir (`commun/menu.css`).
+
 | Dossier | Jeu |
 | --- | --- |
 | `draft-des-anciens/` | Boosters de cartes de danseurs, deck en 7 catégories, jokers, votes et podium |
@@ -56,7 +58,7 @@ Toutes les listes (situations, danseurs, catégories du Battle) sont dans **`maf
 Ce qui est vérifié (`tests/`) :
 
 - `mafia.spec.js` : de vraies parties de Mafia ou pas mafia (Situations, Danseurs, Battle dans chaque catégorie et chaque format, Les anciens, All Style Bad, roulette, annuler y compris entre deux tournois, rechargement de la page).
-- `autres-jeux.spec.js` : un « joueur robot » touche les boutons des trois jeux pendant des centaines d'étapes et vérifie qu'aucune erreur n'apparaît.
+- `autres-jeux.spec.js` : le menu ouvre chaque jeu et chaque jeu y ramène ; un « joueur robot » touche les boutons des trois jeux pendant des centaines d'étapes et vérifie qu'aucune erreur n'apparaît.
 - `multijoueur.spec.js` : les pages multijoueur s'ouvrent sans planter, et un Battle en ligne se joue sur l'écran hôte (All Style Bad complet avec roulette et annuler, Les anciens).
 - `donnees.spec.js` : les listes ne sont écrites qu'une fois, sans doublon, et chaque danseur d'une catégorie est dans la liste complète.
 - `securite.spec.js` : aucune erreur de syntaxe, aucune clé secrète Supabase dans le code, scripts des CDN verrouillés par une empreinte `integrity` (et empreintes vérifiées en ligne), versions anti-cache cohérentes.

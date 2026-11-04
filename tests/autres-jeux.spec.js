@@ -21,3 +21,22 @@ test("Draft des anciens : la partie survit à un rechargement", async ({ page })
   await expect(page.locator("#app")).not.toBeEmpty();
   expect(erreurs).toEqual([]);
 });
+
+// Menu des jeux (index.html à la racine) : chaque lien ouvre un jeu, et chaque jeu ramène au menu
+test("Le menu ouvre chaque jeu, et chaque jeu a un bouton pour revenir au menu", async ({ page }) => {
+  const erreurs = [];
+  page.on("pageerror", e => erreurs.push(e.message));
+  await page.route(/^https?:\/\/(?!localhost)/, r => r.abort());
+  await page.goto("/index.html");
+  const liens = await page.locator(".games a").evaluateAll(as => as.map(a => a.getAttribute("href")));
+  expect(liens).toHaveLength(5);
+  for(const href of liens){
+    await page.goto("/" + href);
+    await expect(page.locator("#app")).not.toBeEmpty();
+    if(!href.includes("multijoueur")){
+      await page.click(".menu-link");
+      await expect(page.locator("h1")).toContainText("Les jeux");
+    }
+  }
+  expect(erreurs.filter(e => !/supabase|QRCode/i.test(e))).toEqual([]);
+});
