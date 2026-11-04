@@ -94,3 +94,6 @@ body.has-play{ padding-bottom:84px; }
 .pass-list li b{ font-family:var(--display); font-weight:400; font-size:1.3rem; color:var(--gold); font-variant-numeric:tabular-nums; }
 .pass-list li.pop{ outline:2px solid var(--gold); animation:popin .35s ease both; }
 @media (prefers-reduced-motion: reduce){ .pass-list li.pop{ animation:none; } }
+
+/* Laisse la place à la pastille de connexion et au bouton du son, en haut de l'écran */
+body > #app{ padding-top:58px; }
