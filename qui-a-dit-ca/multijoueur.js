@@ -72,6 +72,14 @@ const params = new URLSearchParams(location.search);
 let role = null;
 function boot(){
   const h = read(HOST_KEY), me = read(ME_KEY), code = cleanCode(params.get("salle"));
+  // On arrive d'un autre jeu avec la même salle (commun/salle-jeux.js)
+  const suite = window.EVG_SALLE && EVG_SALLE.suite();
+  if(suite && suite.role === "host"){
+    role = "host"; H = Object.assign({ mode: "dit", players: [] }, { phase: "lobby", code: suite.code });
+    if(suite.moi){ H.me = { id: P.id, name: suite.moi }; P.code = H.code; P.name = suite.moi; }
+    saveH(); connectHost(); renderHost(); return;
+  }
+  if(suite){ role = "player"; P.code = suite.code; P.name = suite.name; joinRoom(); return; }
   if(code){ role = "player"; P.code = code; P.name = (me && me.name) || ""; if(me && me.code === code && me.name){ joinRoom(); return; } renderJoin(); return; }
   if(h && h.phase && h.phase !== "setup"){ role = "host"; H = h; if(H.me){ P.id = H.me.id; P.code = H.code; P.name = H.me.name; } connectHost(); renderHost(); return; }
   if(me && me.code && me.name){ role = "player"; Object.assign(P, { code: me.code, name: me.name }); joinRoom(); return; }
@@ -239,6 +247,7 @@ function hostLobby(){
       : `<form class="host-join" id="hj" novalidate><input class="field" id="hjName" maxlength="24" autocomplete="given-name" placeholder="Ton prénom" aria-label="Ton prénom"><button class="btn gold" type="submit">Je joue aussi</button></form>`}
     ${modesHTML()}
     <button class="btn main" id="start" ${H.players.length >= 2 && playable(H.mode).length ? "" : "disabled"}>Lancer la partie</button>
+    ${window.EVG_SALLE ? EVG_SALLE.html() : ""}
     ${closeLink}
   </section>`;
   const qr = q("#qr");
@@ -252,6 +261,7 @@ function hostLobby(){
     H.me = { id: P.id, name }; online.add(P.id); P.code = H.code; P.name = name; saveH(); onHostMsg({ t: "hello", id: P.id, name }); };
   const un = q("#unjoin"); if(un) un.onclick = () => { const id = H.me.id; H.me = null; H.players = H.players.filter(p => p.id !== id); saveH(); broadcast(); renderHost(); };
   bindModes(hostLobby);
+  if(window.EVG_SALLE) EVG_SALLE.bind(app, { code: H.code, moi: H.me && H.me.name, envoyer: send, fermer: () => { disconnect(); write(HOST_KEY, null); } });
   q("#start").onclick = () => {
     H.order = shuffle(playable(H.mode)); H.idx = 0; H.scores = Object.fromEntries(H.players.map(p => [p.id, 0]));
     startQuestion(); saveH(); broadcast(); sfx.go(); renderHost();
@@ -386,7 +396,10 @@ function onPlayerMsg(m){
   // Messages non authentifiés : tout ce qui arrive dans le HTML passe par esc()
   if(role === "host") return;
   if(m.to && m.to !== P.id) return;
+  if(role !== "host" && window.EVG_SALLE && EVG_SALLE.suivre(m, P.code, P.name)) return;
   if(m.t === "state"){
+    // Hôte qui vient d'arriver (changement de jeu) : il ne nous connaît pas encore, on se présente
+    if(Array.isArray(m.players) && !m.players.some(p => p.id === P.id) && Date.now() - (P.helloAt || 0) > 2000){ P.helloAt = Date.now(); sendP({ t: "hello", id: P.id, name: P.name }); }
     const first = !P.st;
     if(P.mine && P.mine.idx !== m.idx) P.mine = null;
     P.st = m; if(first) sfx.point();

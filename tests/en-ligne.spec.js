@@ -174,3 +174,26 @@ test("En ligne : le lien « Menu des jeux » ferme ou quitte proprement la salle
     for(const t of [hote, lou, max]){ expect(sansCdn(t.erreurs)).toEqual([]); await t.page.context().close(); }
   }
 });
+
+test("En ligne : changer de jeu en gardant la même salle et les mêmes joueurs", async ({ browser }) => {
+  const [hote, lou, max] = await telephones(browser, 3, { reglages: { "qui-a-dit-v1": { players: ["Lou", "Max"], game: null, bank: [{ type: "dit", text: "Test.", answer: "Zed" }] } } });
+  await hote.page.goto("/mafia-pas-mafia/multijoueur.html");
+  await hote.page.click("#asHost"); await hote.page.click("#create");
+  const code = await codeSalle(hote.page);
+  // L'hôte joue aussi
+  await hote.page.fill("#hjName", "Hôte"); await hote.page.click("#hj button");
+  await rejoindre(lou.page, "/mafia-pas-mafia/multijoueur.html", code, "Lou");
+  await rejoindre(max.page, "/mafia-pas-mafia/multijoueur.html", code, "Max");
+  await expect(hote.page.locator(".roster li:not(.empty)")).toHaveCount(3);
+  for(const [jeu, chemin] of [["Qui a dit ça ?", "/qui-a-dit-ca/"], ["Draft des anciens", "/draft-des-anciens/"], ["Mafia ou pas mafia", "/mafia-pas-mafia/"]]){
+    await hote.page.locator("[data-jeu]", { hasText: jeu }).click();
+    await hote.page.click(".ov [data-yes]");
+    await expect(hote.page).toHaveURL(new RegExp(chemin.replace(/\//g, "\\/") + "multijoueur\\.html"));
+    for(const t of [lou, max]) await expect(t.page).toHaveURL(new RegExp(chemin.replace(/\//g, "\\/") + "multijoueur\\.html\\?salle=" + code));
+    // Même code, et tout le monde est revenu dans la salle tout seul
+    await expect(hote.page.locator(".room .code")).toHaveText(code);
+    await expect(hote.page.locator(".roster li:not(.empty)")).toHaveCount(3);
+    await expect(lou.page.locator(".roster li")).toHaveCount(3);
+  }
+  for(const t of [hote, lou, max]) expect(sansCdn(t.erreurs)).toEqual([]);
+});
