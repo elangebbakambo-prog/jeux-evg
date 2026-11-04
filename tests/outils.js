@@ -16,7 +16,7 @@ async function ouvrir(page, chemin, { reglages } = {}){
 // Joue au hasard (mais de façon reproductible) en touchant les boutons de l'écran,
 // en priorité le bouton principal. Sert à détecter un plantage n'importe où dans un jeu.
 // Ne touche jamais aux boutons qui quittent, effacent ou ramènent à l'accueil.
-const INTERDITS = /arr[êe]ter|quitter|supprimer|effacer|tout supprimer|r[ée]initialiser|retour|accueil|fermer la salle/i;
+const INTERDITS = /arr[êe]ter|quitter|supprimer|effacer|tout supprimer|r[ée]initialiser|retour|accueil|fermer la salle|menu des jeux/i;
 async function explorer(page, { etapes = 150, graine = 1 } = {}){
   let s = graine;
   const hasard = n => { s = (s * 16807) % 2147483647; return s % n; };

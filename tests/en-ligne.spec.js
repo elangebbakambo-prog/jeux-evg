@@ -145,3 +145,32 @@ test("Draft des anciens en ligne : choix du tour, roulettes, équipes et podium 
   await expect(max.page.locator("#app .screen > .ranking li")).toHaveCount(2);
   for(const t of [hote, lou, max]) expect(sansCdn(t.erreurs)).toEqual([]);
 });
+
+test("En ligne : le lien « Menu des jeux » ferme ou quitte proprement la salle", async ({ browser }) => {
+  for(const jeu of ["mafia-pas-mafia", "draft-des-anciens", "qui-a-dit-ca"]){
+    const [hote, lou, max] = await telephones(browser, 3, { reglages: { "qui-a-dit-v1": { players: ["Lou", "Max"], game: null, bank: [{ type: "dit", text: "Test.", answer: "Zed" }] } } });
+    const URL = `/${jeu}/multijoueur.html`;
+    // Écran de départ : retour direct au menu
+    await hote.page.goto(URL);
+    await hote.page.click("#menuBack");
+    await expect(hote.page.locator("h1")).toContainText("Les jeux");
+    await hote.page.goto(URL);
+    await hote.page.click("#asHost"); await hote.page.click("#create");
+    const code = await codeSalle(hote.page);
+    await rejoindre(lou.page, URL, code, "Lou");
+    await rejoindre(max.page, URL, code, "Max");
+    await expect(hote.page.locator(".roster li:not(.empty)")).toHaveCount(2);
+    // Un joueur quitte la salle pour revenir au menu
+    await lou.page.click("#menuBack"); await lou.page.click(".ov [data-yes]");
+    await expect(lou.page.locator("h1")).toContainText("Les jeux");
+    await expect(hote.page.locator(".roster li:not(.empty)")).toHaveCount(1);
+    // L'hôte ferme la salle : l'autre téléphone est prévenu
+    await hote.page.click("#menuBack"); await hote.page.click(".ov [data-yes]");
+    await expect(hote.page.locator("h1")).toContainText("Les jeux");
+    await expect(max.page.locator(".error-box")).toContainText("fermée");
+    // En revenant sur le jeu, l'hôte repart de zéro (pas de salle fantôme)
+    await hote.page.goto(URL);
+    await expect(hote.page.locator("#asHost")).toBeVisible();
+    for(const t of [hote, lou, max]){ expect(sansCdn(t.erreurs)).toEqual([]); await t.page.context().close(); }
+  }
+});
