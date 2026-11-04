@@ -112,6 +112,7 @@ function renderHome(){
   app.innerHTML = `<section class="screen">
     <h1 class="title">Qui a<br>dit ça ?</h1>
     <p class="lead">Deux modes de jeu sur la bande et sur les danseurs que vous connaissez. Préparez les questions, choisissez un mode, puis jouez tous autour du téléphone.</p>
+    ${window.MULTI_URL ? `<a class="btn gold" href="${window.MULTI_URL}">Jouer sur plusieurs téléphones</a>` : ""}
     <h2 class="h2">Joueurs</h2>
     <ol class="players">${store.players.map((n,i) => `<li>${av(n || "?")}
       <input class="field" id="pl-${i}" data-i="${i}" value="${esc(n)}" placeholder="Prénom" aria-label="Joueur ${i+1}">
@@ -313,4 +314,5 @@ function renderEnd(){
   $("#home").onclick = () => { store.game = null; save(); screen = "home"; render(); };
 }
 
-render();
+// En mode bibliothèque (version en ligne), c'est multijoueur.js qui affiche
+if(!window.QUI_LIB) render();

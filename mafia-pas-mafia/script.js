@@ -2,30 +2,21 @@
    RÉGLAGES
    ========================================================= */
 const DEFAULT_PLAYERS = ["Elange","Ismaël","Jovan","Chris","Ysli"];
-// Exemples provisoires : remplace-les depuis l'écran « Préparer les situations »
-const EXAMPLES = [
-  "Annuler le battle une heure avant pour aller à un date.",
-  "Reprendre le passage d'un autre en battle et dire que c'est ton style.",
-  "Arriver au cours juste après l'échauffement pour ne pas le faire.",
-  "Demander au DJ de passer ton son préféré juste avant ton passage.",
-  "Prendre la dernière part de pizza sans demander à personne.",
-  "Liker la story de l'ex d'un pote à 2 h du matin.",
-  "Filmer un pote qui tombe en plein freeze et le poster direct.",
-  "Dire « j'ai pas révisé la choré » alors que tu l'as bossée toute la semaine.",
-  "Garder les meilleurs danseurs du crew pour ta propre équipe en compétition.",
-  "Te faire inviter en soirée et repartir avec la bouteille que tu as ramenée.",
-  "Mettre la vidéo d'un autre danseur en story sans le créditer.",
-  "Partir de l'EVG avant le dernier verre « parce que demain je bosse »."
-].map(text => ({ text, ex:true }));
+// Toutes les listes (situations, danseurs, catégories du Battle) sont dans donnees.js,
+// partagé avec la version multijoueur : c'est là qu'il faut les modifier.
+const DATA = window.MAFIA_DATA || {};
+const EXAMPLES = (DATA.situations || []).map(text => ({ text, ex:true }));
 // Danseurs du mode Danseurs (liste complète). Le Battle All style, lui, prend seulement Hip hop + Popping.
-const DANCER_NAMES = ["Ismaël", "Elange", "Vita", "Julie", "Dimust", "Aline", "Jikay", "Soyuz", "Yoh", "Kodi", "Dialo", "Ronyl", "Sobek", "Marie", "Ughost", "Viro", "Clément", "Suki", "Leah", "Noth", "Imou", "Semoss", "Lumi", "Paul (Meute Céleste)", "Evion", "Joann", "Youyou", "Missile", "Pakissi", "Richard Pop", "Ziko", "Forge", "Ma2t", "Hervé", "Ness", "Erine", "Spider", "Kuty", "Laura Nala", "Rubix", "Hamza", "Drop", "Poppin J", "Lossejoint", "Delannotche", "Mels", "Junior", "Miguel", "Xelyna", "Dyken", "Odilon", "Deadhomies", "Jean-Michel Cruel", "Willis", "Nastya", "Batalla", "Andrey Stylez", "Rochka", "Alex the Cage", "Icee", "Sam Yudat", "Lindsay", "Nicurl", "April", "Reverse", "Dereck", "Krissy", "Doyah", "Physs", "Jimmy Yudat", "Lilkens", "Joël Brown", "Dokyun", "Hozin", "Hoan", "Nikki Pop", "Slimboogie", "Greenteck", "Franqey", "Nelson", "Cinthia", "Sonya", "Eun-G", "Riha", "Nuria", "Lady C", "Ryu", "Sacha", "Paris", "Leila", "Bougito", "Creesto", "Iron Mike", "Linda", "Future", "Junior Boogaloo", "Super Dino", "Lemzo", "Gucchon", "Kei", "Breeze Lee", "Précise", "Jrock", "Jiggy Jaya", "Kinho", "Trakinas", "Jaygee", "Glory", "Jeff West Gang", "Poppin C", "Chams", "Kryss Boogie", "Jerems", "Daren", "Niako", "Kery", "Twizy", "Capjay", "Marta"];
+const DANCER_NAMES = DATA.dancers || [];
 // Catégories du mode Battle. Un danseur peut être dans plusieurs catégories.
-const HIPHOP_NAMES = ["Alex the Cage", "Andrey Stylez", "April", "Batalla", "Deadhomies", "Delannotche", "Dereck", "Doyah", "Drop", "Dyken", "Erine", "Evion", "Forge", "Icee", "Jean-Michel Cruel", "Jimmy Yudat", "Junior", "Krissy", "Kuty", "Laura Nala", "Lilkens", "Lindsay", "Lossejoint", "Lumi", "Ma2t", "Mels", "Miguel", "Missile", "Nastya", "Ness", "Nicurl", "Odilon", "Pakissi", "Physs", "Reverse", "Rochka", "Rubix", "Sam Yudat", "Spider", "Willis", "Daren", "Xelyna", "Ziko", "Niako", "Kery", "Twizy", "Capjay"];
-const POPPING_NAMES = ["Poppin J", "Missile", "Joël Brown", "Ness", "Dokyun", "Hozin", "Hoan", "Nikki Pop", "Slimboogie", "Greenteck", "Franqey", "Nelson", "Cinthia", "Sonya", "Eun-G", "Riha", "Nuria", "Lady C", "Ryu", "Sacha", "Paris", "Leila", "Bougito", "Creesto", "Iron Mike", "Linda", "Future", "Junior Boogaloo", "Marta", "Super Dino", "Lemzo", "Gucchon", "Kei", "Breeze Lee", "Précise", "Jrock", "Jiggy Jaya", "Kinho", "Trakinas", "Jaygee", "Glory", "Jeff West Gang", "Poppin C", "Chams", "Kryss Boogie", "Jerems"];
+const HIPHOP_NAMES = DATA.hiphop || [];
+const POPPING_NAMES = DATA.popping || [];
+const ANCIENS_NAMES = DATA.anciens || [];
 const BCATS = {
   all:     { label:"All style", names:null, union:true },
   hiphop:  { label:"Hip hop",   names:HIPHOP_NAMES },
   popping: { label:"Popping",   names:POPPING_NAMES },
+  anciens: { label:"Les anciens", names:ANCIENS_NAMES },
   bad:     { label:"All Style Bad", names:null, bad:true }
 };
 // All Style Bad : un tournoi Popping, puis un tournoi Hip hop, puis une grande finale
@@ -206,6 +197,7 @@ function renderHome(){
     <h2 class="h2">Catégorie</h2>
     <div class="seg" role="group" aria-label="Catégorie du battle">${Object.entries(BCATS).map(([k,c]) =>
       `<button data-bcat="${k}" aria-pressed="${store.bcat === k}">${c.label}<br><small>${catCount(k)} danseurs</small></button>`).join("")}</div>
+    ${store.bcat === "anciens" ? `<p class="hint">Les anciens : les danseurs de la liste qui ne sont ni en Hip hop ni en Popping. La liste se modifie dans donnees.js.</p>` : ""}
     ${isBad ? `<p class="hint">All Style Bad : un tournoi Popping, puis un tournoi Hip hop. Les deux champions s'affrontent ensuite en grande finale.</p>` : ""}
     <h2 class="h2">Format des duels</h2>
     <div class="seg" role="group" aria-label="Format des duels">${Object.entries(BFMTS).map(([k,f]) =>
@@ -512,6 +504,8 @@ function startBattle(){
 function badNext(){
   const g = G(), b = g.bad, champ = g.rounds[g.r][0].w;
   b.champs.push(champ); b.done.push(g.rounds);
+  // Historique du tournoi fini, gardé pour pouvoir y revenir avec « Annuler »
+  (b.hists || (b.hists = [])).push(g.hist);
   b.phase++;
   if(b.phase < BAD_PHASES.length){
     const ph = BAD_PHASES[b.phase];
@@ -561,8 +555,19 @@ function choose(side, score){
   seek(); save(); render();
   if(g.step === "champion" || g.step === "phaseEnd") sfx.fanfare(); else if(g.step === "intro") sfx.reveal();
 }
+// All Style Bad : on revient à la fin du tournoi précédent (son tableau et son historique)
+function badBack(){
+  const g = G(), b = g.bad;
+  b.phase--; b.champs.pop();
+  g.rounds = b.done.pop(); g.hist = (b.hists || []).pop() || [];
+  g.cat = BAD_PHASES[b.phase].cat; g.r = g.rounds.length - 1; g.m = 0; g.step = "phaseEnd";
+  save(); sfx.click(); render();
+}
+const canUndo = g => g.hist.length > 0 || !!(g.bad && g.bad.phase > 0);
 function undoBattle(){
-  const g = G(), h = g.hist.pop(); if(!h) return;
+  const g = G();
+  if(!g.hist.length && g.bad && g.bad.phase > 0){ badBack(); return; }
+  const h = g.hist.pop(); if(!h) return;
   const [r, m] = h;
   g.rounds.length = r + 1; g.rounds[r][m].w = null; delete g.rounds[r][m].score; delete g.rounds[r][m].pass; delete g.rounds[r][m].callout; delete g.rounds[r][m].style;
   g.r = r; g.m = m; g.step = "duel";
@@ -613,7 +618,7 @@ function renderBattleIntro(){
     <ol class="mlist">${duels.map(x => `<li><span>${esc(nm(x, "a"))}</span><b>VS</b><span>${esc(nm(x, "b"))}</span></li>`).join("")}</ol>
     ${byes.length ? `<p class="hint">Qualifié${byes.length > 1 ? "s" : ""} d'office pour le tour suivant : ${byes.map(x => esc(nm(x, "a"))).join(", ")}.</p>` : ""}
     <button class="btn main" id="go">${isGrandFinal(g) ? "Lancer la grande finale" : cur.length === 1 ? "Lancer la finale" : "Lancer les duels"}</button>
-    ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier choix</button>` : ""}
+    ${canUndo(g) ? `<button class="link" id="undo">Annuler le dernier choix</button>` : ""}
     <button class="link" id="quit">Arrêter le tournoi</button>
   </section>`;
   $("#go").onclick = () => { g.step = "duel"; save(); render(); sfx.swipe(); };
@@ -656,7 +661,7 @@ function renderPasses(){
     ${roulHTML(x)}
     <p class="hint center">Débattez, puis touchez le gagnant de ce passage.</p>
     ${k ? `<button class="link" id="unpass">Annuler le dernier passage</button>` : ""}
-    ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier duel</button>` : ""}
+    ${canUndo(g) ? `<button class="link" id="undo">Annuler le dernier duel</button>` : ""}
     <button class="link" id="quit">Arrêter le tournoi</button>
   </section>`;
   $$(".fighter small").forEach(el => el.textContent = "Gagne ce passage");
@@ -680,7 +685,7 @@ function renderCallout(){
     <div class="duel">${fighter(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">VS</span>${fighter(nm(x, "b"), "b")}</div>
     ${roulHTML(x)}
     <p class="hint center">Envoyez sans vous arrêter. Touchez celui qui n'a plus rien : l'autre se qualifie.</p>
-    ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier duel</button>` : ""}
+    ${canUndo(g) ? `<button class="link" id="undo">Annuler le dernier duel</button>` : ""}
     <button class="link" id="quit">Arrêter le tournoi</button>
   </section>`;
   $$(".fighter small").forEach(el => el.textContent = "Touche s'il n'a plus rien");
@@ -704,7 +709,7 @@ function renderDuel(){
     ${roulHTML(x)}
     <p class="hint center">Débattez, puis touchez le gagnant.</p>
     <button class="btn ghost" id="coin">Pas d'accord ? Pile ou face</button>
-    ${g.hist.length ? `<button class="link" id="undo">Annuler le dernier choix</button>` : ""}
+    ${canUndo(g) ? `<button class="link" id="undo">Annuler le dernier choix</button>` : ""}
     <button class="link" id="quit">Arrêter le tournoi</button>
   </section>`;
   let busy = false;

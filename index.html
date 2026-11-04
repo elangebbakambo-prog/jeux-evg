@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Les jeux de l'EVG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* Menu des jeux : une colonne de téléphone, une affiche par jeu, avec ses deux façons de jouer. */
+:root{
+  --bg:#1E0507; --bg2:#33090C; --bg3:#4A0D11; --ink:#160304; --paper:#F5EBDD; --muted:#D9B8B3;
+  --red:#E1192B; --red-dark:#8A0F18; --gold:#F2C14E;
+  --display:"Anton", "Impact", "Arial Narrow", sans-serif;
+  --body:"Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme:dark;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{ box-sizing:inherit; }
+html{ background:var(--bg); }
+body{ margin:0; min-height:100vh; background:var(--bg); color:var(--paper); font-family:var(--body); font-size:16px; line-height:1.45;
+  background-image:radial-gradient(ellipse at 50% -10%, rgba(225,25,43,.45), transparent 60%), radial-gradient(circle at 1px 1px, rgba(255,255,255,.06) 1px, transparent 0);
+  background-size:100% 100vh, 18px 18px; background-repeat:no-repeat, repeat; }
+main{ max-width:480px; margin:0 auto; padding-block:28px 48px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px));
+  display:flex; flex-direction:column; gap:18px; }
+.eyebrow{ margin:0; text-transform:uppercase; letter-spacing:.14em; font-weight:800; font-size:.75rem; color:var(--gold); }
+h1{ margin:0; font-family:var(--display); font-weight:400; font-size:clamp(3.2rem, 17vw, 5rem); line-height:.92; text-transform:uppercase; text-wrap:balance; }
+h1 em{ font-style:normal; color:var(--red); }
+.lead{ margin:0; color:var(--muted); max-width:60ch; }
+.games{ list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:14px; }
+.game{ background:var(--paper); color:var(--ink); border-radius:14px; padding:18px 18px 16px; display:flex; flex-direction:column; gap:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,.35); position:relative; overflow:hidden; }
+.game::after{ content:attr(data-mono); position:absolute; right:-6px; top:-22px; font-family:var(--display); font-size:7.5rem; line-height:1; color:var(--red); opacity:.13; pointer-events:none; }
+.game h2{ margin:0; font-family:var(--display); font-weight:400; font-size:2rem; line-height:1; text-transform:uppercase; }
+.game p{ margin:0; font-size:.95rem; color:#4A2A27; max-width:42ch; }
+.tags{ display:flex; flex-wrap:wrap; gap:6px; }
+.tags span{ font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em; background:var(--ink); color:var(--paper); border-radius:999px; padding:3px 9px; }
+.ways{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
+.ways.one{ grid-template-columns:1fr; }
+.btn{ display:flex; flex-direction:column; justify-content:center; min-height:56px; text-decoration:none; border-radius:10px; padding:10px 12px; font-weight:800; line-height:1.15; }
+.btn small{ font-weight:600; font-size:.75rem; opacity:.8; margin-top:2px; }
+.btn.main{ background:var(--red); color:var(--paper); }
+.btn.ghost{ background:transparent; color:var(--ink); border:2px solid var(--ink); }
+.btn:focus-visible{ outline:3px solid var(--gold); outline-offset:2px; }
+.btn.main:hover{ background:var(--red-dark); }
+.btn.ghost:hover{ background:var(--ink); color:var(--paper); }
+.note{ margin:4px 0 0; font-size:.85rem; color:var(--muted); }
+@media (max-width:360px){ .ways{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">EVG · samedi 7 novembre</p>
+  <h1>Les jeux<br><em>de l'EVG</em></h1>
+  <p class="lead">Trois jeux entre anciens danseurs. Sur un seul téléphone qu'on se passe, ou chacun sur le sien avec un écran hôte.</p>
+
+  <ul class="games">
+    <li class="game" data-mono="M">
+      <h2>Mafia ou pas mafia</h2>
+      <p>On glisse les cartes en secret : mafia à droite, ça passe à gauche. Puis le mode Battle : tournoi de danseurs, duel après duel.</p>
+      <div class="tags"><span>Situations</span><span>Danseurs</span><span>Battle</span><span>Les anciens</span><span>All Style Bad</span></div>
+      <div class="ways">
+        <a class="btn main" href="mafia-pas-mafia/index.html">Un téléphone<small>On se le passe</small></a>
+        <a class="btn ghost" href="mafia-pas-mafia/multijoueur.html">En ligne<small>Chacun son téléphone</small></a>
+      </div>
+    </li>
+    <li class="game" data-mono="D">
+      <h2>Draft des anciens</h2>
+      <p>Ouvre ton booster de danseurs, construis ton deck en 7 catégories, joue tes jokers. Votes, élections et podium à la fin.</p>
+      <div class="tags"><span>Boosters</span><span>Jokers</span><span>Podium</span></div>
+      <div class="ways">
+        <a class="btn main" href="draft-des-anciens/index.html">Un téléphone<small>On se le passe</small></a>
+        <a class="btn ghost" href="draft-des-anciens/multijoueur.html">En ligne<small>Chacun son téléphone</small></a>
+      </div>
+    </li>
+    <li class="game" data-mono="Q">
+      <h2>Qui a dit ça ?</h2>
+      <p>Une phrase ou une anecdote : qui l'a dite, qui l'a faite ? Et « Qui est-ce ? », avec des indices un par un : plus tu trouves tôt, plus tu marques.</p>
+      <div class="tags"><span>Qui a dit ça ?</span><span>Qui est-ce ?</span></div>
+      <div class="ways">
+        <a class="btn main" href="qui-a-dit-ca/index.html">Un téléphone<small>On se le passe</small></a>
+        <a class="btn ghost" href="qui-a-dit-ca/multijoueur.html">En ligne<small>Le plus rapide gagne</small></a>
+      </div>
+    </li>
+  </ul>
+  <p class="note">En ligne : l'écran hôte (télé, ordi ou téléphone posé au milieu) crée la salle, les autres scannent le QR code.</p>
+</main>
+</body>
+</html>

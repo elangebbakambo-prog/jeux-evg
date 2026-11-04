@@ -18,14 +18,20 @@ const MODES = {
 const BCATS = {
   all:     { label: "All style", names: null, union: true },
   hiphop:  { label: "Hip hop",   names: DATA.hiphop || [] },
-  popping: { label: "Popping",   names: DATA.popping || [] }
+  popping: { label: "Popping",   names: DATA.popping || [] },
+  anciens: { label: "Les anciens", names: DATA.anciens || [] },
+  bad:     { label: "All Style Bad", names: null, bad: true }
 };
+// All Style Bad : un tournoi Popping, puis un tournoi Hip hop, puis une grande finale entre les deux champions
+const BAD_PHASES = [ { cat: "popping", label: "Popping" }, { cat: "hiphop", label: "Hip hop" } ];
 // Danseurs ajoutés par l'hôte dans la salle : [{ name, cats: ["hiphop", "popping"] }], gardés sur l'écran hôte
 const EXTRA_KEY = "mafia-multi-extra";
 const extras = () => { const e = read(EXTRA_KEY); return Array.isArray(e) ? e : []; };
 const battlePool = (cat, names) => {
   const c = BCATS[cat] || BCATS.all;
   // All style : Hip hop + Popping, plus les danseurs ajoutés à la main (absents de la liste officielle)
+  // All Style Bad : les danseurs des deux tournois (pour compter)
+  if(c.bad){ const p = battlePool("popping", names), h = battlePool("hiphop", names), low = new Set(p.map(n => n.toLowerCase())); return p.concat(h.filter(n => !low.has(n.toLowerCase()))); }
   if(c.union){ const set = new Set([...(DATA.hiphop || []), ...(DATA.popping || [])].map(n => n.toLowerCase())), off = new Set((DATA.dancers || []).map(n => n.toLowerCase()));
     return names.filter(n => set.has(n.toLowerCase()) || !off.has(n.toLowerCase())); }
   if(!c.names) return names;
@@ -39,6 +45,28 @@ const BFMTS = {
   three:   { label: "3 passages",  hint: "Après les 3 passages, chacun dit combien il en donne à chaque danseur (3-0, 2-1…). On additionne tout : le plus gros total gagne." },
   callout: { label: "Call out",    hint: "Les deux enchaînent jusqu'à ce que l'un n'ait plus rien. L'hôte touche celui qui abandonne : l'autre se qualifie. Pas de vote." }
 };
+// Roulette de style : sans musique, l'hôte tire un style imposé pour le duel (affiché, pas de son).
+// Mêmes réglages que la version un téléphone (même clé dans le navigateur).
+const ROULETTE_KEY = "battle-roulette";
+const ROULETTE_DEFAUT = {
+  popping: ["Funk", "G-Funk", "Electro Funk", "P-Funk", "Popping Beats", "RnB"],
+  hiphop:  ["Boom Bap", "New Jack Swing", "New School", "RnB"]
+};
+function rouletteLoad(){
+  const c = read(ROULETTE_KEY) || {};
+  return {
+    popping: Array.isArray(c.popping) && c.popping.length ? c.popping : ROULETTE_DEFAUT.popping.slice(),
+    hiphop:  Array.isArray(c.hiphop)  && c.hiphop.length  ? c.hiphop  : ROULETTE_DEFAUT.hiphop.slice()
+  };
+}
+// Popping et Hip hop ont leur liste ; All style, Les anciens et la grande finale réunissent les deux
+const rouletteStyles = cat => { const c = rouletteLoad(); return c[cat] || [...new Set([...c.popping, ...c.hiphop])]; };
+const rouletteSettingsHTML = () => { const c = rouletteLoad(); return `<h2 class="h2">Roulette de style</h2>
+    <p class="hint">Sans musique, un bouton « Lancer la roulette » apparaît sur l'écran hôte pendant les duels : il tire un style à imposer aux danseurs, affiché aussi sur les téléphones. Un style par ligne.</p>
+    ${[["popping", "Popping"], ["hiphop", "Hip hop"]].map(([k, l]) => `<label class="mus-row"><span>${l}</span>
+      <textarea class="field solo" data-roul="${k}" rows="4" placeholder="Un style par ligne">${esc(c[k].join("\n"))}</textarea></label>`).join("")}
+    <p class="hint">All style, Les anciens et la grande finale du All Style Bad tirent dans les deux listes.</p>`; };
+const noMusic = () => !window.Musique || !Musique.configured();
 const fmtOf = () => (H.bat && H.bat.fmt) || "one";
 const passVote = v => /^p[0-3]$/.test(v || "") ? +v[1] : null; // vote « 3 passages » : nombre de passages donnés au danseur de gauche
 const listOf = (L, mode) => mode === "bat" ? battlePool(H && H.bcat, L.dan) : L[mode];
@@ -212,8 +240,9 @@ function publicState(){
   const st = { t: "state", code: H.code, phase: H.phase, mode: H.mode, players: H.players.map(p => ({ id: p.id, name: p.name })),
     progress: Object.fromEntries(H.players.map(p => [p.id, doneCount(p.id)])), total: H.cards.length };
   if(H.phase === "vote") st.cards = H.cards;
-  if(H.phase === "reveal"){ const i = H.revealIdx, t = tallyH(i); st.reveal = { i, text: H.cards[i], y: t.y, n: t.n }; }
-  if(H.bat && ["bintro", "duel", "dreveal", "champion"].includes(H.phase)) Object.assign(st, batPublic());
+  if(H.phase === "reveal"){ const i = H.revealIdx, t = tallyH(i); st.reveal = { i, text: H.cards[i], y: t.y, n: t.n, total: H.cards.length }; }
+  if(H.phase === "end" && H.cards.length) st.end = endData();
+  if(H.bat && ["bintro", "duel", "dreveal", "phaseEnd", "champion"].includes(H.phase)) Object.assign(st, batPublic());
   return st;
 }
 const broadcast = () => send(publicState());
@@ -269,7 +298,7 @@ function renderHost(){ keepFocus(() => {
   if(!PLAY_PHASES.includes(H.phase)) view = "host";
   if(view === "play" && hostPlays()){ swiping() ? paintPlay() : renderPlayer(); return; }
   ({ setup: hostSetup, lobby: hostLobby, vote: hostVote, reveal: hostReveal, end: hostEnd,
-     bintro: hostBatIntro, duel: hostDuel, dreveal: hostDuelReveal, champion: hostChampion })[H.phase]();
+     bintro: hostBatIntro, duel: hostDuel, dreveal: hostDuelReveal, phaseEnd: hostPhaseEnd, champion: hostChampion })[H.phase]();
   const k = H.phase + (H.revealIdx || 0) + (H.bat ? duelKey() : "");
   if(k !== lastHostKey){ window.scrollTo(0, 0); lastHostKey = k; }
   paintPlay();
@@ -284,7 +313,9 @@ function settingsHTML(L){
       `<button data-mode="${k}" aria-pressed="${H.mode === k}">${md.label}<br><small>${listOf(L, k).length} ${md.many}</small></button>`).join("")}</div>
     ${H.mode === "bat" ? `<h2 class="h2">Catégorie</h2>
     <div class="seg" role="group" aria-label="Catégorie du battle">${Object.entries(BCATS).map(([k, c]) =>
-      `<button data-bcat="${k}" aria-pressed="${(H.bcat || "all") === k}">${c.label}<br><small>${battlePool(k, L.dan).length} danseurs</small></button>`).join("")}</div>
+      `<button data-bcat="${k}" aria-pressed="${(H.bcat || "all") === k}">${c.label}<br><small>${k === "bad" ? `${battlePool("popping", L.dan).length} + ${battlePool("hiphop", L.dan).length}` : battlePool(k, L.dan).length} danseurs</small></button>`).join("")}</div>
+    ${H.bcat === "bad" ? `<p class="hint">All Style Bad : un tournoi Popping, puis un tournoi Hip hop. Les deux champions s'affrontent ensuite en grande finale. La taille vaut pour chacun des deux tournois.</p>` : ""}
+    ${H.bcat === "anciens" ? `<p class="hint">Les anciens : les danseurs de la liste qui ne sont ni en Hip hop ni en Popping.</p>` : ""}
     <h2 class="h2">Format des duels</h2>
     <div class="seg" role="group" aria-label="Format des duels">${Object.entries(BFMTS).map(([k, f]) =>
       `<button data-bfmt="${k}" aria-pressed="${(H.bfmt || "one") === k}">${f.label}</button>`).join("")}</div>
@@ -297,7 +328,8 @@ function settingsHTML(L){
     <div class="seg" role="group" aria-label="Nombre de cartes">${[[6, "Rapide"], [10, "Normal"], [0, "Toutes"]].map(([k, l]) =>
       `<button data-size="${k}" aria-pressed="${H.size === k}">${l}<br><small>${k || L[H.mode].length} cartes</small></button>`).join("")}</div>`}
     ${addDancerHTML()}
-    ${H.mode === "bat" && window.Musique ? Musique.settingsHTML() : ""}`;
+    ${H.mode === "bat" && window.Musique ? Musique.settingsHTML() : ""}
+    ${H.mode === "bat" && noMusic() ? rouletteSettingsHTML() : ""}`;
 }
 let addCats = [];
 function addDancerHTML(){
@@ -305,14 +337,17 @@ function addDancerHTML(){
   const ex = extras();
   return `<h2 class="h2">Ajouter des danseurs</h2>
     <form class="host-join" id="addD" novalidate><input class="field" id="dName" maxlength="40" autocomplete="off" placeholder="Nom du danseur" aria-label="Nom du danseur"><button class="btn gold" type="submit">Ajouter</button></form>
-    ${H.mode === "bat" ? `<div class="seg two" role="group" aria-label="Catégories du danseur ajouté">${["hiphop", "popping"].map(k =>
+    ${H.mode === "bat" ? `<div class="seg" role="group" aria-label="Catégories du danseur ajouté">${["hiphop", "popping", "anciens"].map(k =>
       `<button type="button" data-addcat="${k}" aria-pressed="${addCats.includes(k)}">${BCATS[k].label}</button>`).join("")}</div>
-    <p class="hint">Il joue toujours en All style. Coche Hip hop ou Popping pour l'ajouter aussi à ces catégories.</p>` : ""}
+    <p class="hint">Il joue toujours en All style. Coche Hip hop, Popping ou Les anciens pour l'ajouter aussi à ces catégories.</p>` : ""}
     ${ex.length ? `<ul class="roster">${ex.map((e, i) => `<li><span class="dot" aria-hidden="true"></span>${esc(e.name)}${e.cats.length ? ` <small>${e.cats.map(c => BCATS[c].label).join(", ")}</small>` : ""}
       <button class="kick" data-rmx="${i}" aria-label="Retirer ${esc(e.name)}">×</button></li>`).join("")}</ul>` : ""}`;
 }
 function bindSettings(redraw){
   if(window.Musique) Musique.bindSettings(app, redraw);
+  $$("[data-roul]").forEach(ta => ta.oninput = () => {
+    const c = rouletteLoad(); c[ta.dataset.roul] = ta.value.split("\n").map(s => s.trim()).filter(Boolean); write(ROULETTE_KEY, c);
+  });
   const f = $("#addD");
   if(f) f.onsubmit = e => {
     e.preventDefault();
@@ -355,7 +390,7 @@ function rosterHTML(){
 function hostLobby(){
   const L = lists();
   app.innerHTML = `<section class="screen">
-    <p class="meta">${H.mode === "bat" ? `Battle ${catLabel(H.bcat)}, ${BFMTS[H.bfmt || "one"].label.toLowerCase()}, tournoi à ${Math.min(H.bsize || listOf(L, "bat").length, listOf(L, "bat").length)} danseurs` : `${MODES[H.mode].label}, ${H.size || L[H.mode].length} cartes`}</p>
+    <p class="meta">${H.mode === "bat" ? (H.bcat === "bad" ? `All Style Bad, ${BFMTS[H.bfmt || "one"].label.toLowerCase()}, tournoi Popping puis Hip hop, puis grande finale` : `Battle ${catLabel(H.bcat)}, ${BFMTS[H.bfmt || "one"].label.toLowerCase()}, tournoi à ${Math.min(H.bsize || listOf(L, "bat").length, listOf(L, "bat").length)} danseurs`) : `${MODES[H.mode].label}, ${H.size || L[H.mode].length} cartes`}</p>
     <div class="room">
       <p class="hint">Code de la salle</p>
       <span class="code">${esc(H.code)}</span>
@@ -438,7 +473,8 @@ function hostReveal(){
   };
 }
 
-function hostEnd(){
+// Titres de fin et classement des cartes : sur l'écran hôte et sur chaque téléphone
+function endData(){
   const N = H.cards.length, ids = voters();
   const P2 = ids.map(id => ({ id, name: playerName(id), v: H.votes[id] || [] }));
   const mafiaCount = p => p.v.filter(x => x === true).length;
@@ -455,14 +491,18 @@ function hostEnd(){
   const pct = i => tot(i) ? Math.round(tallyH(i).y.length / tot(i) * 100) : 0;
   const order = H.cards.map((c, i) => [i, pct(i)]).sort((a, b) => b[1] - a[1]);
   const divisive = H.cards.map((c, i) => [i, Math.abs(tallyH(i).y.length - tallyH(i).n.length)]).sort((a, b) => a[1] - b[1])[0][0];
+  return { awards, divisive: H.cards[divisive], order: order.map(([i, v]) => [H.cards[i], v]) };
+}
+const endHTML = (d, mode) => `<div class="awards">${d.awards.map(([ico, t, p, why, gold], k) => `<div class="award ${gold ? "gold" : ""}" style="--d:${k}"><span class="ico" aria-hidden="true">${esc(ico)}</span>
+      <p><span class="t">${esc(t)}</span><strong>${esc(p)}</strong><span class="why">${esc(why)}</span></p></div>`).join("")}</div>
+    <h2 class="h2">${mode === "dan" ? "Le danseur" : "Le dossier"} qui a le plus divisé</h2>
+    <p class="note">${esc(d.divisive)}</p>
+    <h2 class="h2">Du plus mafia au moins mafia</h2>
+    <ol class="top-list">${d.order.map(([c, v]) => `<li><span class="pc">${esc(v)} %</span><span>${esc(c)}</span></li>`).join("")}</ol>`;
+function hostEnd(){
   app.innerHTML = `<section class="screen">
     <h1 class="title">Les<br>titres</h1>
-    <div class="awards">${awards.map(([ico, t, p, why, gold], k) => `<div class="award ${gold ? "gold" : ""}" style="--d:${k}"><span class="ico" aria-hidden="true">${ico}</span>
-      <p><span class="t">${t}</span><strong>${esc(p)}</strong><span class="why">${esc(why)}</span></p></div>`).join("")}</div>
-    <h2 class="h2">${H.mode === "dan" ? "Le danseur" : "Le dossier"} qui a le plus divisé</h2>
-    <p class="note">${esc(H.cards[divisive])}</p>
-    <h2 class="h2">Du plus mafia au moins mafia</h2>
-    <ol class="top-list">${order.map(([i, v]) => `<li><span class="pc">${v} %</span><span>${esc(H.cards[i])}</span></li>`).join("")}</ol>
+    ${endHTML(endData(), H.mode)}
     <button class="btn main" id="again">Rejouer avec les mêmes joueurs</button>
     <button class="btn ghost" id="mode">Changer de mode ou de cartes</button>
     <button class="link" id="close">Fermer la salle</button>
@@ -496,25 +536,66 @@ const duelLabel = () => { const cur = H.bat.rounds[H.bat.r], real = cur.filter(y
 const PRIME_CHANCE = .25;
 const withPrime = x => { if(x.b !== null && x.pa === undefined){ x.pa = Math.random() < PRIME_CHANCE; x.pb = Math.random() < PRIME_CHANCE; } return x; };
 const nm = (x, s) => x[s] + (x["p" + s] ? " (prime)" : "");
-function startBattleH(){
-  if(window.Musique) Musique.reset(); // nouveau tournoi : tous les sons peuvent revenir
-  const all = shuffle(listOf(lists(), "bat")), n = H.bsize ? Math.min(H.bsize, all.length) : all.length, ent = all.slice(0, n);
+// Premier tour d'un tournoi
+function firstRound(pool){
+  const all = shuffle(pool), n = H.bsize ? Math.min(H.bsize, all.length) : all.length, ent = all.slice(0, n);
   // Taille du tableau = puissance de 2 ; les places vides sont des exempts (qualifiés d'office)
   let N = 1; while(N < n) N *= 2;
   const byes = N - n, first = []; let k = 0;
   for(let i = 0; i < N / 2; i++) first.push(i < byes ? { a: ent[k++], b: null, w: null } : { a: ent[k++], b: ent[k++], w: null });
-  H.bat = { cat: H.bcat || "all", fmt: H.bfmt || "one", rounds: [shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : withPrime(x))], r: 0, m: 0, hist: [] };
+  return shuffle(first).map(x => x.b === null ? Object.assign(x, { w: x.a, bye: true }) : withPrime(x));
+}
+function startBattleH(){
+  if(window.Musique) Musique.reset(); // nouveau tournoi : tous les sons peuvent revenir
+  const L = lists(), fmt = H.bfmt || "one";
+  if(H.bcat === "bad"){
+    const ph = BAD_PHASES[0];
+    H.bat = { cat: ph.cat, fmt, rounds: [firstRound(battlePool(ph.cat, L.dan))], r: 0, m: 0, hist: [], bad: { phase: 0, champs: [], done: [], hists: [] } };
+  } else {
+    H.bat = { cat: H.bcat || "all", fmt, rounds: [firstRound(listOf(L, "bat"))], r: 0, m: 0, hist: [] };
+  }
   H.cards = []; H.votes = {}; H.dvotes = {};
   seekH(); H.phase = "bintro";
   saveH(); broadcast(); sfx.reveal(); renderHost();
 }
+// All Style Bad : le tournoi en cours est fini, on lance le suivant (ou la grande finale)
+function badNextH(){
+  const B = H.bat, b = B.bad;
+  b.champs.push(B.rounds[B.r][0].w); b.done.push(B.rounds); b.hists.push(B.hist);
+  b.phase++;
+  if(b.phase < BAD_PHASES.length){
+    const ph = BAD_PHASES[b.phase];
+    // Un danseur peut être dans les deux catégories : le champion déjà qualifié ne rejoue pas
+    let pool = battlePool(ph.cat, lists().dan);
+    const sans = pool.filter(n => !b.champs.some(c => c.toLowerCase() === n.toLowerCase()));
+    if(sans.length >= 2) pool = sans;
+    B.cat = ph.cat; B.rounds = [firstRound(pool)];
+  } else {
+    B.cat = "all"; B.rounds = [[withPrime({ a: b.champs[0], b: b.champs[1], w: null })]];
+  }
+  B.r = 0; B.m = 0; B.hist = [];
+  seekH(); H.phase = "bintro";
+  saveH(); broadcast(); sfx.reveal(); renderHost();
+}
+// All Style Bad : retour à la fin du tournoi précédent, avec son tableau et son historique
+function badBackH(){
+  const B = H.bat, b = B.bad;
+  b.phase--; b.champs.pop();
+  B.rounds = b.done.pop(); B.hist = b.hists.pop() || [];
+  B.cat = BAD_PHASES[b.phase].cat; B.r = B.rounds.length - 1; B.m = 0; B.seq = (B.seq || 0) + 1;
+  H.dvotes = {}; H.shown = 0; H.order = []; H.phase = "phaseEnd";
+  saveH(); broadcast(); sfx.click(); renderHost();
+}
+const isGrandFinal = () => !!(H.bat && H.bat.bad && H.bat.bad.phase >= BAD_PHASES.length);
+const rnameH = cur => isGrandFinal() ? "Grande finale" : roundName(cur.length);
+const battleLabelH = () => { const B = H.bat; return B.bad ? (isGrandFinal() ? "All Style Bad, grande finale" : `All Style Bad, tournoi ${BAD_PHASES[B.bad.phase].label}`) : `Battle ${catLabel(B.cat)}`; };
 // Passe au prochain duel à jouer, ou au tour suivant quand le tour est fini
 function seekH(){
   const B = H.bat, cur = B.rounds[B.r], i = cur.findIndex(x => x.w == null);
   H.dvotes = {}; H.shown = 0; H.order = []; B.seq = (B.seq || 0) + 1; B.pass = 1;
   if(i >= 0){ B.m = i; return "duel"; }
   const ws = cur.map(x => x.w);
-  if(ws.length === 1) return "champion";
+  if(ws.length === 1) return B.bad && !isGrandFinal() ? "phaseEnd" : "champion";
   const nx = [];
   for(let j = 0; j < ws.length; j += 2) nx.push(withPrime({ a: ws[j], b: ws[j + 1], w: null }));
   B.rounds.push(nx); B.r++; B.m = 0; return "bintro";
@@ -525,12 +606,15 @@ function chooseH(side){
   B.hist.push([B.r, B.m]);
   H.phase = seekH();
   saveH(); broadcast(); renderHost();
-  H.phase === "champion" ? sfx.fanfare() : H.phase === "bintro" ? sfx.reveal() : sfx.swipe();
+  H.phase === "champion" || H.phase === "phaseEnd" ? sfx.fanfare() : H.phase === "bintro" ? sfx.reveal() : sfx.swipe();
 }
+const canUndoH = () => H.bat.hist.length > 0 || !!(H.bat.bad && H.bat.bad.phase > 0);
 function undoH(){
-  const B = H.bat, h = B.hist.pop(); if(!h) return;
+  const B = H.bat;
+  if(!B.hist.length && B.bad && B.bad.phase > 0){ badBackH(); return; }
+  const h = B.hist.pop(); if(!h) return;
   const [r, m] = h;
-  B.rounds.length = r + 1; delete B.rounds[r][m].score; B.rounds[r][m].w = null;
+  B.rounds.length = r + 1; ["score", "callout", "style"].forEach(k => delete B.rounds[r][m][k]); B.rounds[r][m].w = null;
   B.r = r; B.m = m; B.seq = (B.seq || 0) + 1; B.pass = 1; H.dvotes = {}; H.shown = 0; H.order = []; H.phase = "duel";
   saveH(); broadcast(); sfx.click(); renderHost();
 }
@@ -545,38 +629,69 @@ function countSides(upTo){
   return { a: n("a"), b: n("b"), t: n("t") }; // t : votes « égalité », qui ne comptent pour aucun des deux
 }
 function batPublic(){
-  const B = H.bat, cur = B.rounds[B.r], o = { battle: true, cat: catLabel(B.cat) };
-  if(H.phase === "bintro") o.bintro = { name: roundName(cur.length), duels: cur.filter(x => !x.bye).map(x => [nm(x, "a"), nm(x, "b")]), byes: cur.filter(x => x.bye).map(x => x.a) };
+  const B = H.bat, cur = B.rounds[B.r], o = { battle: true, cat: B.bad ? "All Style Bad" : catLabel(B.cat) };
+  if(H.phase === "bintro") o.bintro = { name: rnameH(cur), duels: cur.filter(x => !x.bye).map(x => [nm(x, "a"), nm(x, "b")]), byes: cur.filter(x => x.bye).map(x => x.a) };
   if(H.phase === "duel" || H.phase === "dreveal"){
     const x = curDuel();
-    o.duel = { key: duelKey(), a: nm(x, "a"), b: nm(x, "b"), round: roundName(cur.length), label: duelLabel(), fmt: fmtOf() };
+    o.duel = { key: duelKey(), a: nm(x, "a"), b: nm(x, "b"), round: rnameH(cur), label: duelLabel(), fmt: fmtOf(), style: x.style || null, spin: !!roulSpin };
     o.voted = Object.keys(H.dvotes);
   }
   if(H.phase === "dreveal"){
     o.shown = H.order.slice(0, H.shown).map(id => ({ name: playerName(id), side: H.dvotes[id] }));
     o.total = H.order.length; o.score = countSides(H.shown);
   }
-  if(H.phase === "champion"){ const f = B.rounds[B.r][0]; o.champ = f.w; o.runner = f.w === f.a ? f.b : f.a; }
+  if(H.phase === "champion" || H.phase === "phaseEnd"){ const f = B.rounds[B.r][0]; o.champ = f.w; o.runner = f.w === f.a ? f.b : f.a;
+    // Tableaux pour les téléphones : le tournoi en cours, et ceux déjà finis du All Style Bad
+    const pack = rounds => rounds.map(rd => rd.map(x => ({ a: nm(x, "a"), b: x.bye ? null : nm(x, "b"), w: x.w === x.a ? "a" : "b",
+      q: x.score ? `${x.score.a}-${x.score.b}` : x.callout ? "call out" : "", st: x.style || "" })));
+    o.brackets = [{ label: H.phase === "phaseEnd" ? `Le tableau ${BAD_PHASES[B.bad.phase].label}` : B.bad ? "Grande finale" : "Le tableau", rounds: pack(B.rounds) }]
+      .concat(H.phase === "champion" && B.bad ? B.bad.done.map((r, i) => ({ label: `Le tableau ${BAD_PHASES[i].label}`, rounds: pack(r) })) : []); }
+  if(H.phase === "phaseEnd"){ o.phaseLabel = BAD_PHASES[B.bad.phase].label; o.last = B.bad.phase + 1 >= BAD_PHASES.length; }
   return o;
 }
-const undoLink = () => H.bat.hist.length ? `<button class="link" id="undo">Annuler le dernier duel</button>` : "";
-function bindBatLinks(){ const u = $("#undo"); if(u) u.onclick = () => askConfirm("Annuler le résultat du dernier duel ? Il sera rejoué.", undoH, "Annuler le duel"); const c = $("#close"); if(c) c.onclick = closeRoom; }
+const undoLink = () => canUndoH() ? `<button class="link" id="undo">Annuler le dernier duel</button>` : "";
+function bindBatLinks(){ const u = $("#undo"); if(u) u.onclick = () => H.bat.hist.length ? askConfirm("Annuler le résultat du dernier duel ? Il sera rejoué.", undoH, "Annuler le duel") : askConfirm(`Revenir à la fin du tournoi ${BAD_PHASES[H.bat.bad.phase - 1].label} ?`, undoH, "Revenir"); const c = $("#close"); if(c) c.onclick = closeRoom; }
 
 function hostBatIntro(){
-  const B = H.bat, cur = B.rounds[B.r], name = roundName(cur.length);
+  const B = H.bat, cur = B.rounds[B.r], name = rnameH(cur);
   const duels = cur.filter(x => !x.bye), byes = cur.filter(x => x.bye);
   app.innerHTML = `<section class="screen">
-    <p class="meta">Battle ${catLabel(B.cat)}, tour ${B.r + 1} sur ${Math.log2(B.rounds[0].length) + 1}</p>
+    <p class="meta">${battleLabelH()}, tour ${B.r + 1} sur ${Math.log2(B.rounds[0].length) + 1}</p>
     <h1 class="title">${name.replace(" ", "<br>")}</h1>
-    <p class="lead">${cur.length === 1 ? "Plus que deux. Un seul repartira avec la couronne." : `${duels.length} duel${duels.length > 1 ? "s" : ""} au programme. À chaque duel, chacun vote sur son téléphone.`}</p>
+    <p class="lead">${isGrandFinal() ? `Le champion ${BAD_PHASES[0].label} contre le champion ${BAD_PHASES[1].label}. Un seul repartira avec la couronne.` : cur.length === 1 ? "Plus que deux. Un seul repartira avec la couronne." : `${duels.length} duel${duels.length > 1 ? "s" : ""} au programme. À chaque duel, chacun vote sur son téléphone.`}</p>
     <ol class="mlist">${duels.map(x => `<li><span>${esc(nm(x, "a"))}</span><b>VS</b><span>${esc(nm(x, "b"))}</span></li>`).join("")}</ol>
     ${byes.length ? `<p class="hint">Qualifié${byes.length > 1 ? "s" : ""} d'office pour le tour suivant : ${byes.map(x => esc(nm(x, "a"))).join(", ")}.</p>` : ""}
-    <button class="btn main" id="go">${cur.length === 1 ? "Lancer la finale" : "Lancer le premier duel"}</button>
+    <button class="btn main" id="go">${isGrandFinal() ? "Lancer la grande finale" : cur.length === 1 ? "Lancer la finale" : "Lancer le premier duel"}</button>
     ${undoLink()}
     <button class="link" id="close">Fermer la salle</button>
   </section>`;
   $("#go").onclick = () => { H.phase = "duel"; saveH(); broadcast(); sfx.swipe(); renderHost(); };
   bindBatLinks();
+}
+// Roulette de style (sans musique) : tirée sur l'écran hôte, le style reste attaché au duel
+// et s'affiche aussi sur les téléphones. roulSpin : la roulette est en train de tourner.
+let roulSpin = null;
+const roulHTMLH = (x, live = true) => (live && noMusic()) || x.style || roulSpin ? `<div class="roul" aria-live="polite">
+    <p class="roul-txt">${roulSpin ? `<small>La roulette tourne…</small><b>${esc(roulSpin.cur)}</b>` : x.style ? `<small>Style imposé</small><b>${esc(x.style)}</b>` : `<small>Bonus sans musique</small><b>Roulette de style</b>`}</p>
+    ${live && noMusic() ? `<button class="btn ghost" id="roul" ${roulSpin ? "disabled" : ""}>${x.style ? "Relancer la roulette" : "Lancer la roulette"}</button>` : ""}</div>` : "";
+function bindRoulH(){
+  const btn = $("#roul"); if(!btn) return;
+  btn.onclick = () => {
+    if(roulSpin) return;
+    const key = duelKey(), styles = rouletteStyles(H.bat.cat); if(!styles.length) return;
+    const pick = styles[Math.floor(Math.random() * styles.length)];
+    const done = () => {
+      roulSpin = null;
+      if(H && H.bat && duelKey() === key && ["duel", "dreveal"].includes(H.phase)){ curDuel().style = pick; saveH(); sfx.reveal(); }
+      if(H){ broadcast(); renderHost(); }
+    };
+    if(reduce() || styles.length < 2){ done(); return; }
+    let t = 0, d = 60, i = Math.floor(Math.random() * styles.length);
+    roulSpin = { cur: styles[i % styles.length] }; broadcast(); renderHost();
+    // Le nom affiché change sans redessiner l'écran : un vote qui arrive pendant ce temps ne coupe pas l'animation
+    while(t < 1800){ const st = styles[i++ % styles.length]; setTimeout(() => { if(!roulSpin) return; roulSpin.cur = st; const b = app.querySelector(".roul-txt b"); if(b) b.textContent = st; sfx.click(); }, t); t += d; d *= 1.13; }
+    setTimeout(done, t + 120);
+  };
 }
 const fighterH = (name, side, extra = "") => `<div class="fighter ${extra}" data-side="${side}">
   <span class="f-mono" aria-hidden="true">${esc([...name][0] || "?")}</span>
@@ -585,8 +700,9 @@ const fighterH = (name, side, extra = "") => `<div class="fighter ${extra}" data
 function hostCallout(){
   const x = curDuel();
   app.innerHTML = `<section class="screen">
-    <header class="bar"><span>${roundName(H.bat.rounds[H.bat.r].length)}</span><span>${duelLabel()}, call out</span></header>
+    <header class="bar"><span>${rnameH(H.bat.rounds[H.bat.r])}</span><span>${duelLabel()}, call out</span></header>
     <div class="duel">${fighterH(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">VS</span>${fighterH(nm(x, "b"), "b")}</div>
+    ${roulHTMLH(x)}
     <p class="lead center">Envoyez sans vous arrêter. Le premier qui n'a plus rien perd.</p>
     <h2 class="h2">Qui n'a plus rien ?</h2>
     <div class="vote2"><button class="btn ghost" data-out="a">${esc(nm(x, "a"))}</button><button class="btn ghost" data-out="b">${esc(nm(x, "b"))}</button></div>
@@ -597,6 +713,7 @@ function hostCallout(){
     const out = b.dataset.out, win = out === "a" ? "b" : "a";
     askConfirm(`${out === "a" ? nm(x, "a") : nm(x, "b")} n'a plus rien ? ${win === "a" ? nm(x, "a") : nm(x, "b")} se qualifie.`, () => chooseH(win), "Confirmer");
   });
+  bindRoulH();
   bindBatLinks();
 }
 function hostDuel(){
@@ -604,10 +721,11 @@ function hostDuel(){
   const three = fmtOf() === "three";
   const x = curDuel(), nV = Object.keys(H.dvotes).length, N = H.players.length, all = N > 0 && H.players.every(p => H.dvotes[p.id]);
   app.innerHTML = `<section class="screen">
-    <header class="bar"><span>${roundName(H.bat.rounds[H.bat.r].length)}</span><span>${duelLabel()}</span></header>
+    <header class="bar"><span>${rnameH(H.bat.rounds[H.bat.r])}</span><span>${duelLabel()}</span></header>
     ${three ? `<p class="meta center">Passage ${H.bat.pass || 1} sur 3</p>` : ""}
     <div class="duel">${fighterH(nm(x, "a"), "a")}<span class="vs" aria-hidden="true">VS</span>${fighterH(nm(x, "b"), "b")}</div>
-    ${three && (H.bat.pass || 1) < 3 ? `<button class="btn gold" id="nextPass">Passage suivant, nouveau son</button>` : ""}
+    ${roulHTMLH(x)}
+    ${three && (H.bat.pass || 1) < 3 ? `<button class="btn gold" id="nextPass">${noMusic() ? "Passage suivant" : "Passage suivant, nouveau son"}</button>` : ""}
     <p class="lead center">${all ? "Tout le monde a voté." : `Votez sur vos téléphones. ${nV} vote${nV > 1 ? "s" : ""} sur ${N}.`}</p>
     <ul class="roster">${H.players.map(p => `<li class="${H.dvotes[p.id] ? "" : "off"}"><span class="dot" aria-hidden="true"></span>${esc(p.name)}${H.dvotes[p.id] ? " ✓" : ""}</li>`).join("")}</ul>
     <button class="btn main" id="go" ${all ? "" : "disabled"}>Révéler les votes</button>
@@ -619,6 +737,7 @@ function hostDuel(){
   $("#go").onclick = go;
   const np = $("#nextPass"); if(np) np.onclick = () => { H.bat.pass = (H.bat.pass || 1) + 1; saveH(); sfx.swipe(); renderHost(); };
   const f = $("#force"); if(f) f.onclick = () => askConfirm("Révéler maintenant ? Ceux qui n'ont pas voté ne compteront pas pour ce duel.", go, "Révéler");
+  bindRoulH();
   bindBatLinks();
 }
 
@@ -630,10 +749,11 @@ function hostDuelReveal(){
   const col = side => H.order.slice(0, H.shown).filter(id => H.dvotes[id] === side)
     .map(id => `<li class="${id === last ? "pop" : ""}">${esc(playerName(id))}</li>`).join("") || `<li class="none">Personne</li>`;
   app.innerHTML = `<section class="screen">
-    <header class="bar"><span>${roundName(H.bat.rounds[H.bat.r].length)}</span><span>${duelLabel()}</span></header>
+    <header class="bar"><span>${rnameH(H.bat.rounds[H.bat.r])}</span><span>${duelLabel()}</span></header>
     <div class="duel">${fighterH(nm(x, "a"), "a", (done && lead === "a" ? "win" : done && lead === "b" ? "lose" : "") + (lead === "a" && !done ? " hot" : ""))}
       <span class="vs" aria-hidden="true">${sc.a}-${sc.b}</span>
       ${fighterH(nm(x, "b"), "b", (done && lead === "b" ? "win" : done && lead === "a" ? "lose" : "") + (lead === "b" && !done ? " hot" : ""))}</div>
+    ${roulHTMLH(x, false)}
     ${three ? (last ? `<p class="big-reveal" aria-live="polite"><strong>${esc(playerName(last))}</strong> : ${esc(nm(x, "a"))} <strong>${passVote(H.dvotes[last])} - ${3 - passVote(H.dvotes[last])}</strong> ${esc(nm(x, "b"))}</p>` : `<p class="hint center">${tot} vote${tot > 1 ? "s" : ""} à révéler, un par un. Le score est le total des passages.</p>`)
     : last ? `<p class="big-reveal" aria-live="polite"><strong>${esc(playerName(last))}</strong> ${H.dvotes[last] === "t" ? "a voté <strong>égalité</strong>" : `a voté <strong>${esc(H.dvotes[last] === "a" ? nm(x, "a") : nm(x, "b"))}</strong>`}</p>` : `<p class="hint center">${tot} vote${tot > 1 ? "s" : ""} à révéler, un par un.</p>`}
     ${three ? `<ul class="pass-list">${H.order.slice(0, H.shown).map(id => { const v = passVote(H.dvotes[id]); return `<li class="${id === last ? "pop" : ""}"><span>${esc(playerName(id))}</span><b>${v} - ${3 - v}</b></li>`; }).join("")}</ul>`
@@ -666,21 +786,48 @@ function hostDuelReveal(){
   bindBatLinks();
 }
 
-function hostChampion(){
-  const B = H.bat, fin = B.rounds[B.r][0], champ = fin.w, runner = fin.w === fin.a ? fin.b : fin.a;
-  const sc = x => x.score ? ` <small>${x.score.a}-${x.score.b}</small>` : x.callout ? ` <small>call out</small>` : "";
+// Tableau d'un tournoi (écrans de fin)
+const bracketH = (rounds, finalName) => { const sc = x => x.score ? ` <small>${x.score.a}-${x.score.b}</small>` : x.callout ? ` <small>call out</small>` : "";
+  return `<div class="bracket">${rounds.map(rd => `<section><h3>${finalName && rd.length === 1 ? finalName : roundName(rd.length)}</h3><ul>${rd.map(x => x.bye
+    ? `<li><span class="w">${esc(nm(x, "a"))}</span><span class="q">qualifié d'office</span></li>`
+    : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(nm(x, "a"))}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(nm(x, "b"))}</span>${sc(x)}${x.style ? ` <small>${esc(x.style)}</small>` : ""}</li>`).join("")}</ul></section>`).join("")}</div>`; };
+const finalLineH = fin => fin.score ? `, ${Math.max(fin.score.a, fin.score.b)} à ${Math.min(fin.score.a, fin.score.b)}` : fin.callout ? ", en call out" : "";
+
+// All Style Bad : fin d'un des deux tournois
+function hostPhaseEnd(){
+  const B = H.bat, b = B.bad, ph = BAD_PHASES[b.phase], fin = B.rounds[B.r][0], champ = fin.w, runner = fin.w === fin.a ? fin.b : fin.a;
+  const last = b.phase + 1 >= BAD_PHASES.length;
   app.innerHTML = `<section class="screen">
     <div class="champ">
       <span class="crown" aria-hidden="true">♛</span>
-      <p class="meta">Champion ${catLabel(B.cat)}</p>
+      <p class="meta">All Style Bad, champion ${ph.label}</p>
       <h1 class="champ-name">${esc(champ)}</h1>
-      <p class="hint">A battu ${esc(runner)} en finale${fin.score ? `, ${Math.max(fin.score.a, fin.score.b)} votes à ${Math.min(fin.score.a, fin.score.b)}` : ""}.</p>
+      <p class="hint">A battu ${esc(runner)} en finale${finalLineH(fin)}. ${last ? `Il affronte ${esc(b.champs[0])}, champion ${BAD_PHASES[0].label}, en grande finale.` : "Qualifié pour la grande finale."}</p>
     </div>
-    <h2 class="h2">Le tableau</h2>
-    <div class="bracket">${B.rounds.map(rd => `<section><h3>${roundName(rd.length)}</h3><ul>${rd.map(x => x.bye
-        ? `<li><span class="w">${esc(nm(x, "a"))}</span><span class="q">qualifié d'office</span></li>`
-        : `<li><span class="${x.w === x.a ? "w" : "l"}">${esc(nm(x, "a"))}</span><b>VS</b><span class="${x.w === x.b ? "w" : "l"}">${esc(nm(x, "b"))}</span>${sc(x)}</li>`).join("")}</ul></section>`).join("")}</div>
-    <button class="btn main" id="again">Nouveau tournoi avec les mêmes joueurs</button>
+    <h2 class="h2">Le tableau ${ph.label}</h2>
+    ${bracketH(B.rounds)}
+    <button class="btn main" id="next">${last ? "Lancer la grande finale" : `Lancer le tournoi ${BAD_PHASES[b.phase + 1].label}`}</button>
+    ${undoLink()}
+    <button class="link" id="close">Fermer la salle</button>
+  </section>`;
+  $("#next").onclick = badNextH;
+  bindBatLinks();
+}
+
+function hostChampion(){
+  const B = H.bat, b = B.bad, fin = B.rounds[B.r][0], champ = fin.w, runner = fin.w === fin.a ? fin.b : fin.a;
+  const from = n => b ? (BAD_PHASES[b.champs.indexOf(n)] || {}).label || "" : "";
+  app.innerHTML = `<section class="screen">
+    <div class="champ">
+      <span class="crown" aria-hidden="true">♛</span>
+      <p class="meta">Champion ${b ? "All Style Bad" : catLabel(B.cat)}</p>
+      <h1 class="champ-name">${esc(champ)}</h1>
+      <p class="hint">${b ? `Champion ${from(champ)}, a battu ${esc(runner)} (champion ${from(runner)}) en grande finale${finalLineH(fin)}.` : `A battu ${esc(runner)} en finale${fin.score ? `, ${Math.max(fin.score.a, fin.score.b)} votes à ${Math.min(fin.score.a, fin.score.b)}` : ""}.`}</p>
+    </div>
+    ${b ? `${bracketH(B.rounds, "Grande finale")}
+    ${b.done.map((rounds, i) => `<h2 class="h2">Le tableau ${BAD_PHASES[i].label}</h2>${bracketH(rounds)}`).join("")}`
+      : `<h2 class="h2">Le tableau</h2>${bracketH(B.rounds)}`}
+    <button class="btn main" id="again">${b ? "Nouveau All Style Bad avec les mêmes joueurs" : "Nouveau tournoi avec les mêmes joueurs"}</button>
     <button class="btn ghost" id="mode">Changer de mode</button>
     ${undoLink()}
     <button class="link" id="close">Fermer la salle</button>
@@ -773,6 +920,7 @@ function renderPlayer(){
   else if(st.phase === "bintro") playerBatIntro();
   else if(st.phase === "duel") (P.dv && P.dv.side ? playerDuelDone() : playerDuel());
   else if(st.phase === "dreveal") playerDuelReveal();
+  else if(st.phase === "phaseEnd") playerPhaseEnd();
   else if(st.phase === "champion") playerChampion();
   else playerEnd();
   const k = (st ? st.phase : "") + P.votes.length + (st && st.reveal ? st.reveal.i : "") + (st && st.duel ? st.duel.key : "") + (P.dv && P.dv.side ? "v" : "");
@@ -876,17 +1024,24 @@ function playerDone(){
   $("#undo").onclick = undoMine;
   bindLeave();
 }
+const namesLi = (arr, other) => arr.length ? arr.map(p => `<li class="${arr.length === 1 && other.length > 1 ? "alone" : ""}">${esc(p)}</li>`).join("") : `<li class="none">Personne</li>`;
 function playerReveal(){
-  const r = P.st.reveal || {}, y = r.y || [], n = r.n || [], [cls, word] = verdictWord(y.length, n.length);
+  const r = P.st.reveal || {}, y = Array.isArray(r.y) ? r.y : [], n = Array.isArray(r.n) ? r.n : [], [cls, word] = verdictWord(y.length, n.length);
   const mine = y.includes(P.name) ? ["y", "Mafia"] : n.includes(P.name) ? ["n", "Pas mafia"] : null;
-  app.innerHTML = `<section class="screen handoff">
-    <p class="meta">Regarde l'écran hôte</p>
+  const md = MODES[P.st.mode] || MODES.sit;
+  app.innerHTML = `<section class="screen">
+    <header class="bar"><span>Verdict</span><span>${esc(md.card)} ${esc((r.i || 0) + 1)}${r.total ? ` sur ${esc(r.total)}` : ""}</span></header>
     <article class="verdict ${P.st.mode === "dan" ? "dancer" : ""}">
-      <span class="c-head"><span>${MODES[P.st.mode].card}</span><span class="c-file">N° ${esc(pad((r.i || 0) + 1))}</span></span>
+      <span class="c-head"><span>${esc(md.card)}</span><span class="c-file">N° ${esc(pad((r.i || 0) + 1))}</span></span>
       <span class="${P.st.mode === "dan" ? "c-name" : "c-text"}">${esc(r.text || "")}</span>
       <p class="big-verdict ${cls}">${word}</p>
+      <div class="split" aria-label="${y.length} Mafia, ${n.length} Pas mafia">
+        <span class="y" style="flex-grow:${y.length || .0001}">${y.length ? y.length + " Mafia" : ""}</span>
+        <span class="n" style="flex-grow:${n.length || .0001}">${n.length ? n.length + " Pas mafia" : ""}</span>
+      </div>
+      <div class="who"><div class="y"><h3>Mafia</h3><ul>${namesLi(y, n)}</ul></div><div class="n"><h3>Pas mafia</h3><ul>${namesLi(n, y)}</ul></div></div>
     </article>
-    ${mine ? `<p>Tu as voté <span class="mine ${mine[0]}">${mine[1]}</span></p>` : ""}
+    ${mine ? `<p class="center">Tu as voté <span class="mine ${mine[0]}">${mine[1]}</span></p>` : ""}
     ${leaveLink}
   </section>`;
   bindLeave();
@@ -908,6 +1063,9 @@ function sendDuelVote(side){
   P.dv = { key: P.st.duel.key, side };
   sendP({ t: "dvote", id: P.id, key: P.st.duel.key, side });
 }
+// Style imposé par la roulette de l'hôte (sans musique)
+const styleP = d => d.spin ? `<div class="roul" aria-live="polite"><p class="roul-txt"><small>Roulette de style</small><b>Ça tourne…</b></p></div>`
+  : d.style ? `<div class="roul" aria-live="polite"><p class="roul-txt"><small>Style imposé</small><b>${esc(d.style)}</b></p></div>` : "";
 const passLabel = (d, v) => `${d.a} ${v} - ${3 - v} ${d.b}`;
 const myVoteLabel = d => { const v = P.dv && P.dv.side; if(!v) return null; const p = passVote(v); return p !== null ? passLabel(d, p) : v === "a" ? d.a : v === "b" ? d.b : "Égalité"; };
 function playerPasses(){
@@ -915,6 +1073,7 @@ function playerPasses(){
   app.innerHTML = `<section class="screen">
     <header class="bar"><span>${esc(d.round)}</span><span>${esc(d.label)}, 3 passages</span></header>
     <h1 class="big center">${esc(d.a)}<br><span class="score-line">VS</span><br>${esc(d.b)}</h1>
+    ${styleP(d)}
     <p class="hint center">Après les 3 passages : combien de passages tu donnes à chacun ?</p>
     <div class="pass-grid">${[3, 2, 1, 0].map(v => `<button class="btn ${v >= 2 ? "main" : "ghost"}" data-pass="${v}">
       <span class="pg-n">${esc(d.a)}</span><b>${v} - ${3 - v}</b><span class="pg-n">${esc(d.b)}</span></button>`).join("")}</div>
@@ -929,6 +1088,7 @@ function playerCallout(){
   app.innerHTML = `<section class="screen handoff">
     <p class="meta">${esc(d.label)}, call out</p>
     <h1 class="big">${esc(d.a)}<br><span class="score-line">VS</span><br>${esc(d.b)}</h1>
+    ${styleP(d)}
     <p class="hint">Pas de vote : les deux enchaînent jusqu'à ce que l'un n'ait plus rien. Regarde l'écran hôte.</p>
     ${leaveLink}
   </section>`;
@@ -945,6 +1105,7 @@ function playerDuel(){
       <span class="vs" aria-hidden="true">VS</span>
       <button class="fighter" data-side="b" aria-label="Voter pour ${esc(d.b)}"><span class="f-mono" aria-hidden="true">${esc([...d.b][0] || "?")}</span><span class="f-name">${esc(d.b)}<small>Touche pour voter</small></span></button>
     </div>
+    ${styleP(d)}
     <button class="btn ghost" id="tie">Égalité, je n'arrive pas à choisir</button>
     <p class="hint center">Ton vote reste secret jusqu'à la révélation sur l'écran hôte.</p>
     ${leaveLink}
@@ -967,6 +1128,7 @@ function playerDuelDone(){
       <p class="meta">${esc(d.label)}</p>
       <h1 class="big">Vote<br>envoyé</h1>
       <p>Tu as voté <span class="mine y">${esc(myVoteLabel(d))}</span></p>
+      ${styleP(d)}
       <p class="hint">${esc(n)} sur ${esc(N)} ont voté. Regarde l'écran hôte pour la révélation.</p></div>
     <button class="undo-btn" id="change"><span aria-hidden="true">↶</span> Changer mon vote</button>
     ${leaveLink}
@@ -975,13 +1137,33 @@ function playerDuelDone(){
   bindLeave();
 }
 function playerDuelReveal(){
-  const st = P.st, d = st.duel, sc = st.score || { a: 0, b: 0 }, shown = st.shown || [];
+  const st = P.st, d = st.duel, sc = st.score || { a: 0, b: 0 }, shown = Array.isArray(st.shown) ? st.shown : [];
   const mine = P.dv && P.dv.key === d.key ? myVoteLabel(d) : null;
+  const col = side => namesLi(shown.filter(v => v.side === side).map(v => v.name), []);
+  const list = d.fmt === "three"
+    ? `<ul class="pass-list">${shown.map(v => { const p = passVote(v.side); return p === null ? "" : `<li><span>${esc(v.name)}</span><b>${p} - ${3 - p}</b></li>`; }).join("")}</ul>`
+    : `<div class="who three"><div class="y"><h3>${esc(d.a)}</h3><ul>${col("a")}</ul></div><div class="t"><h3>Égalité</h3><ul>${col("t")}</ul></div><div class="n"><h3>${esc(d.b)}</h3><ul>${col("b")}</ul></div></div>`;
+  app.innerHTML = `<section class="screen">
+    <header class="bar"><span>${esc(d.round)}</span><span>${esc(d.label)}</span></header>
+    <h1 class="big center">${esc(d.a)}<br><span class="score-line">${esc(sc.a)} - ${esc(sc.b)}</span><br>${esc(d.b)}</h1>
+    ${styleP(d)}
+    <p class="hint center">${d.fmt === "three" ? "Total des passages. " : ""}${esc(shown.length)} vote${shown.length > 1 ? "s" : ""} révélé${shown.length > 1 ? "s" : ""} sur ${esc(st.total || 0)}${sc.t ? `, dont ${esc(sc.t)} égalité` : ""}.</p>
+    ${shown.length ? list : ""}
+    ${mine ? `<p class="center">Tu as voté <span class="mine y">${esc(mine)}</span></p>` : ""}
+    ${leaveLink}
+  </section>`;
+  bindLeave();
+}
+// Tableaux du tournoi sur le téléphone (données du réseau : tout passe par esc())
+const bracketsP = st => (Array.isArray(st.brackets) ? st.brackets : []).map(b => `<h2 class="h2">${esc(b.label)}</h2><div class="bracket">${(b.rounds || []).map(rd => `<section><h3>${esc(roundName(rd.length))}</h3><ul>${rd.map(x => x.b == null
+    ? `<li><span class="w">${esc(x.a)}</span><span class="q">qualifié d'office</span></li>`
+    : `<li><span class="${x.w === "a" ? "w" : "l"}">${esc(x.a)}</span><b>VS</b><span class="${x.w === "b" ? "w" : "l"}">${esc(x.b)}</span>${x.q ? ` <small>${esc(x.q)}</small>` : ""}${x.st ? ` <small>${esc(x.st)}</small>` : ""}</li>`).join("")}</ul></section>`).join("")}</div>`).join("");
+function playerPhaseEnd(){
   app.innerHTML = `<section class="screen handoff">
-    <p class="meta">Regarde l'écran hôte</p>
-    <h1 class="big">${esc(d.a)}<br><span class="score-line">${esc(sc.a)} - ${esc(sc.b)}</span><br>${esc(d.b)}</h1>
-    <p class="hint">${d.fmt === "three" ? "Total des passages. " : ""}${esc(shown.length)} vote${shown.length > 1 ? "s" : ""} révélé${shown.length > 1 ? "s" : ""} sur ${esc(st.total || 0)}${sc.t ? `, dont ${esc(sc.t)} égalité` : ""}.</p>
-    ${mine ? `<p>Tu as voté <span class="mine y">${esc(mine)}</span></p>` : ""}
+    <div class="champ"><span class="crown" aria-hidden="true">♛</span><p class="meta">All Style Bad, champion ${esc(P.st.phaseLabel || "")}</p>
+      <h1 class="champ-name">${esc(P.st.champ || "")}</h1><p class="hint">A battu ${esc(P.st.runner || "")} en finale. Qualifié pour la grande finale.</p></div>
+    <p class="hint">${P.st.last ? "La grande finale arrive sur ton téléphone dès que l'hôte la lance." : "Le tournoi suivant arrive sur ton téléphone dès que l'hôte le lance."}</p>
+    ${bracketsP(P.st)}
     ${leaveLink}
   </section>`;
   bindLeave();
@@ -990,16 +1172,20 @@ function playerChampion(){
   app.innerHTML = `<section class="screen handoff">
     <div class="champ"><span class="crown" aria-hidden="true">♛</span><p class="meta">Champion ${esc(P.st.cat || "du tournoi")}</p>
       <h1 class="champ-name">${esc(P.st.champ || "")}</h1><p class="hint">A battu ${esc(P.st.runner || "")} en finale.</p></div>
+    ${bracketsP(P.st)}
     <p class="hint">Si l'hôte relance un tournoi, il s'affichera ici tout seul.</p>
     ${leaveLink}
   </section>`;
   bindLeave();
 }
 function playerEnd(){
-  app.innerHTML = `<section class="screen handoff">
-    <div class="wait"><p class="meta">Salle ${esc(P.code)}</p>
-      <h1 class="big">Les<br>titres</h1>
-      <p class="hint">Regarde l'écran hôte. Si l'hôte relance une partie, elle s'affichera ici toute seule.</p></div>
+  const d = P.st.end;
+  const ok = d && Array.isArray(d.awards) && Array.isArray(d.order);
+  app.innerHTML = `<section class="screen">
+    <p class="meta">Salle ${esc(P.code)}</p>
+    <h1 class="title">Les<br>titres</h1>
+    ${ok ? endHTML(d, P.st.mode) : ""}
+    <p class="hint">Si l'hôte relance une partie, elle s'affichera ici toute seule.</p>
     ${leaveLink}
   </section>`;
   bindLeave();
