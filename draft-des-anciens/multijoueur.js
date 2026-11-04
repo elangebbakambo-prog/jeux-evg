@@ -74,6 +74,15 @@ const params = new URLSearchParams(location.search);
 let role = null;
 function boot(){
   const h = read(HOST_KEY), me = read(ME_KEY), code = cleanCode(params.get("salle"));
+  // On arrive d'un autre jeu avec la même salle (commun/salle-jeux.js)
+  const suite = window.EVG_SALLE && EVG_SALLE.suite();
+  if(suite && suite.role === "host"){
+    role = "host"; H = Object.assign({ rounds: SHORT_ROUNDS, groom: "", players: [] }, { phase: "lobby", code: suite.code });
+    if(suite.moi){ H.me = { id: P.id, name: suite.moi }; P.code = H.code; P.name = suite.moi; }
+    setLib({ groom: H.groom, rounds: H.rounds });
+    saveH(); connectHost(); renderHost(); return;
+  }
+  if(suite){ role = "player"; P.code = suite.code; P.name = suite.name; joinRoom(); return; }
   if(code){ role = "player"; P.code = code; P.name = (me && me.name) || ""; if(me && me.code === code && me.name){ joinRoom(); return; } renderJoin(); return; }
   if(h && h.phase && h.phase !== "setup"){ role = "host"; H = h; if(H.me){ P.id = H.me.id; P.code = H.code; P.name = H.me.name; } setLib({ groom: H.groom, rounds: H.rounds }); connectHost(); renderHost(); return; }
   if(me && me.code && me.name){ role = "player"; Object.assign(P, { code: me.code, name: me.name }); joinRoom(); return; }
@@ -242,8 +251,13 @@ function hostLobby(){
     <ul class="roster">${H.players.length ? H.players.map(p => `<li class="${online.has(p.id) ? "" : "off"}"><span class="dot" aria-hidden="true"></span>${esc(p.name)}
       <button class="kick" data-kick="${esc(p.id)}" aria-label="Retirer ${esc(p.name)}">×</button></li>`).join("") : `<li class="empty">Personne pour l'instant. Scannez le QR code ou tapez le code.</li>`}</ul>
     ${hostJoinHTML()}
+    <h2 class="h2">Durée de la partie</h2>
+    <div class="vote">${[[SHORT_ROUNDS, "Courte"], [ROUNDS, "Normale"]].map(([n, l]) => `<button class="btn ${H.rounds === n ? "main" : "ghost"}" data-rounds="${n}" aria-pressed="${H.rounds === n}">${l}<br><small>${n} tours</small></button>`).join("")}</div>
+    <h2 class="h2">Futur marié</h2>
+    <input class="solo" id="groomL" value="${esc(H.groom)}" placeholder="Prénom du futur marié" aria-label="Prénom du futur marié">
     <p class="hint">Les joueurs doivent tous être dans la salle avant le lancement : personne ne peut rejoindre une partie commencée.</p>
     <button class="btn main" id="start" ${H.players.length >= 2 ? "" : "disabled"}>Lancer la partie</button>
+    ${window.EVG_SALLE ? EVG_SALLE.html() : ""}
     ${closeLink}
   </section>`;
   const qr = q("#qr");
@@ -252,7 +266,11 @@ function hostLobby(){
     const id = b.dataset.kick;
     askConfirm(`Retirer ${pName(id)} de la salle ?`, () => { if(H.me && H.me.id === id) H.me = null; H.players = H.players.filter(p => p.id !== id); send({ t: "kick", to: id }); saveH(); broadcast(); renderHost(); }, "Retirer");
   });
+  qa("[data-rounds]").forEach(b => b.onclick = () => { H.rounds = +b.dataset.rounds; saveH(); broadcast(); sfx.click(); renderHost(); });
+  q("#groomL").onchange = e => { H.groom = e.target.value.trim(); saveH(); broadcast(); renderHost(); };
+  if(window.EVG_SALLE) EVG_SALLE.bind(app, { code: H.code, moi: H.me && H.me.name, envoyer: send, fermer: () => { disconnect(); write(HOST_KEY, null); } });
   q("#start").onclick = () => {
+    H.groom = (q("#groomL").value || "").trim();
     H.pool = buildPool(H.groom);
     H.teams = {}; H.jokers = {}; H.flags = {}; H.roundWins = {};
     H.players.forEach(p => { H.teams[p.id] = emptyTeam(); H.jokers[p.id] = []; H.flags[p.id] = {}; H.roundWins[p.id] = 0; });
@@ -519,7 +537,10 @@ function onPlayerMsg(m){
   // Broadcast is unauthenticated: any player can forge these messages, so every field reaching innerHTML goes through esc()
   if(role === "host" && !hostPlays()) return;
   if(m.to && m.to !== P.id) return;
+  if(role !== "host" && window.EVG_SALLE && EVG_SALLE.suivre(m, P.code, P.name)) return;
   if(m.t === "state"){
+    // Hôte qui vient d'arriver (changement de jeu) : il ne nous connaît pas encore, on se présente
+    if(role !== "host" && m.phase === "lobby" && Array.isArray(m.players) && !m.players.some(p => p.id === P.id) && Date.now() - (P.helloAt || 0) > 2000){ P.helloAt = Date.now(); sendP({ t: "hello", id: P.id, name: P.name }); }
     const first = !P.st, was = myTurn(), ph = P.st && P.st.phase, rd = P.st && P.st.round; P.st = m;
     if(m.phase === "lobby" || m.phase === "startSpin"){ P.hand = null; P.sent = ""; }
     if(first) sfx.click();
