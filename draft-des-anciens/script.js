@@ -7,27 +7,23 @@ const SHORT_ROUNDS = 3;    // partie courte
 const R = () => (S && S.rounds) || ROUNDS;
 const JOKER_CHANCE = 0;   // chance de trouver un joker dans un booster (0 = jokers uniquement par la roulette)
 
-const DANCERS = ["Ismaël","Elange","Vita","Julie","Dimust","Aline","Jikay","Soyuz","Yoh","Kodi","Dialo","Ronyl","Sobek",
-  "Marie","Ughost","Viro","Clément","Suki","Leah","Noth","Imou","Semoss","Lumi","Paul (Meute Céleste)","Evion",
-  "Joann","Youyou","Missile","Pakissi","Richard Pop","Ziko","Forge","Ma2t","Hervé","Ness","Erine","Spider",
-  "Kuty","Laura Nala","Rubix","Hamza","Drop","Poppin J","Lossejoint","Delannotche","Mels","Junior","Miguel",
-  "Xelyna","Dyken","Odilon","Deadhomies","Jean-Michel Cruel","Willis","Nastya","Batalla","Andrey Stylez",
-  "Rochka","Alex the Cage","Icee","Sam Yudat","Lindsay","Nicurl","April","Reverse","Dereck","Krissy","Doyah",
-  "Physs","Jimmy Yudat","Lilkens"];
+// Les danseurs et leurs cartes sont dans cartes.js (une ligne par danseur, facile à modifier)
+const CARTES = window.DRAFT_CARTES || {};
+const DANCERS = Object.keys(CARTES);
 
 // Carte spéciale du futur marié (rareté Mythique). Son prénom se règle sur l'écran d'accueil.
 const GROOM = {
   moves: [["Dernier jour de liberté", 200], ["Oui fatal", 180]],
   talent: ["Enterrement de vie de garçon", "Toute son équipe gagne +10 en ambiance ce soir."],
   weak: "La belle-famille", res: "La gueule de bois",
-  flavor: "Il a dit oui. On lui doit au moins un dernier battle."
+  flavor: "Ça y est, il a trouvé sa personnalité."
 };
 
 // Spécialités : chaque danseur est expert dans un domaine. Placé dans sa spécialité, son score est multiplié.
 const SPECIALTY_BONUS = 1.3; // +30 % dans sa spécialité
 // Choisis toi-même la spécialité de certains danseurs (battle, crea, presta, chore, workshop, best, bad).
 // Les autres reçoivent automatiquement la catégorie où leurs stats sont les meilleures.
-const SPECIALTY_OVERRIDES = {}; // ex. : { "Kodi":"battle", "Ughost":"chore" }
+const SPECIALTY_OVERRIDES = {}; // ex. : { "Kodi":"battle", "Ughost":"chore" } (sinon : spec dans cartes.js)
 
 // Choisis toi-même la rareté de certains danseurs. Les autres sont tirés au hasard.
 const RARITY_OVERRIDES = {}; // ex. : { "Kodi":"Légendaire", "Ughost":"Rare" }
@@ -50,15 +46,24 @@ const JOKERS = {
   xl:       { name:"Booster Légendaire", text:"Remplace ta main par un booster doré : que des Légendaires (complété par des Rares s'il en manque)." }
 };
 
-const STYLES = ["Hip-hop","Popping","Locking","Krump","House","Breaking","Waacking","Dancehall","Afro","Voguing"];
-const STYLE_COLORS = { "Hip-hop":"#E1192B","Popping":"#B10E1C","Locking":"#D63A2F","Krump":"#8A0F18","House":"#C41E3A",
+const STYLES = ["Hip-hop","Popping","Locking","Krump","House","Breaking","Waacking","Dancehall","Afro","Voguing","Électro"];
+const STYLE_COLORS = { "Électro":"#B81730","Hip-hop":"#E1192B","Popping":"#B10E1C","Locking":"#D63A2F","Krump":"#8A0F18","House":"#C41E3A",
   "Breaking":"#9E1B32","Waacking":"#E0434F","Dancehall":"#A4161A","Afro":"#BF3A2B","Voguing":"#D1203C" };
 const MOVES = {
   "Hip-hop":["Bounce du quartier","Groove infini"], "Popping":["Hit sec","Animation robot"],
   "Locking":["Point qui tue","Lock et sourire"], "Krump":["Chest pop","Stomp de rage"],
   "House":["Jack sans fin","Lofting aérien"], "Breaking":["Freeze éclair","Windmill tornade"],
   "Waacking":["Bras hélice","Pose de star"], "Dancehall":["Gully creepa","Bad man forward"],
-  "Afro":["Pas du village","Gwara gwara"], "Voguing":["Dip mortel","Duckwalk royal"]
+  "Afro":["Pas du village","Gwara gwara"], "Voguing":["Dip mortel","Duckwalk royal"], "Électro":["Bras mécaniques","Glitch total"]
+};
+// Attaques inventées pour les danseurs sans attaque dans cartes.js (2 tirées pour chacun, toujours les mêmes)
+const MOVE_POOLS = {
+  "Hip-hop": ["Bounce du quartier","Groove infini","Footwork express","Punchline corporelle","Cypher interdit","Rebond fatal",
+    "Old school assumé","Flow imprévisible","Contretemps vicieux","Rythme dans le sang","Call out direct","Smile avant l'attaque",
+    "Dernier round","Groove de 4 h du matin","Rafale de steps","Pas de quartier","Basse qui cogne","Sourire en coin"],
+  "Popping": ["Hit sec","Animation robot","Tutting chirurgical","Waving hypnotique","Strobing","Boogaloo roll","Isolation parfaite",
+    "Dime stop","Glide au ralenti","Ticking nerveux","Fresno infini","Pop sur la caisse claire","Robot en panne (volontaire)",
+    "Mur invisible","Funk dans les genoux","Pose de statue","Electric boogie","Twist-o-flex"]
 };
 const STAT_NAMES = ["Flow","Technique","Musicalité","Cardio"];
 const FLAVORS = [
@@ -163,11 +168,53 @@ paintSound(); document.body.appendChild(soundBtn);
 /* =========================================================
    Génération des cartes (toujours la même carte pour un même nom)
    ========================================================= */
-const dancerStyle = name => pickR(mulberry(seedFrom("S:" + name)), STYLES);
+const rarityOf = note => note >= 85 ? "Légendaire" : note >= 78 ? "Rare" : "Commune";
+const primaryStyle = st => STYLES.find(x => String(st).startsWith(x)) || "Hip-hop";
+const dancerStyle = name => CARTES[name] ? primaryStyle(CARTES[name].styles[0]) : pickR(mulberry(seedFrom("S:" + name)), STYLES);
+const stylesLabel = name => CARTES[name] ? CARTES[name].styles.join(" · ") : dancerStyle(name);
 function rollRarity(name){ const x = mulberry(seedFrom("R:" + name))(); return x < 0.08 ? "Légendaire" : x < 0.35 ? "Rare" : "Commune"; }
 const cache = {};
+// Notes par domaine (sur 100) d'après la note globale et les points forts du danseur
+const DOMAINS = ["battle","crea","presta","chore","workshop"];
+function domainNotes(name){
+  const c = CARTES[name]; if(!c) return null;
+  const g = c.note, clamp = v => Math.max(20, Math.min(99, Math.round(v))), out = {};
+  DOMAINS.forEach(d => {
+    let v = c.complet ? g + 1 : g - 6;
+    if(c.ws && d === "workshop") v = Math.max(v, g + 3);
+    if(c.spec.includes(d)) v = c.complet ? g + 4 : g + 5;
+    if(c.expert90 && c.spec.includes(d)) v = Math.max(v, 90);
+    out[d] = clamp(v);
+  });
+  if(name === "Ismaël") out.presta = clamp(g - 3); // la prestation, c'est moins son truc
+  return out;
+}
+// Carte d'un danseur du jeu (cartes.js), ou carte au hasard (joueurs, noms inconnus)
 function buildData(name, style, rarity){
-  const key = name + "|" + style + "|" + rarity;
+  const c = CARTES[name];
+  const key = name + "|" + style + "|" + rarity + (c ? "|C" : "");
+  if(cache[key]) return cache[key];
+  if(!c || rarity === "Joueur" || rarity === "Mythique") return cache[key] = buildRandom(name, style, rarity);
+  const r = mulberry(seedFrom(key)), n = domainNotes(name), g = c.note;
+  const stats = [["Flow", n.battle], ["Technique", n.workshop], ["Musicalité", n.crea], ["Cardio", n.presta]];
+  const pool = MOVE_POOLS[primaryStyle(c.styles[0])] || MOVE_POOLS["Hip-hop"];
+  const mv = c.moves || (() => { const a = shuffleR(pool, r); return [a[0], a[1]]; })();
+  const dmg = Math.max(20, Math.round(g * 1.6 / 10) * 10);
+  const rar = rarityOf(g);
+  const d = {
+    rarity: rar, stats, statsObj: Object.fromEntries(stats), notes: n, note: g, complet: !!c.complet,
+    level: g,
+    moves: [[mv[0], dmg], [mv[1], Math.max(10, dmg - 30)]],
+    talent: c.talent || (rar === "Commune" ? null : c.ws ? ["Pédagogue", "Explique n'importe quel pas en trois mots."] : pickR(r, TALENTS)),
+    weak: c.weak || pickR(r, WEAKNESSES), res: c.res || pickR(r, RESISTANCES),
+    flavor: c.flavor || pickR(r, FLAVORS),
+    num: String(100 - Math.min(99, g)).padStart(3, "0")
+  };
+  return cache[key] = d;
+}
+function shuffleR(a, r){ a = a.slice(); for(let i = a.length - 1; i > 0; i--){ const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function buildRandom(name, style, rarity){
+  const key = "RND|" + name + "|" + style + "|" + rarity;
   if(cache[key]) return cache[key];
   const R = RANGES[rarity], r = mulberry(seedFrom(key));
   const stats = STAT_NAMES.map(s => [s, between(r, R.stat[0], R.stat[1])]);
@@ -187,36 +234,29 @@ const isGroom = name => !!groomName() && String(name).trim().toLowerCase() === g
 function groomData(name, style){
   const key = "GROOM|" + name;
   if(cache[key]) return cache[key];
-  const d = Object.assign({}, buildData(name, style, "Mythique"), {
-    moves: GROOM.moves, talent: GROOM.talent, weak: GROOM.weak, res: GROOM.res, flavor: GROOM.flavor, num: "001", level: 99 });
+  const d = Object.assign({}, buildRandom(name, style, "Mythique"), {
+    moves: GROOM.moves, talent: GROOM.talent, weak: GROOM.weak, res: GROOM.res, flavor: GROOM.flavor, num: "001", level: 99,
+    stats: STAT_NAMES.map(s => [s, 99]), statsObj: Object.fromEntries(STAT_NAMES.map(s => [s, 99])), note: 99 });
   return cache[key] = d;
 }
-const cardData = c => c.groom ? groomData(c.name, c.style) : buildData(c.name, c.style, RARITY_OVERRIDES[c.name] || rollRarity(c.name));
+const cardData = c => c.groom ? groomData(c.name, c.style) : buildData(c.name, c.style, CARTES[c.name] ? rarityOf(CARTES[c.name].note) : RARITY_OVERRIDES[c.name] || rollRarity(c.name));
 const playerCard = name => ({ name, style: dancerStyle("P:" + name) });
-const rawScore = (card, cat) => cat.score(cardData(card).statsObj);
-// Répartition équilibrée des spécialités : à peu près autant d'experts dans chaque domaine
-let specMap = null;
-function buildSpecMap(){
-  const all = DANCERS.map(n => ({ name:n, style:dancerStyle(n) }));
-  const stats = {};
-  CATS.forEach(cat => {
-    const v = all.map(c => rawScore(c, cat)), mean = v.reduce((x,y) => x + y, 0) / v.length;
-    stats[cat.id] = { mean, sd: Math.sqrt(v.reduce((x,y) => x + (y - mean) ** 2, 0) / v.length) || 1 };
-  });
-  const cap = Math.ceil(all.length / CATS.length), count = Object.fromEntries(CATS.map(c => [c.id, 0])), map = {};
-  all.forEach(c => { const o = SPECIALTY_OVERRIDES[c.name]; if(o){ map[c.name] = o; count[o]++; } });
-  // Toutes les paires (danseur, domaine), de la plus forte à la plus faible par rapport à la moyenne
-  const pairs = [];
-  all.filter(c => !map[c.name]).forEach(c => CATS.forEach(cat => pairs.push([c.name, cat.id, (rawScore(c, cat) - stats[cat.id].mean) / stats[cat.id].sd])));
-  pairs.sort((x,y) => y[2] - x[2]);
-  pairs.forEach(([n, id]) => { if(!map[n] && count[id] < cap){ map[n] = id; count[id]++; } });
-  return map;
+// Points dans une catégorie : notes par domaine (cartes.js), sinon d'après les 4 stats
+function rawScore(card, cat){
+  const d = cardData(card), n = d.notes;
+  if(card.groom) return cat.id === "bad" ? 2 : 198;
+  if(!n) return cat.score(d.statsObj);
+  const avg = DOMAINS.reduce((s, k) => s + n[k], 0) / DOMAINS.length;
+  if(cat.id === "best") return Math.round(avg * 2 + (d.complet ? 6 : 0));
+  if(cat.id === "bad") return Math.round(200 - avg * 2);
+  return n[cat.id] * 2;
 }
+// Spécialité : la première de cartes.js (complet = Best dancer)
 function specialty(card){
   if(card.groom) return "best";
   if(SPECIALTY_OVERRIDES[card.name]) return SPECIALTY_OVERRIDES[card.name];
-  if(!specMap) specMap = buildSpecMap();
-  return specMap[card.name] || "best";
+  const c = CARTES[card.name];
+  return c ? c.spec[0] : "best";
 }
 const specCat = card => CATS.find(c => c.id === specialty(card));
 const isExpert = (card, cat) => specialty(card) === cat.id;
@@ -229,11 +269,11 @@ function cardHTML(c, o = {}){
   const cls = ["tcg", RCLASS[d.rarity], d.rarity !== "Commune" ? "holo" : "", o.player ? "player" : "", o.cls || ""].join(" ");
   const bg = d.rarity === "Mythique" ? "#8A0F18" : o.player ? "#7A0C15" : STYLE_COLORS[c.style];
   return `<${tag} class="${cls}" style="--t:${bg};${o.style || ""}" ${o.attrs || ""}><span class="t-in">
-    <span class="t-top"><span class="t-name">${esc(c.name)}</span><span class="t-lvl">Niv. ${d.level}</span></span>
+    <span class="t-top"><span class="t-name">${esc(c.name)}</span><span class="t-lvl">${d.note ? "Note" : "Niv."} ${d.level}</span></span>
     <span class="t-art"><span class="t-mono" aria-hidden="true">${esc([...c.name][0] || "?")}</span>
       ${d.rarity === "Mythique" ? `<span class="t-star" aria-hidden="true">♛</span><span class="t-groom">Futur marié</span>` : d.rarity === "Légendaire" ? `<span class="t-star" aria-hidden="true">★★★</span>` : d.rarity === "Rare" ? `<span class="t-star" aria-hidden="true">★★</span>` : ""}
-      <span class="t-type">${esc(c.style)}</span>
-      ${!o.player && !(o.cls || "").includes("blind") ? `<span class="t-spec" style="--cat:${specCat(c).color}">Expert ${esc(specCat(c).label)}</span>` : ""}</span>
+      <span class="t-type">${esc(o.player ? c.style : stylesLabel(c.name))}</span>
+      ${!o.player && !(o.cls || "").includes("blind") ? `<span class="t-spec" style="--cat:${specCat(c).color}">${d.complet ? "Complet" : "Expert " + esc(specCat(c).label)}</span>` : ""}</span>
     <span class="t-moves">${d.moves.map(([m, dmg]) => `<span class="t-move"><span class="t-dots">${"<i></i>".repeat(Math.min(4, Math.ceil(dmg / 40)))}</span><span class="t-mname">${esc(m)}</span><span class="t-dmg">${dmg}</span></span>`).join("")}</span>
     <span class="t-stats">${d.stats.map(([s, v]) => `<span>${s}</span><span class="t-bar"><i style="width:${v}%"></i></span><span>${v}%</span>`).join("")}</span>
     ${d.talent ? `<span class="t-talent"><b>Talent : ${esc(d.talent[0])}.</b> ${esc(d.talent[1])}</span>` : ""}
@@ -277,7 +317,7 @@ const tell = text => askConfirm(text, null, "OK", null);
    ========================================================= */
 let S = load();
 let setupNames = DEFAULT_PLAYERS.slice();
-let setupGroom = "";
+let setupGroom = "Sobek";
 let setupRounds = ROUNDS;
 let lastPhase = null, showGallery = false, overlay = null, showRanking = false;
 
@@ -322,7 +362,7 @@ function renderSetup(){
 }
 
 function buildPool(groom){
-  const pool = DANCERS.filter(n => !groom || n.toLowerCase() !== groom.toLowerCase()).map((name,id) => ({ id, name, style: dancerStyle(name) }));
+  const pool = DANCERS.map((name,id) => ({ id, name, style: dancerStyle(name) }));
   if(groom) pool.push({ id: 999, name: groom, style: dancerStyle(groom), groom: true });
   return pool;
 }
@@ -348,7 +388,7 @@ function renderGallery(){
     <div class="gallery">${Object.keys(JOKERS).map(t => jokerHTML(t)).join("")}</div>
     <h2 class="h2">Danseurs</h2>
     ${filterHTML(DANCERS.map(n => ({ name:n, style:dancerStyle(n) })), true)}
-    <div class="gallery">${applyFilter(DANCERS.map(n => ({ name:n, style:dancerStyle(n) })), true).map(c => cardHTML(c)).join("")}</div>
+    <div class="gallery">${(domainOn === "all" ? sortStrong : x => x)(applyFilter(DANCERS.map(n => ({ name:n, style:dancerStyle(n) })), true)).map(c => cardHTML(c)).join("")}</div>
   </section>`;
   bindFilter();
   $("#back").onclick = () => { showGallery = false; render(); };

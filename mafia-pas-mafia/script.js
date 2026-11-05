@@ -59,7 +59,7 @@ const rouletteSettingsHTML = () => { const c = rouletteLoad(); return `<h2 class
     <p class="hint">All style et la grande finale du All Style Bad tirent dans les deux listes.</p>`; };
 // Sans musique : pas de lecteur, ou l'hôte a choisi « Sans musique »
 const noMusic = () => !window.Musique || !Musique.configured();
-const DANCERS_VERSION = 6;
+const DANCERS_VERSION = 7;
 // Formats d'un duel du Battle
 const BFMTS = {
   one:     { label:"1 passage",  hint:"Chaque danseur passe une fois, puis vous choisissez le gagnant." },

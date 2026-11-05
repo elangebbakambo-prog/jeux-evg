@@ -77,7 +77,7 @@ function boot(){
   // On arrive d'un autre jeu avec la même salle (commun/salle-jeux.js)
   const suite = window.EVG_SALLE && EVG_SALLE.suite();
   if(suite && suite.role === "host"){
-    role = "host"; H = Object.assign({ rounds: SHORT_ROUNDS, groom: "", players: [] }, { phase: "lobby", code: suite.code });
+    role = "host"; H = Object.assign({ rounds: SHORT_ROUNDS, groom: "Sobek", players: [] }, { phase: "lobby", code: suite.code });
     if(suite.moi){ H.me = { id: P.id, name: suite.moi }; P.code = H.code; P.name = suite.moi; }
     setLib({ groom: H.groom, rounds: H.rounds });
     saveH(); connectHost(); renderHost(); return;
@@ -99,7 +99,7 @@ function renderStart(){
     </div>
     <a class="link" href="index.html">Jouer sur un seul téléphone</a>
   </section>`;
-  q("#asHost").onclick = () => { role = "host"; H = { phase: "setup", rounds: SHORT_ROUNDS, groom: "", players: [] }; renderHost(); };
+  q("#asHost").onclick = () => { role = "host"; H = { phase: "setup", rounds: SHORT_ROUNDS, groom: "Sobek", players: [] }; renderHost(); };
   q("#asPlayer").onclick = () => { role = "player"; P.code = ""; renderJoin(); };
 }
 
