@@ -180,14 +180,17 @@ function domainNotes(name){
   const c = CARTES[name]; if(!c) return null;
   // Bonus qui rétrécit près de 100 : les meilleurs restent départagés au lieu de tous plafonner à 99
   const g = c.note, clamp = v => Math.max(20, Math.min(99.5, Math.round(v * 2) / 2)), up = k => g + Math.min(k, (100 - g) / 2), out = {};
+  // Le niveau général compte d'abord ; un domaine fort ne donne qu'un petit plus.
+  // Ainsi un danseur nettement plus fort reste devant, même hors de sa spécialité.
   DOMAINS.forEach(d => {
-    let v = c.complet ? up(1) : g - 6;
-    if(c.ws && d === "workshop") v = Math.max(v, up(3));
-    if(c.spec.includes(d)) v = up(c.complet ? 4 : 5);
+    let v = c.complet ? up(2) : g - 1;
+    if(c.ws && d === "workshop") v = Math.max(v, up(1));
+    if(c.spec.includes(d)) v = up(c.complet ? 3 : 2);
     if(c.expert90 && c.spec.includes(d)) v = Math.max(v, 90);
+    if(c.notes && c.notes[d] != null) v = c.notes[d]; // note forcée dans cartes.js
     out[d] = clamp(v);
   });
-  if(name === "Ismaël") out.presta = clamp(g - 3); // la prestation, c'est moins son truc
+  if(name === "Ismaël" && !(c.notes && c.notes.presta != null)) out.presta = clamp(g - 3); // la prestation, c'est moins son truc
   return out;
 }
 // Carte d'un danseur du jeu (cartes.js), ou carte au hasard (joueurs, noms inconnus)
@@ -262,7 +265,9 @@ function specialty(card){
 const specCat = card => CATS.find(c => c.id === specialty(card));
 // Expert dans tous ses domaines forts (ex. Kuty : Battle et Chorégraphe)
 const isExpert = (card, cat) => specialty(card) === cat.id || (!!CARTES[card.name] && !card.groom && CARTES[card.name].spec.includes(cat.id));
-const catScore = (card, cat) => Math.round(rawScore(card, cat) * (isExpert(card, cat) ? SPECIALTY_BONUS : 1));
+// Bonus de spécialité (+30 %), sauf en Battle pour les cartes de cartes.js : presque tout le monde
+// y est spécialiste, donc c'est le niveau général qui décide (Elange reste devant Dialo).
+const catScore = (card, cat) => Math.round(rawScore(card, cat) * (isExpert(card, cat) && !(cat.id === "battle" && CARTES[card.name] && !card.groom) ? SPECIALTY_BONUS : 1));
 
 function cardHTML(c, o = {}){
   const groomP = o.player && isGroom(c.name);
@@ -335,7 +340,7 @@ const cur = () => S.players[S.turn];
 function renderSetup(){
   app.innerHTML = `<section class="screen">
     <h1 class="title">Draft<br>des anciens</h1>
-    <p class="lead">${setupRounds} tours. À chaque tour, ouvre ton booster de ${CATS.length} cartes et place un danseur dans chaque catégorie. Chaque danseur a une spécialité qui vaut +30 % s'il y est placé. Chacun gagne un joker à la roulette de départ, puis à chaque victoire de tour. Sabote tes potes, puis débattez de la meilleure équipe.</p>
+    <p class="lead">${setupRounds} tours. À chaque tour, ouvre ton booster de ${CATS.length} cartes et place un danseur dans chaque catégorie. Chaque danseur a une spécialité qui vaut +30 % s'il y est placé (sauf en Battle, où c'est le niveau qui compte). Chacun gagne un joker à la roulette de départ, puis à chaque victoire de tour. Sabote tes potes, puis débattez de la meilleure équipe.</p>
     <h2 class="h2">Joueurs</h2>
     <ol class="players">${setupNames.map((n,i)=>`<li>
       <input aria-label="Joueur ${i+1}" value="${esc(n)}" data-i="${i}" placeholder="Prénom">
@@ -610,7 +615,7 @@ function renderPick(){
       <div class="detail-side"><p class="detail-t">Meilleurs emplacements</p>
         ${S.blindNow ? `<p class="hint">Stats cachées, place au feeling.</p>` :
           CATS.filter(cat => S.assign[cat.id] == null).map(cat => [cat, catScore(selCard, cat)]).sort((x,y) => y[1] - x[1]).slice(0,3)
-          .map(([cat,sc]) => `<button class="fit ${isExpert(selCard, cat) ? "x" : ""}" data-cat="${cat.id}" style="--cat:${cat.color}"><span>${cat.label}${isExpert(selCard, cat) ? `<small>Spécialité, +${Math.round((SPECIALTY_BONUS - 1) * 100)} %</small>` : ""}</span><b>${sc}</b></button>`).join("")}
+          .map(([cat,sc]) => `<button class="fit ${isExpert(selCard, cat) ? "x" : ""}" data-cat="${cat.id}" style="--cat:${cat.color}"><span>${cat.label}${isExpert(selCard, cat) ? `<small>Spécialité${cat.id === "battle" ? "" : ", +30 %"}</small>` : ""}</span><b>${sc}</b></button>`).join("")}
         <button class="btn ghost" id="unsel">Annuler</button></div></div>` : ""}
 
     <div class="coll-head"><span class="deck-title">Ta collection</span><span class="meta">${free.length} carte${free.length > 1 ? "s" : ""}</span></div>

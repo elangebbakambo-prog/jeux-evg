@@ -13,7 +13,11 @@ test("Draft : 86 danseurs + la carte Mythique du marié, raretés d'après la no
       icee: rar("Icee"), elange: rar("Elange"), paul: rar("Paul (Meute Céleste)"),
       // Ughost bat Elange en Battle, Elange (complet) reste devant en Best dancer
       battle: pts("Ughost", "battle") > pts("Elange", "battle"), best: pts("Elange", "best") > pts("Ughost", "best"),
-      leah: domainNotes("Leah").battle, ugh: domainNotes("Ughost").battle,
+      // En Battle, le niveau général compte d'abord (règles d'Elange)
+      plusFortsQueDialo: ["Elange", "Sobek", "Kate", "Jikay", "Aline"].filter(n => pts(n, "battle") <= pts("Dialo", "battle")),
+      leahSousElange: pts("Leah", "battle") < pts("Elange", "battle"),
+      kuty: CATS.find(c => c.id === "chore") && pool.filter(c => !c.groom).sort((x, y) => catScore(y, CATS.find(k => k.id === "chore")) - catScore(x, CATS.find(k => k.id === "chore")))[0].name,
+      ugh: domainNotes("Ughost").battle,
       fortes: CATS.filter(c => !["best", "bad"].includes(c.id)).every(c => pts("Icee", c.id) >= pts("Ronyl", c.id))
     };
   });
@@ -21,7 +25,9 @@ test("Draft : 86 danseurs + la carte Mythique du marié, raretés d'après la no
   expect(r.sobek).toEqual(["Mythique", "Rare"]);
   expect([r.icee, r.elange, r.paul]).toEqual(["Légendaire", "Rare", "Commune"]);
   expect(r.battle).toBe(true); expect(r.best).toBe(true);
-  expect(r.leah).toBeGreaterThanOrEqual(90);  // spécialiste
+  expect(r.plusFortsQueDialo).toEqual([]);
+  expect(r.leahSousElange).toBe(true);
+  expect(r.kuty).toBe("Kuty");                // 1er en Chorégraphe
   expect(r.ugh).toBeLessThan(90);             // fort en battle, pas spécialiste
   expect(r.fortes).toBe(true);
   expect(erreurs).toEqual([]);

@@ -6,6 +6,7 @@
 //   complet : true si le danseur est bon partout (badge « Complet »)
 //   ws      : true s'il est aussi fort en workshop (bon pédagogue)
 //   expert90: true pour forcer au moins 90 dans sa spécialité
+//   notes   : notes forcées par domaine, ex. {"workshop": 99} (sinon calculées d'après la note globale)
 //   moves   : ses 2 attaques ; talent : [nom, texte] ; flavor : petite phrase ; weak / res : faiblesse / résistance
 // Ce qui n'est pas rempli est inventé automatiquement (toujours pareil pour un même nom).
 // Le futur marié (réglé au lancement du jeu) a en plus sa carte Mythique : voir GROOM dans script.js.
@@ -54,7 +55,7 @@ window.DRAFT_CARTES = {
   "Poppin C": {"note": 86, "styles": ["Popping"], "spec": ["battle"], "ws": true},
   "Dimust": {"note": 86, "styles": ["Popping", "House"], "spec": ["best"], "complet": true, "moves": ["Timidité explosive", "Pas fini la choré"], "talent": ["Atout à débloquer", "Timide… jusqu'à ce qu'il explose."], "flavor": "Une Vita qui a progressé de ouf. Toujours aussi lent.", "weak": "Travailler vite", "res": "Pression du public"},
   "Aline": {"note": 86, "styles": ["Popping"], "spec": ["crea"], "moves": ["Sourire poli", "Caractère révélé"], "talent": ["Gentillesse à contretemps", "Adorable… sauf quand elle danse."]},
-  "Ismaël": {"note": 85, "styles": ["Hip-hop", "Électro"], "spec": ["crea", "workshop"], "complet": true, "ws": true, "moves": ["Œil du Sharingan", "Triple vérification"], "talent": ["Éponge", "Absorbe toutes les techniques qu'il voit."], "flavor": "Baume à lèvres appliqué. Porte vérifiée trois fois. Il peut commencer.", "weak": "Porte pas vérifiée", "res": "Lèvres sèches (jamais)"},
+  "Ismaël": {"note": 85, "styles": ["Hip-hop", "Électro"], "spec": ["crea", "workshop"], "complet": true, "notes": {"workshop": 99}, "ws": true, "moves": ["Œil du Sharingan", "Triple vérification"], "talent": ["Éponge", "Absorbe toutes les techniques qu'il voit."], "flavor": "Baume à lèvres appliqué. Porte vérifiée trois fois. Il peut commencer.", "weak": "Porte pas vérifiée", "res": "Lèvres sèches (jamais)"},
   "Yoh": {"note": 85, "styles": ["Hip-hop"], "spec": ["battle"], "moves": ["Silence avant l'orage", "Regard droit"], "talent": ["Insaisissable", "Froid de loin, gentil au fond. Mais quand il attaque, il attaque."], "flavor": "On n'arrive pas à le cerner. Lui, il t'a déjà cerné."},
   "Willis": {"note": 84, "styles": ["Hip-hop"], "spec": ["battle"]},
   "April": {"note": 84, "styles": ["Hip-hop"], "spec": ["battle"]},
@@ -80,9 +81,9 @@ window.DRAFT_CARTES = {
   "Andrey Stylez": {"note": 81, "styles": ["Hip-hop"], "spec": ["battle"]},
   "Kate": {"note": 81, "styles": ["Popping"], "spec": ["chore", "presta"]},
   "Julian Hyun": {"note": 81, "styles": ["Popping"], "spec": ["battle"]},
-  "Elange": {"note": 80, "styles": ["Hip-hop", "House"], "spec": ["chore", "workshop"], "complet": true, "ws": true, "moves": ["Jamais lâché", "Encore une fois"], "talent": ["Mode détermination", "Le talent, ça se construit. Avec ses mains."], "flavor": "Il recommencera jusqu'à ce que ce soit parfait.", "weak": "L'abandon", "res": "La fatigue"},
+  "Elange": {"note": 80, "styles": ["Hip-hop", "House"], "spec": ["chore", "workshop"], "complet": true, "notes": {"workshop": 98}, "ws": true, "moves": ["Jamais lâché", "Encore une fois"], "talent": ["Mode détermination", "Le talent, ça se construit. Avec ses mains."], "flavor": "Il recommencera jusqu'à ce que ce soit parfait.", "weak": "L'abandon", "res": "La fatigue"},
   "Sobek": {"note": 79, "styles": ["Hip-hop West Coast"], "spec": ["best"], "complet": true, "moves": ["La vie de ma mère, c'est pas moi", "West Coast walk"], "flavor": "Hip-hop West Coast, complet de la tête aux pieds."},
-  "Leah": {"note": 79, "styles": ["Popping"], "spec": ["battle"], "expert90": true, "moves": ["Morsure du serpent", "Waving hypnotique"], "talent": ["Spécialiste popping", "Ses bras ondulent jusqu'à hypnotiser l'adversaire."]},
+  "Leah": {"note": 79, "styles": ["Popping"], "spec": ["battle"], "moves": ["Morsure du serpent", "Waving hypnotique"], "talent": ["Spécialiste popping", "Ses bras ondulent jusqu'à hypnotiser l'adversaire."]},
   "Noth": {"note": 79, "styles": ["Hip-hop"], "spec": ["battle"], "moves": ["J'ai la flemme… mais vas-y", "Regard de haut"], "talent": ["Arrogance", "Ne prend pas l'adversaire au sérieux. Et gagne quand même."], "flavor": "« Vas-y, je fais un petit effort. »", "weak": "Se donner à fond", "res": "Le stress"},
   "Clément": {"note": 78, "styles": ["Popping"], "spec": ["battle"], "moves": ["Éveil", "Il commence à capter"], "talent": ["Montée en puissance", "Il découvre sa force en plein passage."]},
   "Semoss": {"note": 78, "styles": ["Hip-hop"], "spec": ["battle"], "moves": ["Problème de livraison", "Hamdoulillah, on s'appelle"], "flavor": "Désolé, je pensais que je l'avais. Je crois que je l'ai envoyé à Isma.", "weak": "Être à l'heure", "res": "Les excuses"},
