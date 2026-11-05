@@ -178,11 +178,12 @@ const cache = {};
 const DOMAINS = ["battle","crea","presta","chore","workshop"];
 function domainNotes(name){
   const c = CARTES[name]; if(!c) return null;
-  const g = c.note, clamp = v => Math.max(20, Math.min(99, Math.round(v))), out = {};
+  // Bonus qui rétrécit près de 100 : les meilleurs restent départagés au lieu de tous plafonner à 99
+  const g = c.note, clamp = v => Math.max(20, Math.min(99.5, Math.round(v * 2) / 2)), up = k => g + Math.min(k, (100 - g) / 2), out = {};
   DOMAINS.forEach(d => {
-    let v = c.complet ? g + 1 : g - 6;
-    if(c.ws && d === "workshop") v = Math.max(v, g + 3);
-    if(c.spec.includes(d)) v = c.complet ? g + 4 : g + 5;
+    let v = c.complet ? up(1) : g - 6;
+    if(c.ws && d === "workshop") v = Math.max(v, up(3));
+    if(c.spec.includes(d)) v = up(c.complet ? 4 : 5);
     if(c.expert90 && c.spec.includes(d)) v = Math.max(v, 90);
     out[d] = clamp(v);
   });
@@ -244,12 +245,12 @@ const playerCard = name => ({ name, style: dancerStyle("P:" + name) });
 // Points dans une catégorie : notes par domaine (cartes.js), sinon d'après les 4 stats
 function rawScore(card, cat){
   const d = cardData(card), n = d.notes;
-  if(card.groom) return cat.id === "bad" ? 2 : 198;
+  if(card.groom) return cat.id === "bad" ? 2 : 210; // la carte Mythique passe devant tout le monde
   if(!n) return cat.score(d.statsObj);
   const avg = DOMAINS.reduce((s, k) => s + n[k], 0) / DOMAINS.length;
   if(cat.id === "best") return Math.round(avg * 2 + (d.complet ? 6 : 0));
   if(cat.id === "bad") return Math.round(200 - avg * 2);
-  return n[cat.id] * 2;
+  return Math.round(n[cat.id] * 2);
 }
 // Spécialité : la première de cartes.js (complet = Best dancer)
 function specialty(card){
@@ -259,7 +260,8 @@ function specialty(card){
   return c ? c.spec[0] : "best";
 }
 const specCat = card => CATS.find(c => c.id === specialty(card));
-const isExpert = (card, cat) => specialty(card) === cat.id;
+// Expert dans tous ses domaines forts (ex. Kuty : Battle et Chorégraphe)
+const isExpert = (card, cat) => specialty(card) === cat.id || (!!CARTES[card.name] && !card.groom && CARTES[card.name].spec.includes(cat.id));
 const catScore = (card, cat) => Math.round(rawScore(card, cat) * (isExpert(card, cat) ? SPECIALTY_BONUS : 1));
 
 function cardHTML(c, o = {}){
