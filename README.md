@@ -30,6 +30,14 @@ Un double-clic sur `index.html` marche aussi, sans extension.
 - Les sons sont générés par la Web Audio API : coupe le mode silencieux sur iPhone.
 - Pour mettre les jeux en ligne, n'importe quel hébergement statique suffit (Netlify, GitHub Pages).
 
+## Cartes du Draft des anciens
+
+Les cartes sont dans **`draft-des-anciens/cartes.js`**, une ligne par danseur (86 danseurs, du plus fort au plus faible) : note sur 100, styles, domaine fort (Battle, Créa, Prestation, Chorégraphe, Workshop, ou Complet), attaques, talent, petite phrase, faiblesse et résistance. Ce qui n'est pas rempli est inventé automatiquement.
+
+- Rareté d'après la note : 85 et plus Légendaire, 78 à 84 Rare, en dessous Commune. Le futur marié (Sobek par défaut) a sa carte normale **et** une carte Mythique.
+- Les points d'une carte dans chaque catégorie viennent de ses notes par domaine : un danseur fort en battle bat un danseur complet en Battle, mais le complet reste devant en Best dancer.
+- Le bouton « Voir les cartes » montre toute la collection, de la plus forte à la plus faible, avec un filtre par rareté et par domaine.
+
 ## Listes de Mafia ou pas mafia
 
 Toutes les listes (situations, danseurs, catégories du Battle) sont dans **`mafia-pas-mafia/donnees.js`**, et nulle part ailleurs : la version un téléphone et la version multijoueur lisent le même fichier.

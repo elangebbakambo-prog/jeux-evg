@@ -105,8 +105,8 @@ function lists(){
   const st = read(STORE_KEY);
   return {
     sit: st && st.bank && st.bank.length ? st.bank.map(q => q.text) : DATA.situations,
-    // liste de « Préparer » seulement si elle est à jour (version 6 : nouvelle liste Hip hop)
-    dan: withExtras(st && st.dancers && st.dancers.length && (st.dancersVersion || 1) >= 6 ? st.dancers.map(q => q.text) : DATA.dancers)
+    // liste de « Préparer » seulement si elle est à jour (version 7 : Kate et Julian Hyun)
+    dan: withExtras(st && st.dancers && st.dancers.length && (st.dancersVersion || 1) >= 7 ? st.dancers.map(q => q.text) : DATA.dancers)
   };
 }
 function withExtras(names){
