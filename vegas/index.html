@@ -220,6 +220,30 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 #story .bub b{ color:var(--amber); }
 #story .bub.new{ animation:bubIn .45s cubic-bezier(.2,1.4,.4,1); }
 @keyframes bubIn{ from{ transform:translateY(14px) scale(.85); opacity:0; } to{ transform:none; opacity:1; } }
+.memos{ display:flex; flex-direction:column; gap:6px; }
+.k2{ margin:0; font-size:.75rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.memo-row{ display:flex; gap:12px; overflow-x:auto; padding:4px 2px 6px; scrollbar-width:none; }
+.memo-row::-webkit-scrollbar{ display:none; }
+.memo{ all:unset; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px; flex:0 0 auto; position:relative; }
+.memo .ring{ width:64px; height:64px; border-radius:50%; padding:3px; background:var(--line); display:flex; }
+.memo.new .ring{ background:linear-gradient(45deg, var(--amber), var(--pink)); }
+.memo .ring img, .memo .ring i{ width:100%; height:100%; border-radius:50%; object-fit:cover; border:3px solid var(--night); box-sizing:border-box; background:var(--card2);
+  display:flex; align-items:center; justify-content:center; font-style:normal; font-size:1.5rem; }
+.memo small{ font-size:.75rem; font-weight:800; text-transform:capitalize; }
+.memo em{ position:absolute; top:0; right:-4px; font-style:normal; font-size:.65rem; font-weight:800; background:var(--pink); color:var(--night); border-radius:999px; padding:1px 6px; }
+.memo.film .ring{ background:var(--amber); }
+.memo:focus-visible .ring{ outline:2px solid var(--mint); outline-offset:2px; }
+#montage{ position:fixed; inset:0; z-index:120; background:rgba(10,6,24,.96); overflow:auto;
+  padding:calc(16px + env(safe-area-inset-top,0px)) max(16px, env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px)); }
+#montage[hidden]{ display:none !important; }
+#montage .mt-box{ max-width:480px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+#montage .mt-head{ display:flex; justify-content:space-between; align-items:center; } #montage h3{ margin:0; font-family:var(--display); font-weight:400; color:var(--amber); }
+#montage .st-close{ all:unset; cursor:pointer; font-size:1.4rem; min-width:44px; min-height:44px; display:flex; align-items:center; justify-content:center; }
+#montage .mt-l{ display:flex; flex-direction:column; gap:4px; font-size:.85rem; font-weight:700; color:var(--muted); }
+#montage select{ font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:9px 12px; }
+#montage .chk2{ display:flex; gap:8px; align-items:center; font-size:.9rem; } #montage .chk2 input{ width:20px; height:20px; accent-color:var(--pink); }
+#montage .mt-prev canvas, #montage .mt-out{ width:100%; max-height:60vh; object-fit:contain; border-radius:12px; background:#000; display:block; }
+#montage #mtStage{ display:flex; flex-direction:column; gap:10px; }
 #story .st-help{ margin:0; font-size:.72rem; color:rgba(255,255,255,.55); text-align:center; }
 #story .st-close{ position:relative; z-index:2; min-width:44px; min-height:44px; display:flex; align-items:center; justify-content:center; }
 #story[hidden]{ display:none !important; }
@@ -834,6 +858,166 @@ function bindComs(root){
     i.value = ""; if(f.classList.contains("st")) i.blur(); sendComment(f.dataset.cform, t.slice(0, 200)); });
   root.querySelectorAll("[data-comall]").forEach(b => b.onclick = () => { openCom[b.dataset.comall] = 1; refreshComs(b.dataset.comall); });
 }
+// ===== Souvenirs jour par jour + montage vidéo =====
+const dayKey = iso => { try{ return new Date(iso).toLocaleDateString("en-CA", { timeZone:TZ.vegas }); }catch(e){ return iso.slice(0, 10); } };
+const dayShort = key => { try{ const d = new Date(key + "T12:00:00"); return d.toLocaleDateString("fr-FR", { weekday:"short" }).replace(".", "") + " " + d.getDate(); }catch(e){ return key; } };
+const dayLong = key => { try{ return new Date(key + "T12:00:00").toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" }); }catch(e){ return key; } };
+function memoryDays(){
+  const by = {};
+  storyList().forEach(x => { const k = dayKey(x.d); (by[k] = by[k] || []).push(x); });
+  return Object.keys(by).sort().map(k => ({ k, list:by[k] }));
+}
+function memoriesHTML(){
+  const days = memoryDays(); if(!days.length) return "";
+  return `<section class="memos"><p class="k2">Souvenirs</p><div class="memo-row">${days.map(d => {
+      const cover = d.list.find(x => x.h) || d.list[0], unseen = d.list.some(x => !seenStories[x.id]);
+      return `<button type="button" class="memo ${unseen ? "new" : ""}" data-day="${d.k}" aria-label="Souvenirs du ${esc(dayLong(d.k))}">
+        <span class="ring">${cover && cover.h ? `<img data-img="${esc(cover.id)}" alt="">` : `<i>🎥</i>`}</span><small>${esc(dayShort(d.k))}</small><em>${d.list.length}</em></button>`;
+    }).join("")}
+    <button type="button" class="memo film" id="openMontage" aria-label="Créer un montage vidéo"><span class="ring"><i>🎬</i></span><small>Montage</small></button>
+    </div></section>`;
+}
+function bindMemories(root){
+  root.querySelectorAll("[data-day]").forEach(b => b.onclick = () => { const d = memoryDays().find(x => x.k === b.dataset.day); if(d) openStory(null, d.list); });
+  root.querySelectorAll(".memo [data-img]").forEach(im => { if(imgCache[im.dataset.img]) im.src = imgCache[im.dataset.img]; else loadImg(im.dataset.img, im); });
+  const om = root.querySelector("#openMontage"); if(om) om.onclick = openMontagePanel;
+}
+// --- Montage : le téléphone joue photos et vidéos dans un canvas et l'enregistre en vidéo ---
+let montage = null;
+function getImg(id){
+  return new Promise(ok => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null);
+    if(imgCache[id]){ im.src = imgCache[id]; return; }
+    fetch(SB_URL + "?nom=eq.post%3A" + encodeURIComponent(id) + "&select=i:coches->>i", { headers:{ apikey:SB_KEY } }).then(r => r.json())
+      .then(j => { if(j[0] && j[0].i){ imgCache[id] = j[0].i; im.src = j[0].i; } else ok(null); }).catch(() => ok(null)); });
+}
+function openMontagePanel(){
+  const days = memoryDays();
+  let ov = document.getElementById("montage");
+  if(!ov){ ov = document.createElement("div"); ov.id = "montage"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "Montage"); document.body.appendChild(ov); }
+  ov.hidden = false; document.documentElement.style.overflow = "hidden";
+  ov.innerHTML = `<div class="mt-box"><div class="mt-head"><h3>🎬 Créer un montage</h3><button type="button" class="st-close" id="mtClose" aria-label="Fermer">✕</button></div>
+    <p class="note">Le téléphone enchaîne les photos et les vidéos, avec les noms et l'heure Vegas / France. Il le fabrique en temps réel : garde l'appli ouverte jusqu'au bout.</p>
+    <label class="mt-l">Quoi<select id="mtDay"><option value="all">Tout le séjour (${storyList().length})</option>${days.map(d => `<option value="${d.k}">${esc(dayLong(d.k))} (${d.list.length})</option>`).join("")}</select></label>
+    <label class="mt-l">Photos<select id="mtSec"><option value="2">Rapide : 2 s par photo</option><option value="3" selected>Normal : 3 s par photo</option><option value="4">Tranquille : 4 s par photo</option></select></label>
+    <label class="chk2"><input type="checkbox" id="mtSound" checked> Garder le son des vidéos</label>
+    <p class="err" id="mtErr" hidden></p>
+    <button type="button" class="btn hot" id="mtGo">Lancer le montage</button>
+    <div id="mtStage"></div></div>`;
+  document.getElementById("mtClose").onclick = closeMontage;
+  document.getElementById("mtGo").onclick = () => runMontage(document.getElementById("mtDay").value, +document.getElementById("mtSec").value, document.getElementById("mtSound").checked);
+}
+function closeMontage(){
+  if(montage){ montage.stop = true; }
+  const ov = document.getElementById("montage"); if(ov){ ov.hidden = true; ov.innerHTML = ""; }
+  document.documentElement.style.overflow = ""; storyClosedAt = Date.now();
+}
+function pickMime(){
+  const c = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  if(!window.MediaRecorder) return null;
+  for(const m of c){ try{ if(MediaRecorder.isTypeSupported(m)) return m; }catch(e){} }
+  return "";
+}
+async function runMontage(dayK, sec, withSound){
+  // Le son se prépare tout de suite, pendant le tap (sinon le téléphone le bloque) ; sans son qui tourne, l'enregistrement perdait les photos.
+  let actx = null, dest = null;
+  if(withSound){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); dest = actx.createMediaStreamDestination(); }catch(e){ actx = null; dest = null; } }
+  const err = document.getElementById("mtErr"), stage = document.getElementById("mtStage");
+  const say = t => { err.textContent = t; err.hidden = false; };
+  const mime = pickMime();
+  const cv = document.createElement("canvas"); cv.width = 720; cv.height = 1280;
+  if(mime === null || !cv.captureStream) return say("Ce téléphone ne sait pas fabriquer de vidéo. Essaie sur un autre (Chrome ou Safari récent).");
+  const items = dayK === "all" ? storyList() : ((memoryDays().find(d => d.k === dayK) || {}).list || []);
+  if(!items.length) return say("Rien à monter pour ce choix.");
+  err.hidden = true; document.getElementById("mtGo").hidden = true;
+  stage.innerHTML = `<p class="note" id="mtProg">Préparation…</p><div class="mt-prev"></div><button type="button" class="btn" id="mtStop">Arrêter</button>`;
+  stage.querySelector(".mt-prev").appendChild(cv);
+  const ctx = cv.getContext("2d");
+  montage = { stop:false };
+  document.getElementById("mtStop").onclick = () => { montage.stop = true; };
+  let wake = null; try{ wake = await navigator.wakeLock.request("screen"); }catch(e){}
+  // Son des vidéos : passé par Web Audio vers l'enregistrement.
+  if(actx && actx.state !== "running"){ try{ await actx.resume(); }catch(e){} }
+  if(actx){ // le son doit vraiment tourner, sinon l'enregistrement attend le son et perd les images
+    const c0 = actx.currentTime; await new Promise(r => setTimeout(r, 350));
+    if(actx.state !== "running" || actx.currentTime <= c0){ try{ actx.close(); }catch(e){} actx = null; dest = null; }
+    else { try{ const o = actx.createOscillator(), gn = actx.createGain(); gn.gain.value = 0; o.connect(gn); gn.connect(dest); o.start(); }catch(e){} }
+  }
+  const stream = cv.captureStream(30);
+  if(dest) dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+  const rec = new MediaRecorder(stream, Object.assign({ videoBitsPerSecond:4000000 }, mime ? { mimeType:mime } : {}));
+  const chunks = []; rec.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+  const done = new Promise(r => rec.onstop = r);
+  const title = dayK === "all" ? "Tout le séjour" : dayLong(dayK);
+  const prog = t => { const el = document.getElementById("mtProg"); if(el) el.textContent = t; };
+  const cover = (src, w, h, z, ox, oy) => { const k = Math.max(cv.width / w, cv.height / h) * z, dw = w * k, dh = h * k;
+    ctx.drawImage(src, (cv.width - dw) / 2 + ox, (cv.height - dh) / 2 + oy, dw, dh); };
+  const overlay = (x, alpha) => {
+    const g = ctx.createLinearGradient(0, cv.height - 330, 0, cv.height); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,.75)");
+    ctx.fillStyle = g; ctx.fillRect(0, cv.height - 330, cv.width, 330);
+    ctx.globalAlpha = alpha; ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = x.s === "france" ? "#5EE0B5" : "#FFB547"; ctx.font = "800 44px system-ui, -apple-system, sans-serif";
+    ctx.fillText((x.a || "?") + (x.s === "france" ? "  🥐 en France" : "  🎰 à Vegas"), 40, cv.height - 150);
+    ctx.fillStyle = "#fff"; ctx.font = "600 32px system-ui, -apple-system, sans-serif";
+    ctx.fillText(hm(x.d, TZ.vegas) + " à Vegas · " + hm(x.d, TZ.france) + " en France", 40, cv.height - 100);
+    if(x.t){ ctx.font = "500 34px system-ui, -apple-system, sans-serif"; let t = x.t; while(ctx.measureText(t).width > cv.width - 80 && t.length > 3) t = t.slice(0, -2); if(t !== x.t) t = t.slice(0, -1) + "…"; ctx.fillText(t, 40, cv.height - 50); }
+    ctx.globalAlpha = 1;
+  };
+  const card = (big, small, a) => {
+    const g = ctx.createLinearGradient(0, 0, 0, cv.height); g.addColorStop(0, "#2A1550"); g.addColorStop(1, "#15102B");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height); ctx.globalAlpha = a; ctx.textAlign = "center";
+    ctx.fillStyle = "#FFB547"; ctx.font = "900 92px system-ui, -apple-system, sans-serif"; ctx.fillText(big, cv.width / 2, cv.height / 2 - 20);
+    ctx.fillStyle = "#FF4F8B"; ctx.font = "800 42px system-ui, -apple-system, sans-serif"; ctx.fillText(small, cv.width / 2, cv.height / 2 + 50);
+    ctx.globalAlpha = 1; ctx.textAlign = "left";
+  };
+  const frame = () => new Promise(r => requestAnimationFrame(r));
+  const hold = async (ms, draw) => { const t0 = performance.now(); while(!montage.stop){ const t = (performance.now() - t0) / ms; if(t >= 1) break; draw(t); await frame(); } };
+  rec.start(1000);
+  try{
+    await hold(2200, t => card("VEGAS · EVG", title, Math.min(1, t * 3)));
+    for(let n = 0; n < items.length && !montage.stop; n++){
+      const x = items[n]; prog(`Montage ${n + 1} / ${items.length}…`);
+      if(x.v){
+        const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.setAttribute("playsinline", ""); v.muted = !actx; v.src = x.v;
+        const ok = await new Promise(r => { v.oncanplay = () => r(true); v.onerror = () => r(false); setTimeout(() => r(false), 12000); v.load(); });
+        if(!ok) continue;
+        let src = null; if(actx){ try{ src = actx.createMediaElementSource(v); src.connect(dest); }catch(e){ v.muted = true; } }
+        try{ await v.play(); }catch(e){ v.muted = true; try{ await v.play(); }catch(e2){ continue; } }
+        const t0 = performance.now();
+        while(!montage.stop && !v.ended && performance.now() - t0 < (MAX_VID_SEC + 2) * 1000){
+          ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+          if(v.videoWidth) cover(v, v.videoWidth, v.videoHeight, 1, 0, 0);
+          overlay(x, Math.min(1, (performance.now() - t0) / 400)); await frame();
+        }
+        v.pause(); if(src) try{ src.disconnect(); }catch(e){}
+      } else {
+        const im = await getImg(x.id); if(!im) continue;
+        const dir = n % 2 ? 1 : -1;
+        await hold(sec * 1000, t => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+          cover(im, im.naturalWidth, im.naturalHeight, 1.02 + t * .08, dir * t * 30, 0); overlay(x, Math.min(1, t * 4));
+          if(t < .12){ ctx.fillStyle = `rgba(0,0,0,${1 - t / .12})`; ctx.fillRect(0, 0, cv.width, cv.height); } });
+      }
+    }
+    if(!montage.stop) await hold(1800, t => card("À SUIVRE…", "EVG de Sobek", 1 - Math.max(0, t - .6) * 2.5));
+  }catch(e){ say("Le montage s'est arrêté : " + e.message); }
+  const stopped = montage.stop;
+  rec.stop(); await done; try{ wake && wake.release(); }catch(e){} try{ actx && actx.close(); }catch(e){}
+  montage = null;
+  if(!document.getElementById("mtStage")) return; // fermé entre-temps
+  if(stopped){ stage.innerHTML = ""; document.getElementById("mtGo").hidden = false; return; }
+  const type = (mime || "video/webm").split(";")[0], ext = /mp4/.test(type) ? "mp4" : "webm";
+  const blob = new Blob(chunks, { type }), url = URL.createObjectURL(blob);
+  const name = "evg-vegas-" + (dayK === "all" ? "sejour" : dayK) + "." + ext;
+  stage.innerHTML = `<p class="miss ok">Montage prêt ✓ (${(blob.size / 1048576).toFixed(1)} Mo)</p>
+    <video src="${url}" controls playsinline class="mt-out"></video>
+    <div class="actions"><button type="button" class="btn hot" id="mtShare">Partager / enregistrer</button><a class="btn" href="${url}" download="${name}">Télécharger</a></div>
+    <p class="note">Sur iPhone : « Partager » puis « Enregistrer la vidéo ». Tu peux ensuite ajouter une musique dans Insta ou CapCut.</p>`;
+  const file = new File([blob], name, { type });
+  document.getElementById("mtShare").onclick = async () => {
+    try{ if(navigator.canShare && navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"EVG Vegas" });
+      else { const a = stage.querySelector("a[download]"); a.click(); } }catch(e){}
+  };
+  document.getElementById("mtGo").hidden = false;
+}
 // --- Écran Live ---
 function drawLiveView(){
   return `<div style="display:flex;flex-direction:column;gap:12px">
@@ -854,6 +1038,7 @@ function drawLive(){
   const storyCount = storyList().length, unseen = storyList().filter(p => !seenStories[p.id]).length;
   html += `<div class="livebar"><button type="button" class="btn hot story-btn ${unseen ? "new" : ""}" id="openStories" ${storyCount ? "" : "disabled"}>▶ Stories${unseen ? ` · ${unseen} nouvelle${unseen > 1 ? "s" : ""}` : ""}</button>
     ${moi && !om ? `<button type="button" class="btn moment-btn" id="startMoment">⚡ Lancer un Moment</button>` : ""}</div>`;
+  html += memoriesHTML();
   if(om){
     const done = posts.some(p => p.m === om.id && isMe(p.a) && !p.x);
     html += `<section class="panel moment-live"><p class="k">⚡ C'est l'heure du Moment !</p>
@@ -908,6 +1093,7 @@ function drawLive(){
     try{ await sendRow("mom:" + id, { a:moi, s:cote(), d }); }catch(e){}
   };
   const os = document.getElementById("openStories"); if(os) os.onclick = () => openStory();
+  bindMemories(box);
   const sd = document.getElementById("liveSend");
   if(sd) sd.onclick = async () => {
     const t = (liveDraft.t || "").trim(), er = document.getElementById("liveErr");
@@ -980,8 +1166,8 @@ function drawFeed(){
 let story = null; // { list, i, t0, paused, timer }
 const STORY_MS = 6000;
 function storyList(){ return posts.filter(x => !x.x && (x.h || x.v)).sort((a, b) => a.d.localeCompare(b.d)); }
-function openStory(startId){
-  const list = storyList(); if(!list.length) return;
+function openStory(startId, only){
+  const list = only || storyList(); if(!list.length) return;
   let i = startId ? list.findIndex(x => x.id === startId) : list.findIndex(x => !seenStories[x.id]);
   if(i < 0) i = 0; // tout déjà vu : on repart du début, comme sur Insta
   story = { list, i, t0:Date.now(), paused:false, elapsed:0 };
@@ -1030,6 +1216,7 @@ function drawStory(dir){
     <p class="st-help">Tape ou glisse ← → pour changer · glisse vers le bas pour fermer · doigt appuyé = pause</p>
     ${x.t ? `<p class="st-cap">${esc(x.t)}</p>` : ""}
     <div class="st-foot">${reactBar(x.id)}<form class="cform st" data-cform="${esc(x.id)}"><input maxlength="200" placeholder="Envoyer un message…" enterkeyhint="send" autocomplete="off" aria-label="Commenter"><button type="submit" aria-label="Envoyer">➤</button></form></div></div>`;
+  [story.list[story.i + 1], story.list[story.i + 2]].forEach(nx => { if(nx && nx.h && !imgCache[nx.id]) loadImg(nx.id, new Image()); });
   const vEl = document.getElementById("stVid");
   if(vEl){
     if(x.h && imgCache[x.id]) vEl.poster = imgCache[x.id];
@@ -1052,7 +1239,7 @@ function drawStory(dir){
     img.style.transition = ""; img.style.transform = "";
     if(Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) return stepStory(dx < 0 ? 1 : -1);
     if(dy > 90 && dy > Math.abs(dx)) return closeStory();
-    if(dt < 280 && Math.abs(dx) < 12 && Math.abs(dy) < 12){ const r = area.getBoundingClientRect(); return stepStory(e.clientX - r.left < r.width * .35 ? -1 : 1); }
+    if(dt < 500 && Math.abs(dx) < 15 && Math.abs(dy) < 15){ const r = area.getBoundingClientRect(); return stepStory(e.clientX - r.left < r.width * .35 ? -1 : 1); }
     resume(); };
   area.onpointercancel = () => { g = null; img.style.transition = ""; img.style.transform = ""; resume(); };
   const bubs = document.createElement("div"); bubs.className = "st-coms"; bubs.id = "stComs"; bubs.innerHTML = storyBubbles(x.id); area.appendChild(bubs);
