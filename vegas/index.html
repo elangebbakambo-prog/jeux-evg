@@ -82,6 +82,16 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .book .hrs{ font-size:.85rem; color:var(--mint); font-weight:700; }
 .book p{ font-size:.88rem; }
 .book .price b, .book p b{ color:var(--sand); }
+.when-book{ font-size:.85rem; font-weight:800; border-radius:8px; padding:6px 9px; }
+.when-book.today{ background:var(--pink); color:var(--night); }
+.when-book.later{ background:rgba(94,224,181,.15); color:var(--mint); }
+.what{ margin:2px 0; padding-left:18px; font-size:.88rem; display:flex; flex-direction:column; gap:3px; }
+.money{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.money span{ background:var(--card2); border-radius:10px; padding:7px 9px; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.money small{ font-size:.72rem; color:var(--muted); }
+.money b{ color:var(--sand); font-size:.95rem; }
+.order{ margin:0; padding-left:20px; display:flex; flex-direction:column; gap:6px; font-size:.93rem; }
+.order .t{ color:var(--pink); font-weight:800; } .order .l{ color:var(--mint); font-weight:800; }
 .book .alt{ color:var(--muted); font-size:.82rem; border-top:1px dashed var(--line); padding-top:6px; }
 .tip{ border-left:4px solid var(--amber); background:rgba(255,181,71,.1); border-radius:0 10px 10px 0; padding:8px 12px; font-size:.9rem; }
 .tip.pink{ border-left-color:var(--pink); background:rgba(255,79,139,.1); }
@@ -148,7 +158,10 @@ const DAYS = [
       { when:"Matin", name:"Départ pour le buggy", addr:"4670 Polaris Ave, Las Vegas, NV 89103", mode:"driving", hop:"Uber · environ 10 min (si pas de prise en charge à l'hôtel)",
         info:"Navette vers les dunes de Nellis, environ 30 min. Lunettes de soleil, vêtements qui peuvent se salir, foulard contre la poussière. Permis et pièce d'identité pour piloter (18 ans et plus).",
         book:{ who:"Las Vegas ATV Dune Tours", tel:"+1 702-333-0999", web:"https://lasvegasatvdunetours.com/", hours:"Ouvert tous les jours, 6 h – 22 h",
-          price:"Quad : à partir de 105 $ par personne (1 h de conduite, 2 h en tout). Buggy RZR : prix sur demande.",
+          urgent:"today", whenBook:"À réserver aujourd'hui : c'est dimanche matin, le premier jour.",
+          what:["Quad, chacun le sien, derrière un guide, dans les dunes de sable de Nellis (désert au nord-est de Vegas).","1 h de conduite, environ 2 h en tout avec la navette.","Prenez la formule « Nellis Dune Tour » (quad). Le buggy RZR (petite voiture tout-terrain à 2 ou 4 places) coûte plus cher, prix sur le site."],
+          pp:"105 $", share:"131,25 $",
+          price:"Quad : à partir de 105 $ par personne, plus taxes. Buggy RZR : prix sur demande.",
           pickup:"Navette gratuite depuis les hôtels du Strip, mais pas depuis les Airbnb : indiquez « The Platinum Hotel ». S'ils refusent, rendez-vous à leur bureau (adresse ci-dessus), navette aller-retour gratuite.",
           note:"4,9 ★ sur plus de 4 000 avis.",
           alt:"Plan B : Awesome Adventures (awesomeadventures.com) · quad ou buggy RZR, 2 h, à partir de 136 $ par personne + frais, prise en charge au Strip incluse" } },
@@ -162,7 +175,10 @@ const DAYS = [
       { when:"Matin", name:"Rendez-vous navette du tir", addr:"3999 S Las Vegas Blvd, Las Vegas, NV 89119", mode:"driving", hop:"Uber · environ 10 min",
         info:"Derrière le McDonald's, au sud du Strip. Pas de prise en charge à l'hôtel : c'est ici que la navette vous récupère.",
         book:{ who:"Gun Blast Vegas (Outdoor Range)", tel:"+1 702-935-6511", web:"https://www.gunblast.vegas/packages-shooting-range-las-vegas/", hours:"Lun – sam, 7 h – 17 h · fermé le dimanche",
-          price:"Par personne : The Blast 199 $ · The BIG Blast 225 $ · The FULL Blast 289 $.",
+          urgent:"today", whenBook:"À réserver aujourd'hui : seulement 3 départs par jour, et aucun client sans réservation. Prenez le départ de 8 h.",
+          what:["Stand de tir en plein air, dans le désert au nord-ouest de Vegas, face aux montagnes.","Formule The Blast : pistolet 9 mm (16 balles), fusil AR-15 (20), AK-47 (20), fusil à pompe (5), soit 61 tirs, plus des cibles qui explosent.","Instructeur, lunettes, casque antibruit, eau et navette compris. Environ 4 h en tout.","Les 3 formules ont les mêmes armes : BIG et FULL ajoutent seulement cibles explosives, fumigène et grenade assourdissante. The Blast suffit."],
+          pp:"179 $ avec le code BLAST10", share:"223,75 $",
+          price:"The Blast 199 $ · BIG Blast 225 $ · FULL Blast 289 $ par personne, taxes comprises. Code promo BLAST10 : −10 %.",
           pickup:"Navette aller-retour incluse, depuis le point de rendez-vous ci-dessus.",
           note:"5,0 ★ sur plus de 1 300 avis. Le lundi tombe bien : il est fermé le dimanche.",
           alt:"Plan B (en salle, près du Strip) : Battlefield Vegas, 2771 S Sammy Davis Jr Dr · +1 702-566-1000 · Humvee gratuit depuis l'hôtel · battlefieldvegas.com" } },
@@ -172,6 +188,9 @@ const DAYS = [
       { when:"Soir", name:"The Pinky Ring (Bellagio)", addr:"3600 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"walking", hop:"À pied · environ 12 min",
         info:"Le club de Bruno Mars : groupe en live, ambiance soirée chic. Petit lieu, donc prenez une table. Tenue correcte exigée : chaussures de ville, pas de short ni de casquette. Passeport à l'entrée.",
         book:{ who:"The Pinky Ring by Bruno Mars", tel:"+1 702-693-8393", web:"https://bellagio.mgmresorts.com/en/nightlife/the-pinky-ring.html", hours:"Ouvert le lundi, 20 h – 2 h",
+          urgent:"later", whenBook:"Peut attendre : à réserver sur place, samedi ou dimanche, depuis le téléphone. Sans table, rien à réserver.",
+          what:["Le club de Bruno Mars au Bellagio : groupe en live, DJ, ambiance chic et petite salle.","Version économique : vous entrez gratuitement et restez au bar, vous payez seulement vos verres."],
+          pp:"0 $ au bar (verres en plus)", share:"0 $ au bar · 75 $ avec une table à 300 $",
           price:"Entrée gratuite si vous restez debout au bar. Table (2 à 7 personnes) : environ 300 à 1 000 $ de consommation minimum, à partager. Cocktails : 20 à 30 $.",
           pickup:"Pas besoin : 12 min à pied.",
           note:"Réservez sur le site officiel du Bellagio, pas chez des revendeurs.",
@@ -182,6 +201,9 @@ const DAYS = [
     steps:[
       { when:"Matin", name:"Prise en charge pour Red Rock", addr:HOME, info:"Le Jeep vient vous chercher : l'endroit exact arrive par e-mail après la réservation.",
         book:{ who:"Pink Jeep Tours Las Vegas", tel:"+1 800-873-3662", web:"https://www.pinkadventuretours.com/tours/las-vegas-tours", hours:"Ouvert tous les jours, 6 h – 20 h",
+          urgent:"later", whenBook:"Peut attendre : à réserver sur place samedi ou dimanche. Ou aujourd'hui, si l'annulation est gratuite, pour être tranquilles.",
+          what:["Un guide vous emmène en Jeep 4x4 dans les falaises de roche rouge, à 30 min du Strip.","Arrêts photos et explications sur le canyon. 3 à 4 h en tout.","Prenez le tour « Red Rock Canyon Classic »."],
+          pp:"environ 130 $", share:"162,50 $",
           price:"Tour « Red Rock Canyon Classic » : environ 125 à 130 $ par adulte, 3 à 4 h.",
           pickup:"Prise en charge gratuite à la plupart des hôtels du Strip. Indiquez « The Platinum Hotel » ; s'il n'est pas dans la liste, choisissez un hôtel voisin (Hard Rock / Virgin, ou Paris) à quelques minutes.",
           note:"4,8 ★. Ils gèrent le créneau d'entrée du parc.",
@@ -253,7 +275,9 @@ function drawDay(d){
           <h3>${esc(s.name)}</h3>
           <span class="addr">${esc(s.addr)}</span>
           <p>${esc(s.info)}</p>
-          ${s.book ? `<div class="book"><span class="k">À réserver</span><b>${esc(s.book.who)}</b>
+          ${s.book ? `<div class="book"><span class="when-book ${s.book.urgent}">${esc(s.book.whenBook)}</span><span class="k">À réserver</span><b>${esc(s.book.who)}</b>
+            ${s.book.what ? `<ul class="what">${s.book.what.map(w => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+            ${s.book.pp ? `<div class="money"><span><small>Par personne</small><b>${esc(s.book.pp)}</b></span><span><small>Chacun des 4 (avec la part du marié)</small><b>${esc(s.book.share)}</b></span></div>` : ""}
             <span class="tel">${esc(s.book.tel)}</span><span class="hrs">${esc(s.book.hours)}</span>
             ${s.book.price ? `<p class="price"><b>Prix :</b> ${esc(s.book.price)}</p>` : ""}
             ${s.book.pickup ? `<p><b>Transport :</b> ${esc(s.book.pickup)}</p>` : ""}
@@ -272,6 +296,15 @@ function drawDay(d){
 function drawInfos(){
   return `<div style="display:flex;flex-direction:column;gap:12px">
     <div class="dhead"><p class="eyebrow">Avant de partir</p><h2>La check-list</h2><p>Cochez au fur et à mesure (c'est gardé sur ce téléphone).</p></div>
+    <section class="panel"><h3>Ordre des réservations</h3>
+      <ol class="order">
+        <li><span class="t">Aujourd'hui</span> · Quad, dim. 8 : Las Vegas ATV Dune Tours</li>
+        <li><span class="t">Aujourd'hui</span> · Tir, lun. 9 à 8 h : Gun Blast, The Blast, code BLAST10</li>
+        <li><span class="l">Sur place, la veille au plus tard</span> · Red Rock, mar. 10 : Pink Jeep</li>
+        <li><span class="l">Sur place</span> · Pinky Ring, lun. 9 : au bar, rien à réserver (table seulement si vous la voulez)</li>
+      </ol>
+      <p class="note">Budget version économique, pour chacun des 4 qui paient la part du marié : environ 517 $ (quad 131,25 + tir 223,75 + Red Rock 162,50, club au bar). Plus taxes et pourboires des guides (10 à 20 $ par guide) : comptez environ 10 % de plus.</p>
+    </section>
     <section class="panel"><ul class="checks">${CHECK.map((c, i) => `<li><label><input type="checkbox" data-c="${i}" ${checked[i] ? "checked" : ""}><span>${esc(c)}</span></label></li>`).join("")}</ul></section>
     <section class="panel"><h3>Bon à savoir</h3>
       <ul class="facts">
