@@ -105,6 +105,25 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .cta:focus-visible{ outline:3px solid var(--amber); outline-offset:2px; }
 .cta.games{ background:var(--card); color:var(--sand); border:2px solid var(--amber); box-shadow:0 0 14px rgba(255,181,71,.3); text-decoration:none; }
 .cta.games b{ color:var(--amber); }
+.teampanel{ border:1px solid var(--mint); }
+.team{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.team li{ background:var(--card2); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:5px; min-width:0; }
+.team li.mine{ outline:2px solid var(--mint); }
+.team .top{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.team .top b{ font-size:1.05rem; overflow-wrap:anywhere; }
+.team .score{ font-family:var(--display); color:var(--amber); }
+.pills{ display:flex; flex-wrap:wrap; gap:6px; }
+.pill{ font-size:.8rem; font-weight:800; border-radius:999px; padding:3px 9px; }
+.pill.yes{ background:rgba(94,224,181,.18); color:var(--mint); }
+.pill.no{ background:rgba(255,79,139,.18); color:var(--pink); }
+.miss{ margin:0; font-size:.84rem; color:var(--muted); } .miss.ok{ color:var(--mint); font-weight:700; }
+.maj{ margin:0; font-size:.75rem; color:var(--muted); }
+.me{ margin:0; font-size:.9rem; }
+.who{ display:flex; flex-direction:column; gap:6px; font-size:.9rem; }
+.who .row{ display:flex; gap:8px; flex-wrap:wrap; }
+.who input{ flex:1 1 160px; min-width:0; font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:9px 12px; }
+.who input:focus-visible{ outline:2px solid var(--mint); }
+.link{ all:unset; cursor:pointer; color:var(--mint); text-decoration:underline; font-weight:700; }
 .resa{ border:1px solid var(--pink); }
 .order b{ color:var(--sand); }
 .order .t{ color:var(--pink); font-weight:800; } .order .l{ color:var(--mint); font-weight:800; }
@@ -268,21 +287,105 @@ const DAYS = [
     ] }
 ];
 
+// [identifiant, nom court (vue équipe), texte complet]. L'identifiant ne change jamais : c'est lui qui est enregistré.
 const CHECK = [
-  "Passeport (celui de l'ESTA)", "ESTA « Approved » (capture sur le téléphone)", "Attestation Ebola imprimée et signée",
-  "Quad réservé : Las Vegas ATV Dune Tours, dim. 8", "Tir réservé : Gun Blast Vegas, lun. 9 à 7 h", "Table au Pinky Ring réservée, lun. 9 soir",
-  "Instructions d'arrivée de l'hôte", "eSIM installée (avant de partir, en wifi)", "Revolut + carte bancaire française pour la caution",
-  "Adaptateur de prise américaine", "Ordinateur, enceinte, batteries en cabine", "Une veste pour le soir"
+  ["quad", "Quad réservé", "Quad réservé : dim. 8 à 11 h (Las Vegas ATVs Nellis Dunes Tour)"],
+  ["tir", "Tir réservé", "Tir réservé : The Blast, lun. 9 à 7 h (code BLAST10)"],
+  ["passeport", "Passeport", "Passeport (celui de l'ESTA)"],
+  ["esta", "ESTA", "ESTA « Approved » (capture sur le téléphone)"],
+  ["ebola", "Attestation Ebola", "Attestation Ebola imprimée et signée"],
+  ["permis", "Permis", "Permis de conduire (pour piloter le quad)"],
+  ["esim", "eSIM", "eSIM installée (avant de partir, en wifi)"],
+  ["cartes", "Cartes bancaires", "Revolut + carte bancaire française pour la caution"],
+  ["appli", "Appli installée", "Appli « Vegas EVG » ajoutée à l'écran d'accueil"],
+  ["adaptateur", "Adaptateur", "Adaptateur de prise américaine"],
+  ["cabine", "Batteries en cabine", "Ordinateur, enceinte, batteries en cabine"],
+  ["veste", "Veste", "Une veste pour le soir"]
 ];
+const KEY_ITEMS = ["quad", "tir"];
 
-let cur = "j1", checked = {};
-try{ const s = JSON.parse(localStorage.getItem("vegas-evg") || "null"); if(s){ cur = s.cur || cur; checked = s.checked || {}; } }catch(e){}
-const save = () => { try{ localStorage.setItem("vegas-evg", JSON.stringify({ cur, checked })); }catch(e){} };
+let cur = "infos", checked = {}, moi = "";
+try{
+  const s = JSON.parse(localStorage.getItem("vegas-evg") || "null");
+  if(s){ cur = s.cur || cur; moi = s.moi || ""; checked = s.checked || {};
+    // Anciennes versions : cases enregistrées par leur texte, on les ramène à leur identifiant.
+    const old = { "Passeport (celui de l'ESTA)":"passeport", "ESTA « Approved » (capture sur le téléphone)":"esta", "Attestation Ebola imprimée et signée":"ebola",
+      "Quad réservé : Las Vegas ATV Dune Tours, dim. 8":"quad", "Tir réservé : Gun Blast Vegas, lun. 9 à 7 h":"tir", "eSIM installée (avant de partir, en wifi)":"esim",
+      "Revolut + carte bancaire française pour la caution":"cartes", "Adaptateur de prise américaine":"adaptateur", "Ordinateur, enceinte, batteries en cabine":"cabine", "Une veste pour le soir":"veste" };
+    Object.keys(old).forEach(t => { if(checked[t]) checked[old[t]] = true; });
+    Object.keys(checked).forEach(k => { if(!CHECK.some(c => c[0] === k) || !checked[k]) delete checked[k]; });
+  }
+}catch(e){}
+const save = () => { try{ localStorage.setItem("vegas-evg", JSON.stringify({ cur, checked, moi })); }catch(e){} };
+
+// Suivi de l'équipe : une ligne par prénom dans la table Supabase « vegas_suivi » (clé publique, faite pour être visible).
+const SB_URL = "https://mrxfwkmdcqicirccgiom.supabase.co/rest/v1/vegas_suivi";
+const SB_KEY = "sb_publishable_SMy5j__0GTgrJHhJ4GmYQg_2OQ8fTLh";
+let team = [], teamState = "load", pushTimer = 0;
+async function loadTeam(){
+  try{
+    const r = await fetch(SB_URL + "?select=nom,coches,maj&order=nom.asc", { headers:{ apikey:SB_KEY }, cache:"no-store" });
+    if(!r.ok) throw new Error(r.status);
+    team = await r.json(); teamState = "ok";
+  }catch(e){ teamState = team.length ? "stale" : "err"; }
+  drawTeam();
+}
+function pushMe(){
+  if(!moi) return;
+  clearTimeout(pushTimer);
+  const row = { nom:moi, coches:Object.assign({}, checked), maj:new Date().toISOString() };
+  const i = team.findIndex(t => t.nom.toLowerCase() === moi.toLowerCase());
+  if(i >= 0) team[i] = row; else team.push(row);
+  drawTeam();
+  pushTimer = setTimeout(async () => {
+    try{
+      const r = await fetch(SB_URL + "?on_conflict=nom", { method:"POST",
+        headers:{ apikey:SB_KEY, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal" },
+        body:JSON.stringify(row) });
+      if(!r.ok) throw new Error(r.status);
+      loadTeam();
+    }catch(e){ teamState = "err-save"; drawTeam(); }
+  }, 400);
+}
+const when = iso => { try{ return new Date(iso).toLocaleString("fr-FR", { weekday:"short", hour:"2-digit", minute:"2-digit" }); }catch(e){ return ""; } };
+function drawTeam(){
+  const box = document.getElementById("team"); if(!box) return;
+  if(box.contains(document.activeElement) && document.activeElement.id === "whoName") return; // ne pas effacer ce qu'on tape
+  const me = moi ? `<p class="me">Tu es <b>${esc(moi)}</b> : tes cases cochées s'affichent ici pour tout le groupe. <button class="link" type="button" id="changeMe">Changer</button></p>`
+    : `<form class="who" id="whoForm"><label for="whoName">Ton prénom, pour que le groupe voie ce que tu as fait :</label><div class="row"><input id="whoName" maxlength="30" autocomplete="given-name" placeholder="Ex. Elange" required><button class="btn hot" type="submit">C'est moi</button></div></form>`;
+  let list = "";
+  if(teamState === "load") list = `<p class="note">Chargement de l'équipe…</p>`;
+  else if(teamState === "err") list = `<p class="note">Le suivi de l'équipe n'est pas joignable pour l'instant (pas de réseau, ou pas encore activé). Tes cases restent gardées sur ce téléphone.</p>`;
+  else {
+    list = team.length ? `<ul class="team">${team.map(t => {
+      const c = t.coches || {}, done = CHECK.filter(x => c[x[0]]).length;
+      const keys = KEY_ITEMS.map(k => { const it = CHECK.find(x => x[0] === k); return `<span class="pill ${c[k] ? "yes" : "no"}">${c[k] ? "✓" : "✗"} ${esc(it[1])}</span>`; }).join("");
+      const miss = CHECK.filter(x => !c[x[0]] && !KEY_ITEMS.includes(x[0])).map(x => x[1]);
+      return `<li class="${moi && t.nom.toLowerCase() === moi.toLowerCase() ? "mine" : ""}"><div class="top"><b>${esc(t.nom)}</b><span class="score">${done}/${CHECK.length}</span></div>
+        <div class="pills">${keys}</div>
+        ${miss.length ? `<p class="miss">Reste : ${esc(miss.join(", "))}</p>` : `<p class="miss ok">Tout est prêt ✓</p>`}
+        <p class="maj">Mis à jour ${esc(when(t.maj))}</p></li>`;
+    }).join("")}</ul>` : `<p class="note">Personne encore. Entre ton prénom et coche tes cases : tu seras le premier.</p>`;
+    if(teamState === "stale" || teamState === "err-save") list += `<p class="note">Pas de réseau : la liste peut ne pas être à jour. Ça se resynchronise tout seul.</p>`;
+  }
+  box.innerHTML = me + list;
+  const f = document.getElementById("whoForm");
+  if(f) f.onsubmit = e => { e.preventDefault(); const inp = document.getElementById("whoName"); const n = inp.value.trim().slice(0, 30); if(!n) return;
+    inp.blur();
+    const row = team.find(t => t.nom.toLowerCase() === n.toLowerCase());
+    const first = !moi; moi = row ? row.nom : n;
+    if(row) checked = Object.assign({}, row.coches || {}); else if(!first) checked = {};
+    save(); draw(); pushMe(); };
+  const ch = document.getElementById("changeMe");
+  if(ch) ch.onclick = () => { moi = ""; save(); draw(); const i = document.getElementById("whoName"); if(i) i.focus(); };
+}
+setInterval(() => { if(cur === "infos" && !document.hidden) loadTeam(); }, 30000);
+document.addEventListener("visibilitychange", () => { if(!document.hidden && cur === "infos") loadTeam(); });
 
 function drawTabs(){
   const tabs = document.getElementById("tabs");
-  tabs.innerHTML = DAYS.map(d => `<button class="day" data-id="${d.id}" aria-pressed="${cur === d.id}"><small>${d.d}</small><b>${d.n}</b></button>`).join("")
-    + `<button class="day extra" data-id="infos" aria-pressed="${cur === "infos"}"><small>Réserver</small><b>&amp; infos</b></button>`;
+  tabs.innerHTML = `<button class="day extra" data-id="infos" aria-pressed="${cur === "infos"}"><small>Équipe</small><b>Check-list</b></button>`
+    + DAYS.map(d => `<button class="day" data-id="${d.id}" aria-pressed="${cur === d.id}"><small>${d.d}</small><b>${d.n}</b></button>`).join("");
   tabs.querySelectorAll("[data-id]").forEach(b => b.onclick = () => { cur = b.dataset.id; save(); draw(); b.scrollIntoView({ block:"nearest", inline:"center" }); });
 }
 function drawDay(d){
@@ -319,7 +422,9 @@ function drawDay(d){
 }
 function drawInfos(){
   return `<div style="display:flex;flex-direction:column;gap:12px">
-    <div class="dhead"><p class="eyebrow">Avant de partir</p><h2>Réserver et préparer</h2><p>Chacun réserve et paie sa propre place, sur le même créneau que les autres.</p></div>
+    <div class="dhead"><p class="eyebrow">Avant de partir</p><h2>Équipe et check-list</h2><p>Qui a réservé quoi, ce qu'il reste à faire, et comment réserver sa place.</p></div>
+    <section class="panel teampanel"><h3>Qui a fait quoi</h3><div id="team" aria-live="polite"></div></section>
+    <section class="panel" id="maListe"><h3>${moi ? "Ma check-list · " + esc(moi) : "Ma check-list"}</h3><ul class="checks">${CHECK.map(([id, , long]) => `<li><label><input type="checkbox" data-c="${id}" ${checked[id] ? "checked" : ""}><span>${esc(long)}</span></label></li>`).join("")}</ul></section>
     <section class="panel resa"><h3>1 · Le quad (dim. 8) : aujourd'hui</h3>
       <ol class="order">
         <li>Ouvrez le site et choisissez <b>« Las Vegas ATVs Nellis Dunes Tour »</b> (105 $ par personne, avec guide).</li>
@@ -361,7 +466,6 @@ function drawInfos(){
         <li><b>Club</b> : chaussures de ville, pantalon, chemise ou haut propre. Pas de short, de casquette, de jogging ni de baskets de sport.</li>
       </ul>
     </section>
-    <h2 style="margin:6px 0 0;font-family:var(--display);font-weight:400;color:var(--amber);font-size:1.3rem">La check-list</h2>
     <section class="panel"><h3>Ordre des réservations</h3>
       <ol class="order">
         <li><span class="t">Aujourd'hui</span> · Quad, dim. 8 à 11 h : Las Vegas ATV Dune Tours</li>
@@ -371,7 +475,6 @@ function drawInfos(){
       </ol>
       <p class="note">Budget version économique, par personne : environ 320 $ (quad 105 + tir 179 + grande roue 35, AREA15 et club au bar gratuits). Plus taxes et pourboires des guides (10 à 20 $ par guide) : comptez environ 10 % de plus.</p>
     </section>
-    <section class="panel"><ul class="checks">${CHECK.map((c, i) => `<li><label><input type="checkbox" data-c="${esc(c)}" ${checked[c] ? "checked" : ""}><span>${esc(c)}</span></label></li>`).join("")}</ul></section>
     <section class="panel"><h3>Bon à savoir</h3>
       <ul class="facts">
         <li><b>−9 h</b><span>Décalage avec Paris</span></li>
@@ -393,7 +496,8 @@ function draw(){
     try{ navigator.clipboard.writeText(b.dataset.tel).then(ok, () => { getSelection().selectAllChildren(b.parentNode.parentNode.querySelector(".tel")); b.textContent = "Sélectionné"; }); }
     catch(e){ getSelection().selectAllChildren(b.parentNode.parentNode.querySelector(".tel")); }
   });
-  v.querySelectorAll("[data-c]").forEach(c => c.onchange = () => { checked[c.dataset.c] = c.checked; save(); });
+  v.querySelectorAll("[data-c]").forEach(c => c.onchange = () => { if(c.checked) checked[c.dataset.c] = true; else delete checked[c.dataset.c]; save(); pushMe(); });
+  if(cur === "infos"){ drawTeam(); loadTeam(); }
 }
 document.getElementById("goResa").onclick = () => { cur = "infos"; save(); draw(); document.getElementById("tabs").scrollIntoView({ behavior:"smooth" }); };
 document.getElementById("copyHome").onclick = e => {
