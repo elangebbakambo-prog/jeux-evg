@@ -214,22 +214,28 @@ const DAYS = [
           note:"Réservez sur le site officiel du Bellagio, pas chez des revendeurs.",
           alt:"Plan B : Marquee Mondays au Marquee (Cosmopolitan, 3708 S Las Vegas Blvd) · grosse boîte avec DJ le lundi · guest list ou table sur le site du Cosmopolitan" } }
     ] },
-  { id:"j4", d:"Mar", n:"10", title:"Red Rock Canyon", sub:"Les falaises rouges à 30 min du Strip. Allez-y le matin, au frais.",
-    chips:[["Transport inclus","ok"],["Réservation horaire","warn"]],
+  { id:"j4", d:"Mar", n:"10", title:"Photo, AREA15 et grande roue", sub:"Une journée facile sur place, sans excursion : récup le matin, délire l'après-midi, Vegas d'en haut au coucher du soleil.",
+    chips:[["Rien à réserver à l'avance","ok"],["Uber seulement",""]],
     steps:[
-      { when:"Matin", name:"Prise en charge pour Red Rock", addr:HOME, info:"Le Jeep vient vous chercher : l'endroit exact arrive par e-mail après la réservation.",
-        book:{ who:"Pink Jeep Tours Las Vegas", tel:"+1 800-873-3662", web:"https://www.pinkadventuretours.com/tours/las-vegas-tours", hours:"Ouvert tous les jours, 6 h – 20 h",
-          urgent:"later", whenBook:"Peut attendre : à réserver sur place samedi ou dimanche. Ou aujourd'hui, si l'annulation est gratuite, pour être tranquilles.",
-          what:["Un guide vous emmène en Jeep 4x4 dans les falaises de roche rouge, à 30 min du Strip.","Arrêts photos et explications sur le canyon. 3 à 4 h en tout.","Prenez le tour « Red Rock Canyon Classic »."],
-          pp:"environ 130 $", share:"162,50 $",
-          price:"Tour « Red Rock Canyon Classic » : environ 125 à 130 $ par adulte, 3 à 4 h.",
-          pickup:"Prise en charge gratuite à la plupart des hôtels du Strip. Indiquez « The Platinum Hotel » ; s'il n'est pas dans la liste, choisissez un hôtel voisin (Hard Rock / Virgin, ou Paris) à quelques minutes.",
-          note:"4,8 ★. Ils gèrent le créneau d'entrée du parc.",
-          alt:"Plan B, en conduisant vous-mêmes : GoCar Tours, 723 S Casino Center Blvd · +1 702-323-4066 · 9 h – 17 h" } },
-      { when:"Fin de matinée", name:"Red Rock Canyon, centre des visiteurs", addr:"1000 Scenic Loop Dr, Las Vegas, NV 89161", mode:"driving", hop:"Environ 35 min en voiture",
-        info:"D'octobre à mai, l'entrée en voiture demande un créneau réservé (8 h à 17 h). Avec une excursion, l'agence s'en charge normalement : vérifiez-le. Eau, crème solaire, une veste." },
-      { when:"Fin d'après-midi", name:"Photo de groupe au panneau « Welcome to Fabulous Las Vegas »", addr:"5100 S Las Vegas Blvd, Las Vegas, NV 89119", mode:"driving", hop:"Uber · environ 10 min depuis l'hôtel",
-        info:"La photo souvenir obligatoire de l'EVG. Il y a souvent la queue au coucher du soleil." }
+      { when:"Matin", name:"Récup, piscine, brunch", addr:HOME, info:"Lendemain de club : grasse matinée bien méritée." },
+      { when:"Fin de matinée", name:"Photo de groupe au panneau « Welcome to Fabulous Las Vegas »", addr:"5100 S Las Vegas Blvd, Las Vegas, NV 89119", mode:"driving", hop:"Uber · environ 10 min",
+        info:"La photo souvenir obligatoire de l'EVG. Le matin, il y a beaucoup moins de queue qu'au coucher du soleil." },
+      { when:"Après-midi", name:"AREA15", addr:"3215 S Rancho Dr, Las Vegas, NV 89102", mode:"driving", hop:"Uber · environ 15 min",
+        info:"Un grand hangar immersif et délirant : art lumineux, bars, jeux, réalité virtuelle. L'entrée de jour est gratuite (parfois avec un pass gratuit à réserver sur le site).",
+        book:{ who:"AREA15", tel:"", web:"https://area15.com/", hours:"Horaires à vérifier sur le site le jour même",
+          urgent:"later", whenBook:"Rien à réserver avant : on décide sur place.",
+          what:["Entrée et balade dans le lieu : gratuites en journée.","Le gros morceau, c'est Omega Mart (Meow Wolf) : un faux supermarché qui mène à des mondes cachés, environ 1 h 30 à fouiller.","Il y a aussi des jeux, de la réalité virtuelle et des bars, payés à l'unité."],
+          pp:"0 $ l'entrée · 45 à 55 $ Omega Mart", share:"",
+          price:"Entrée de jour gratuite. Omega Mart : 45 à 55 $. Pass avec quelques attractions : à partir de 49 $.",
+          note:"Omega Mart est optionnel : décidez sur place selon le budget." } },
+      { when:"Coucher du soleil (vers 16 h 30)", name:"High Roller, la grande roue du LINQ", addr:"3545 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"driving", hop:"Uber · environ 10 min",
+        info:"167 m de haut, des cabines vitrées, 30 min pour un tour complet avec tout Vegas qui s'allume. Retour à pied possible (environ 20 min) ou Uber.",
+        book:{ who:"High Roller (The LINQ)", tel:"", web:"https://www.google.com/search?q=High+Roller+LINQ+Las+Vegas+tickets", hours:"De l'après-midi au soir, horaires selon le jour",
+          urgent:"later", whenBook:"Peut attendre : billets sur place ou sur le site le jour même.",
+          what:["Billet « Anytime » pour monter au coucher du soleil ou de nuit (le billet « Daytime » ne marche qu'en journée).","Option EVG : la « Happy Half Hour », cabine avec bar à volonté pendant le tour (21 ans et plus, passeport)."],
+          pp:"environ 35 $ · 60 $ avec bar à volonté", share:"",
+          price:"Anytime : environ 35 $. Happy Half Hour (open bar) : environ 60 $. Plus taxes.",
+          note:"Prenez le billet Anytime : le Daytime ne vaut pas le coup en novembre, il fait nuit tôt." } }
     ] },
   { id:"j5", d:"Mer", n:"11", title:"Hôtels mythiques et 2Pac", sub:"La journée libre devient le tour des légendes du Strip, du sud au nord, puis le vieux Vegas.",
     chips:[["Bonnes chaussures",""],["Environ 4 km à pied",""]],
@@ -264,7 +270,7 @@ const DAYS = [
 
 const CHECK = [
   "Passeport (celui de l'ESTA)", "ESTA « Approved » (capture sur le téléphone)", "Attestation Ebola imprimée et signée",
-  "Quad réservé : Las Vegas ATV Dune Tours, dim. 8", "Tir réservé : Gun Blast Vegas, lun. 9 à 7 h", "Red Rock réservé : Pink Jeep Tours, mar. 10", "Table au Pinky Ring réservée, lun. 9 soir",
+  "Quad réservé : Las Vegas ATV Dune Tours, dim. 8", "Tir réservé : Gun Blast Vegas, lun. 9 à 7 h", "Table au Pinky Ring réservée, lun. 9 soir",
   "Instructions d'arrivée de l'hôte", "eSIM installée (avant de partir, en wifi)", "Revolut + carte bancaire française pour la caution",
   "Adaptateur de prise américaine", "Ordinateur, enceinte, batteries en cabine", "Une veste pour le soir"
 ];
@@ -295,12 +301,12 @@ function drawDay(d){
           <p>${esc(s.info)}</p>
           ${s.book ? `<div class="book"><span class="when-book ${s.book.urgent}">${esc(s.book.whenBook)}</span><span class="k">À réserver</span><b>${esc(s.book.who)}</b>
             ${s.book.what ? `<ul class="what">${s.book.what.map(w => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
-            ${s.book.pp ? `<div class="money"><span><small>Par personne</small><b>${esc(s.book.pp)}</b></span><span><small>Chacun des 4 (avec la part du marié)</small><b>${esc(s.book.share)}</b></span></div>` : ""}
-            <span class="tel">${esc(s.book.tel)}</span><span class="hrs">${esc(s.book.hours)}</span>
+            ${s.book.pp ? `<div class="money"><span><small>Par personne</small><b>${esc(s.book.pp)}</b></span>${s.book.share ? `<span><small>Chacun des 4 (avec la part du marié)</small><b>${esc(s.book.share)}</b></span>` : ""}</div>` : ""}
+            ${s.book.tel ? `<span class="tel">${esc(s.book.tel)}</span>` : ""}<span class="hrs">${esc(s.book.hours)}</span>
             ${s.book.price ? `<p class="price"><b>Prix :</b> ${esc(s.book.price)}</p>` : ""}
             ${s.book.pickup ? `<p><b>Transport :</b> ${esc(s.book.pickup)}</p>` : ""}
             <p>${esc(s.book.note)}</p>
-            <div class="actions"><a class="btn hot" href="${s.book.web}" target="_blank" rel="noopener">Site pour réserver</a><button class="btn" type="button" data-tel="${esc(s.book.tel)}">Copier le numéro</button></div>
+            <div class="actions"><a class="btn hot" href="${s.book.web}" target="_blank" rel="noopener">${s.book.urgent === "later" && !s.book.tel ? "Voir le site" : "Site pour réserver"}</a>${s.book.tel ? `<button class="btn" type="button" data-tel="${esc(s.book.tel)}">Copier le numéro</button>` : ""}</div>
             ${s.book.alt ? `<p class="alt">${esc(s.book.alt)}</p>` : ""}</div>` : ""}
           ${real && s.addr !== HOME ? `<div class="actions"><a class="btn" href="${maps(s.name + ", " + s.addr)}" target="_blank" rel="noopener">Voir sur la carte</a></div>` : ""}
         </article>
@@ -351,7 +357,7 @@ function drawInfos(){
         <li><b>Téléphone chargé</b> avec l'eSIM et une batterie externe.</li>
         <li><b>Quad</b> : lunettes de soleil, foulard ou cache-cou contre la poussière, vêtements qui peuvent se salir, chaussures fermées.</li>
         <li><b>Tir</b> : chaussures fermées, pas de t-shirt décolleté (les douilles chaudes), casquette, et zéro alcool avant.</li>
-        <li><b>Red Rock</b> : eau, crème solaire, une veste (il fait frais le matin).</li>
+        <li><b>Mardi</b> : passeport pour la grande roue avec bar (21 ans et plus).</li>
         <li><b>Club</b> : chaussures de ville, pantalon, chemise ou haut propre. Pas de short, de casquette, de jogging ni de baskets de sport.</li>
       </ul>
     </section>
@@ -360,10 +366,10 @@ function drawInfos(){
       <ol class="order">
         <li><span class="t">Aujourd'hui</span> · Quad, dim. 8 : Las Vegas ATV Dune Tours</li>
         <li><span class="t">Aujourd'hui</span> · Tir, lun. 9 à 7 h : Gun Blast, The Blast, code BLAST10</li>
-        <li><span class="l">Sur place, la veille au plus tard</span> · Red Rock, mar. 10 : Pink Jeep</li>
+        <li><span class="l">Sur place, le jour même</span> · Mardi 10 : AREA15 et grande roue High Roller</li>
         <li><span class="l">Sur place</span> · Pinky Ring, lun. 9 : au bar, rien à réserver (table seulement si vous la voulez)</li>
       </ol>
-      <p class="note">Budget version économique, par personne : environ 414 $ (quad 105 + tir 179 + Red Rock 130, club au bar). Plus taxes et pourboires des guides (10 à 20 $ par guide) : comptez environ 10 % de plus.</p>
+      <p class="note">Budget version économique, par personne : environ 320 $ (quad 105 + tir 179 + grande roue 35, AREA15 et club au bar gratuits). Plus taxes et pourboires des guides (10 à 20 $ par guide) : comptez environ 10 % de plus.</p>
     </section>
     <section class="panel"><ul class="checks">${CHECK.map((c, i) => `<li><label><input type="checkbox" data-c="${i}" ${checked[i] ? "checked" : ""}><span>${esc(c)}</span></label></li>`).join("")}</ul></section>
     <section class="panel"><h3>Bon à savoir</h3>
