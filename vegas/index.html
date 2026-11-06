@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#15102B">
+<title>Vegas EVG Sobek</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0}
+
+/* Carnet de route de l'EVG : un jour à la fois, une ligne de trajets numérotés (l'ordre de la journée), façon enseigne lumineuse du Strip.
+   Un seul thème de nuit, assumé : le Vegas du soir. */
+:root{
+  --night:#15102B; --card:#221A41; --card2:#2C2352; --line:#3B3168;
+  --sand:#F4EDE4; --muted:#ADA4C9; --amber:#FFB547; --pink:#FF4F8B; --mint:#5EE0B5;
+  --display:"Bungee","Arial Black",Impact,sans-serif; --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*,*::before,*::after{ box-sizing:border-box; }
+html{ background:var(--night); }
+body{ background:var(--night); color:var(--sand); font-family:var(--body); font-size:16px; line-height:1.45;
+  background-image:radial-gradient(ellipse 80% 40% at 50% 0%, rgba(255,79,139,.22), transparent 70%), radial-gradient(circle at 1px 1px, rgba(255,255,255,.05) 1px, transparent 0);
+  background-size:100% 100%, 20px 20px; }
+main{ max-width:640px; margin:0 auto; padding-block:22px 60px; padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px));
+  display:flex; flex-direction:column; gap:16px; }
+.eyebrow{ margin:0; font-weight:800; font-size:.78rem; letter-spacing:.16em; text-transform:uppercase; color:var(--amber); }
+h1{ margin:0; font-family:var(--display); font-weight:400; font-size:clamp(2.6rem,12vw,4rem); line-height:.95; color:var(--sand);
+  text-shadow:0 0 18px rgba(255,79,139,.55), 0 0 2px rgba(255,79,139,.9); text-wrap:balance; }
+h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
+.lead{ margin:0; color:var(--muted); }
+/* Logement */
+.home{ background:var(--card); border:2px solid var(--amber); border-radius:16px; padding:14px 16px; display:flex; flex-direction:column; gap:6px; }
+.home .k{ font-size:.72rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); }
+.home b{ font-size:1.15rem; }
+.home .addr{ font-weight:600; user-select:all; }
+.actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+.btn{ display:inline-flex; align-items:center; gap:6px; border:2px solid var(--line); background:var(--card2); color:var(--sand); border-radius:999px; padding:7px 13px;
+  font:800 .86rem var(--body); text-decoration:none; cursor:pointer; }
+.btn.hot{ border-color:var(--pink); background:var(--pink); color:#1A0B1F; }
+.btn:focus-visible, .day:focus-visible, .tab:focus-visible{ outline:3px solid var(--amber); outline-offset:2px; }
+/* Onglets */
+.tabs{ display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+.tabs::-webkit-scrollbar{ display:none; }
+.day{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; min-width:64px; padding:8px 10px; border-radius:12px; border:2px solid var(--line);
+  background:var(--card); color:var(--sand); cursor:pointer; font-family:var(--body); }
+.day small{ font-size:.7rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.day b{ font-family:var(--display); font-weight:400; font-size:1.5rem; line-height:1; }
+.day[aria-pressed="true"]{ border-color:var(--amber); background:var(--amber); color:#1A0B1F; }
+.day[aria-pressed="true"] small{ color:#5A3A10; }
+.day.extra{ min-width:auto; }
+.day.extra b{ font-family:var(--body); font-weight:800; font-size:.95rem; line-height:1.6; }
+/* Journée */
+.dhead{ display:flex; flex-direction:column; gap:4px; }
+.dhead h2{ margin:0; font-family:var(--display); font-weight:400; font-size:clamp(1.6rem,7vw,2.2rem); line-height:1.05; color:var(--sand); text-wrap:balance; }
+.dhead p{ margin:0; color:var(--muted); }
+.chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.chip{ font-size:.74rem; font-weight:800; padding:3px 9px; border-radius:999px; background:var(--card2); color:var(--sand); border:1px solid var(--line); }
+.chip.warn{ border-color:var(--pink); color:var(--pink); }
+.chip.ok{ border-color:var(--mint); color:var(--mint); }
+.tl{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; }
+.step{ display:grid; grid-template-columns:40px minmax(0,1fr); gap:0 12px; }
+.dot{ display:flex; flex-direction:column; align-items:center; }
+.dot i{ font-style:normal; width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-family:var(--display); font-size:1rem;
+  background:var(--night); border:2px solid var(--pink); color:var(--pink); box-shadow:0 0 10px rgba(255,79,139,.45); flex:0 0 auto; }
+.dot::after{ content:""; flex:1; width:2px; background:linear-gradient(var(--pink), var(--line)); margin:2px 0; min-height:14px; }
+.step:last-child .dot::after{ display:none; }
+.stop{ background:var(--card); border-radius:14px; padding:12px 14px; margin-bottom:10px; display:flex; flex-direction:column; gap:5px; min-width:0; }
+.stop .when{ font-size:.76rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); }
+.stop h3{ margin:0; font-size:1.08rem; font-weight:800; }
+.stop .addr{ font-size:.9rem; color:var(--muted); overflow-wrap:anywhere; user-select:all; }
+.stop p{ margin:0; font-size:.93rem; }
+.go{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:.82rem; color:var(--muted); margin:-2px 0 10px 52px; }
+.go b{ color:var(--sand); }
+.book{ border:1px solid var(--amber); border-radius:12px; padding:10px 12px; margin-top:4px; display:flex; flex-direction:column; gap:4px; background:rgba(255,181,71,.07); }
+.book .k{ font-size:.72rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--amber); }
+.book .tel{ font-family:var(--display); font-size:1.15rem; color:var(--sand); user-select:all; }
+.book .hrs{ font-size:.85rem; color:var(--mint); font-weight:700; }
+.book p{ font-size:.88rem; }
+.book .alt{ color:var(--muted); font-size:.82rem; border-top:1px dashed var(--line); padding-top:6px; }
+.tip{ border-left:4px solid var(--amber); background:rgba(255,181,71,.1); border-radius:0 10px 10px 0; padding:8px 12px; font-size:.9rem; }
+.tip.pink{ border-left-color:var(--pink); background:rgba(255,79,139,.1); }
+/* Listes */
+.panel{ background:var(--card); border-radius:16px; padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+.panel h3{ margin:0; font-family:var(--display); font-weight:400; font-size:1.2rem; color:var(--amber); }
+.checks{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.checks label{ display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
+.checks input{ width:20px; height:20px; accent-color:var(--pink); margin-top:2px; flex:0 0 auto; }
+.checks input:checked + span{ color:var(--muted); text-decoration:line-through; }
+.facts{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.facts li{ background:var(--card2); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.facts b{ font-family:var(--display); font-weight:400; font-size:1.25rem; color:var(--sand); }
+.facts span{ font-size:.82rem; color:var(--muted); }
+.note{ margin:0; font-size:.8rem; color:var(--muted); }
+@media (max-width:380px){ .facts{ grid-template-columns:1fr; } }
+@media (prefers-reduced-motion:no-preference){ #view{ animation:in .25s ease; } @keyframes in{ from{ opacity:.4; transform:translateY(4px); } to{ opacity:1; transform:none; } } }
+</style>
+</head>
+<body>
+
+
+<main>
+  <p class="eyebrow">EVG de Sobek · 5 voyageurs</p>
+  <h1>Vegas <span>7 → 12 nov.</span></h1>
+  <p class="lead">Le carnet de route : une journée par onglet, les étapes dans l'ordre, les adresses et le trajet en un clic.</p>
+
+  <section class="home" aria-label="Logement">
+    <span class="k">Votre logement</span>
+    <b>The Platinum Hotel &amp; Spa</b>
+    <span class="addr" id="homeAddr">211 E Flamingo Rd, Las Vegas, NV 89169</span>
+    <span class="note">Appartement Airbnb · à un pâté de maisons du Strip · +1 702-365-5000</span>
+    <div class="actions">
+      <a class="btn hot" href="https://www.google.com/maps/search/?api=1&query=The+Platinum+Hotel+%26+Spa+211+E+Flamingo+Rd+Las+Vegas" target="_blank" rel="noopener">Ouvrir dans Maps</a>
+      <button class="btn" id="copyHome" type="button">Copier l'adresse</button>
+    </div>
+  </section>
+
+  <nav class="tabs" id="tabs" aria-label="Jours"></nav>
+  <section id="view" aria-live="polite"></section>
+</main>
+
+<script>
+const HOME = "211 E Flamingo Rd, Las Vegas, NV 89169";
+const maps = q => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
+const route = (a, b, mode) => "https://www.google.com/maps/dir/?api=1&origin=" + encodeURIComponent(a) + "&destination=" + encodeURIComponent(b) + "&travelmode=" + (mode || "driving");
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+// Programme recadré : club le lundi soir (après le tir), jour libre du 11 = hôtels mythiques.
+const DAYS = [
+  { id:"j1", d:"Sam", n:"7", title:"Arrivée et Strip chill", sub:"Atterrissage, installation, première balade. On garde la grosse soirée pour plus tard : 9 h de décalage.",
+    chips:[["Décalage −9 h",""],["Soirée légère","ok"]],
+    steps:[
+      { when:"Arrivée", name:"Aéroport Harry Reid (LAS)", addr:"5757 Wayne Newton Blvd, Las Vegas, NV 89119",
+        info:"Contrôle des passeports (le même que sur l'ESTA). Activez l'eSIM. Pour l'Uber, suivez les panneaux « Rideshare »." },
+      { when:"Fin d'après-midi", name:"Check-in au Platinum", addr:HOME, mode:"driving", hop:"Uber · environ 15 min",
+        info:"Suivez les instructions d'arrivée de l'hôte (réception, code, horaire)." },
+      { when:"Soir", name:"Fontaines du Bellagio", addr:"3600 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"walking", hop:"À pied · environ 12 min",
+        info:"Spectacle gratuit, toutes les 15 à 30 min le soir. Premier contact avec le Strip, dîner dans le coin, retour tôt." }
+    ] },
+  { id:"j2", d:"Dim", n:"8", title:"Buggy dans le désert", sub:"Grosse matinée dans les dunes, puis récupération. Le décalage vous réveillera tôt : parfait pour le désert.",
+    chips:[["Ouvert le dimanche","ok"],["Prise en charge à l'hôtel",""]],
+    steps:[
+      { when:"Matin", name:"Prise en charge pour le buggy", addr:HOME,
+        info:"Navette depuis l'hôtel vers les dunes de Nellis (environ 30 min). Lunettes de soleil, vêtements qui peuvent se salir, foulard contre la poussière. Permis de conduire pour piloter.",
+        book:{ who:"Las Vegas ATV Dune Tours", tel:"+1 702-333-0999", web:"https://lasvegasatvdunetours.com/", hours:"Ouvert tous les jours, 6 h – 22 h", note:"4,9 ★ sur plus de 4 000 avis. Demandez un RZR (buggy) pour 5 et la prise en charge au Platinum.",
+          alt:"Plan B : Las Vegas ATV/UTV Tours, 7055 Las Vegas Blvd N · +1 702-750-9751 · 8 h – 21 h" } },
+      { when:"Après-midi", name:"Repos, piscine, sieste", addr:HOME, info:"On recharge les batteries." },
+      { when:"Soir", name:"La Sphere (de l'extérieur)", addr:"255 Sands Ave, Las Vegas, NV 89169", mode:"walking", hop:"À pied · environ 15 min",
+        info:"La boule géante qui s'illumine la nuit. Elle se voit aussi depuis certaines chambres du Platinum." }
+    ] },
+  { id:"j3", d:"Lun", n:"9", title:"Tir dans le désert, puis club", sub:"Le tir le matin, à jeun d'alcool, puis la grosse soirée club le soir.",
+    chips:[["Passeport obligatoire","warn"],["Zéro alcool avant le tir","warn"],["Club : 21 ans +",""]],
+    steps:[
+      { when:"Matin", name:"Tir en plein désert", addr:"8985 W Verde Way, Las Vegas, NV 89149", mode:"driving", hop:"Navette ou Uber · environ 35 min",
+        info:"Stand en extérieur, très apprécié des Européens qui n'ont jamais tiré. Prenez le passeport : il est demandé, et certaines armes sont réservées aux 21 ans et plus.",
+        book:{ who:"Gun Blast Vegas (Outdoor Range)", tel:"+1 702-935-6511", web:"https://www.gunblast.vegas/", hours:"Lun – sam, 7 h – 17 h · fermé le dimanche", note:"5,0 ★ sur plus de 1 300 avis. Le lundi tombe bien : il est fermé le dimanche. Demandez la prise en charge à l'hôtel.",
+          alt:"Plan B (en salle, sur le Strip) : Battlefield Vegas, 2771 S Sammy Davis Jr Dr · +1 702-566-1000 · Humvee gratuit depuis l'hôtel" } },
+      { when:"Après-midi", name:"Détente", addr:HOME, mode:"driving", hop:"Retour · environ 35 min", info:"Repos avant la soirée." },
+      { when:"Soir", name:"The Pinky Ring (Bellagio)", addr:"3600 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"walking", hop:"À pied · environ 12 min",
+        info:"Le club de Bruno Mars : groupe en live, ambiance soirée chic. Petit lieu, donc prenez une table. Tenue correcte exigée : chaussures de ville, pas de short ni de casquette. Passeport à l'entrée.",
+        book:{ who:"The Pinky Ring by Bruno Mars", tel:"+1 702-693-8393", web:"https://bellagio.mgmresorts.com/en/nightlife/the-pinky-ring.html", hours:"Ouvert le lundi, 20 h – 2 h", note:"Un client parle d'une table pour 4 un lundi à environ 300 $ de consommation minimum (bien plus cher le week-end). Demandez le prix pour 5." } }
+    ] },
+  { id:"j4", d:"Mar", n:"10", title:"Red Rock Canyon", sub:"Les falaises rouges à 30 min du Strip. Allez-y le matin, au frais.",
+    chips:[["Transport inclus","ok"],["Réservation horaire","warn"]],
+    steps:[
+      { when:"Matin", name:"Prise en charge pour Red Rock", addr:HOME, info:"Le Jeep vient vous chercher à l'hôtel.",
+        book:{ who:"Pink Jeep Tours Las Vegas", tel:"+1 800-873-3662", web:"https://www.pinkadventuretours.com/tours/las-vegas-tours", hours:"Ouvert tous les jours, 6 h – 20 h", note:"4,8 ★. Choisissez le tour Red Rock Canyon, en Jeep ouvert si possible. Ils gèrent le créneau d'entrée du parc.",
+          alt:"Plan B, en conduisant vous-mêmes : GoCar Tours, 723 S Casino Center Blvd · +1 702-323-4066 · 9 h – 17 h" } },
+      { when:"Fin de matinée", name:"Red Rock Canyon, centre des visiteurs", addr:"1000 Scenic Loop Dr, Las Vegas, NV 89161", mode:"driving", hop:"Environ 35 min en voiture",
+        info:"D'octobre à mai, l'entrée en voiture demande un créneau réservé (8 h à 17 h). Avec une excursion, l'agence s'en charge normalement : vérifiez-le. Eau, crème solaire, une veste." },
+      { when:"Fin d'après-midi", name:"Photo de groupe au panneau « Welcome to Fabulous Las Vegas »", addr:"5100 S Las Vegas Blvd, Las Vegas, NV 89119", mode:"driving", hop:"Uber · environ 10 min depuis l'hôtel",
+        info:"La photo souvenir obligatoire de l'EVG. Il y a souvent la queue au coucher du soleil." }
+    ] },
+  { id:"j5", d:"Mer", n:"11", title:"Hôtels mythiques et 2Pac", sub:"La journée libre devient le tour des légendes du Strip, du sud au nord, puis le vieux Vegas.",
+    chips:[["Bonnes chaussures",""],["Environ 4 km à pied",""]],
+    steps:[
+      { when:"Matin", name:"Carrefour Flamingo Rd / Koval Ln", addr:"E Flamingo Rd & Koval Ln, Las Vegas, NV 89169", mode:"walking", hop:"À pied · environ 4 min, sur votre rue",
+        info:"Le 7 septembre 1996, la voiture où se trouvait 2Pac a été visée ici après le match Tyson–Seldon. Simple carrefour, sans monument." },
+      { when:"Matin", name:"MGM Grand", addr:"3799 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"driving", hop:"Uber · environ 5 min",
+        info:"L'hôtel du match Mike Tyson contre Bruce Seldon (gagné en moins d'une minute) et de la bagarre dans le hall, ce même soir." },
+      { when:"Midi", name:"New York-New York", addr:"3790 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"walking", hop:"À pied · en face",
+        info:"La mini Statue de la Liberté et les montagnes russes." },
+      { when:"Début d'après-midi", name:"Paris Las Vegas", addr:"3655 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"walking", hop:"À pied · environ 15 min",
+        info:"La tour Eiffel version Vegas. Vue sur les fontaines depuis le haut." },
+      { when:"Après-midi", name:"Bellagio", addr:"3600 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"walking", hop:"À pied · en face",
+        info:"Les fontaines en plein jour, et le décor d'Ocean's Eleven." },
+      { when:"Après-midi", name:"Caesars Palace", addr:"3570 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"walking", hop:"À pied · environ 5 min",
+        info:"La maison des grands combats de boxe, et le décor de Very Bad Trip." },
+      { when:"Fin d'après-midi", name:"Flamingo", addr:"3555 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"walking", hop:"À pied · en face",
+        info:"L'hôtel de Bugsy Siegel, le gangster qui a lancé le Vegas des casinos. Allez voir les flamants roses du jardin." },
+      { when:"Soir", name:"Mob Museum", addr:"300 Stewart Ave, Las Vegas, NV 89101", mode:"driving", hop:"Uber · environ 15 min",
+        info:"Le musée de la mafia à Vegas : parfait après la journée gangsters." },
+      { when:"Soir", name:"Fremont Street Experience", addr:"Fremont St, Las Vegas, NV 89101", mode:"walking", hop:"À pied · environ 5 min",
+        info:"Le vieux Vegas sous son plafond d'écrans géants. Retour en Uber, environ 15 min." }
+    ] },
+  { id:"j6", d:"Jeu", n:"12", title:"Retour", sub:"Check-out, dernières photos, et direction l'aéroport.",
+    chips:[["3 h avant le vol","warn"]],
+    steps:[
+      { when:"Matin", name:"Check-out du Platinum", addr:HOME, info:"Vérifiez qu'il ne reste rien : chargeurs, adaptateur, passeports." },
+      { when:"3 h avant le vol", name:"Aéroport Harry Reid (LAS)", addr:"5757 Wayne Newton Blvd, Las Vegas, NV 89119", mode:"driving", hop:"Uber · environ 15 min",
+        info:"Ordinateur, enceinte et batteries en cabine. Pas d'attestation Ebola pour rentrer en France : elle ne sert qu'à l'aller." }
+    ] }
+];
+
+const CHECK = [
+  "Passeport (celui de l'ESTA)", "ESTA « Approved » (capture sur le téléphone)", "Attestation Ebola imprimée et signée",
+  "Buggy réservé : Las Vegas ATV Dune Tours, dim. 8", "Tir réservé : Gun Blast Vegas, lun. 9 matin", "Red Rock réservé : Pink Jeep Tours, mar. 10", "Table au Pinky Ring réservée, lun. 9 soir",
+  "Instructions d'arrivée de l'hôte", "eSIM installée (avant de partir, en wifi)", "Revolut + carte bancaire française pour la caution",
+  "Adaptateur de prise américaine", "Ordinateur, enceinte, batteries en cabine", "Une veste pour le soir"
+];
+
+let cur = "j1", checked = {};
+try{ const s = JSON.parse(localStorage.getItem("vegas-evg") || "null"); if(s){ cur = s.cur || cur; checked = s.checked || {}; } }catch(e){}
+const save = () => { try{ localStorage.setItem("vegas-evg", JSON.stringify({ cur, checked })); }catch(e){} };
+
+function drawTabs(){
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = DAYS.map(d => `<button class="day" data-id="${d.id}" aria-pressed="${cur === d.id}"><small>${d.d}</small><b>${d.n}</b></button>`).join("")
+    + `<button class="day extra" data-id="infos" aria-pressed="${cur === "infos"}"><small>Avant</small><b>Check-list</b></button>`;
+  tabs.querySelectorAll("[data-id]").forEach(b => b.onclick = () => { cur = b.dataset.id; save(); draw(); b.scrollIntoView({ block:"nearest", inline:"center" }); });
+}
+function drawDay(d){
+  let prev = HOME;
+  const steps = d.steps.map((s, i) => {
+    const from = prev; prev = s.addr.startsWith("Votre") ? prev : s.addr;
+    const real = !s.addr.startsWith("Votre");
+    return `<li class="step">
+      <div class="dot"><i>${i + 1}</i></div>
+      <div>
+        ${s.hop ? `<div class="go" style="margin-left:0"><b>${esc(s.hop)}</b>${real ? `<a class="btn" href="${route(from, s.addr, s.mode)}" target="_blank" rel="noopener">Itinéraire</a>` : ""}</div>` : ""}
+        <article class="stop">
+          <span class="when">${esc(s.when)}</span>
+          <h3>${esc(s.name)}</h3>
+          <span class="addr">${esc(s.addr)}</span>
+          <p>${esc(s.info)}</p>
+          ${s.book ? `<div class="book"><span class="k">À réserver</span><b>${esc(s.book.who)}</b>
+            <span class="tel">${esc(s.book.tel)}</span><span class="hrs">${esc(s.book.hours)}</span>
+            <p>${esc(s.book.note)}</p>
+            <div class="actions"><a class="btn hot" href="${s.book.web}" target="_blank" rel="noopener">Site pour réserver</a><button class="btn" type="button" data-tel="${esc(s.book.tel)}">Copier le numéro</button></div>
+            ${s.book.alt ? `<p class="alt">${esc(s.book.alt)}</p>` : ""}</div>` : ""}
+          ${real && s.addr !== HOME ? `<div class="actions"><a class="btn" href="${maps(s.name + ", " + s.addr)}" target="_blank" rel="noopener">Voir sur la carte</a></div>` : ""}
+        </article>
+      </div></li>`;
+  }).join("");
+  return `<div style="display:flex;flex-direction:column;gap:12px">
+    <div class="dhead"><p class="eyebrow">${esc(d.d)}. ${esc(d.n)} novembre</p><h2>${esc(d.title)}</h2><p>${esc(d.sub)}</p></div>
+    <div class="chips">${d.chips.map(([t, k]) => `<span class="chip ${k}">${esc(t)}</span>`).join("")}</div>
+    <ol class="tl">${steps}</ol></div>`;
+}
+function drawInfos(){
+  return `<div style="display:flex;flex-direction:column;gap:12px">
+    <div class="dhead"><p class="eyebrow">Avant de partir</p><h2>La check-list</h2><p>Cochez au fur et à mesure (c'est gardé sur ce téléphone).</p></div>
+    <section class="panel"><ul class="checks">${CHECK.map((c, i) => `<li><label><input type="checkbox" data-c="${i}" ${checked[i] ? "checked" : ""}><span>${esc(c)}</span></label></li>`).join("")}</ul></section>
+    <section class="panel"><h3>Bon à savoir</h3>
+      <ul class="facts">
+        <li><b>−9 h</b><span>Décalage avec Paris</span></li>
+        <li><b>15–20 %</b><span>Pourboire au restaurant</span></li>
+        <li><b>21 ans</b><span>Alcool, casinos, clubs : passeport sur soi</span></li>
+        <li><b>911</b><span>Urgences (police, pompiers, ambulance)</span></li>
+      </ul>
+      <p class="tip">Prenez les cautions avec la carte bancaire française, et payez le reste avec Revolut.</p>
+      <p class="tip pink">Horaires d'ouverture vérifiés pour vos jours. L'heure exacte de prise en charge sera dans chaque confirmation.</p>
+    </section></div>`;
+}
+function draw(){
+  drawTabs();
+  const v = document.getElementById("view");
+  v.style.animation = "none"; void v.offsetWidth; v.style.animation = "";
+  v.innerHTML = cur === "infos" ? drawInfos() : drawDay(DAYS.find(d => d.id === cur) || DAYS[0]);
+  v.querySelectorAll("[data-tel]").forEach(b => b.onclick = () => {
+    const ok = () => { b.textContent = "Numéro copié"; setTimeout(() => b.textContent = "Copier le numéro", 1800); };
+    try{ navigator.clipboard.writeText(b.dataset.tel).then(ok, () => { getSelection().selectAllChildren(b.parentNode.parentNode.querySelector(".tel")); b.textContent = "Sélectionné"; }); }
+    catch(e){ getSelection().selectAllChildren(b.parentNode.parentNode.querySelector(".tel")); }
+  });
+  v.querySelectorAll("[data-c]").forEach(c => c.onchange = () => { checked[c.dataset.c] = c.checked; save(); });
+}
+document.getElementById("copyHome").onclick = e => {
+  const b = e.currentTarget;
+  const done = () => { b.textContent = "Adresse copiée"; setTimeout(() => b.textContent = "Copier l'adresse", 1800); };
+  try{ navigator.clipboard.writeText(HOME).then(done, () => { getSelection().selectAllChildren(document.getElementById("homeAddr")); b.textContent = "Sélectionnée, copie-la"; }); }
+  catch(err){ getSelection().selectAllChildren(document.getElementById("homeAddr")); }
+};
+draw();
+</script>
+
+</body>
+</html>
