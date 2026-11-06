@@ -193,6 +193,13 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 #story .st-img img.in-r{ animation:stInR .25s ease; } #story .st-img img.in-l{ animation:stInL .25s ease; }
 @keyframes stInR{ from{ transform:translateX(60%); opacity:.3; } to{ transform:none; opacity:1; } }
 @keyframes stInL{ from{ transform:translateX(-60%); opacity:.3; } to{ transform:none; opacity:1; } }
+#story .st-img video{ max-width:100%; max-height:100%; object-fit:contain; border-radius:10px; pointer-events:none; transition:transform .2s ease; background:#111; }
+#story .st-img video.in-r{ animation:stInR .25s ease; } #story .st-img video.in-l{ animation:stInL .25s ease; }
+#story .st-btns{ display:flex; gap:2px; }
+.vidwrap{ position:relative; cursor:pointer; }
+.vidwrap .play{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:2.4rem; color:#fff; text-shadow:0 2px 12px rgba(0,0,0,.8); pointer-events:none; }
+.vidph{ min-height:140px; background:var(--card2); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:800; }
+.preview video{ border-radius:12px; max-height:300px; width:100%; background:#000; }
 #story .st-help{ margin:0; font-size:.72rem; color:rgba(255,255,255,.55); text-align:center; }
 #story .st-close{ position:relative; z-index:2; min-width:44px; min-height:44px; display:flex; align-items:center; justify-content:center; }
 #story[hidden]{ display:none !important; }
@@ -635,7 +642,7 @@ const VOYAGEURS = ["Elange", "Jovan", "Isma", "Ysly", "Chris"];
 const TZ = { vegas:"America/Los_Angeles", france:"Europe/Paris" };
 const EMOJIS = ["🔥", "😂", "😍", "😮", "👏"];
 const MOMENT_SEC = 120, MOMENT_OPEN_MIN = 30;
-let posts = [], moments = [], reacts = [], liveState = "load", liveDraft = { t:"", img:"", m:"" }, liveCote = "", imgCache = {}, liveBusy = false, liveDel = "";
+let posts = [], moments = [], reacts = [], liveState = "load", liveDraft = { t:"", img:"", m:"", vid:null }, liveCote = "", imgCache = {}, liveBusy = false, liveDel = "";
 let seenStories = {}, buzzed = {};
 try{ liveCote = localStorage.getItem("vegas-cote") || ""; seenStories = JSON.parse(localStorage.getItem("vegas-vus") || "{}"); }catch(e){}
 const cote = () => liveCote || (VOYAGEURS.some(n => n.toLowerCase() === (moi || "").toLowerCase()) ? "vegas" : "france");
@@ -653,11 +660,11 @@ async function sendRow(nom, data){
 }
 async function loadLive(){
   try{
-    const q = "?or=(nom.like.post%3A*,nom.like.mom%3A*,nom.like.rea%3A*)&select=nom,maj,a:coches->>a,s:coches->>s,t:coches->>t,h:coches->>h,x:coches->>x,d:coches->>d,m:coches->>m,p:coches->>p,e:coches->>e&order=maj.desc&limit=2000";
+    const q = "?or=(nom.like.post%3A*,nom.like.mom%3A*,nom.like.rea%3A*)&select=nom,maj,a:coches->>a,s:coches->>s,t:coches->>t,v:coches->>v,h:coches->>h,x:coches->>x,d:coches->>d,m:coches->>m,p:coches->>p,e:coches->>e&order=maj.desc&limit=2000";
     const r = await fetch(SB_URL + q, { headers:{ apikey:SB_KEY }, cache:"no-store" });
     if(!r.ok) throw new Error(r.status);
     const rows = await r.json();
-    posts = rows.filter(x => x.nom.startsWith("post:")).map(x => ({ id:x.nom.slice(5), a:x.a, s:x.s, t:x.t || "", h:x.h === "true", x:x.x === "true", d:x.d || x.maj, m:x.m || "" }));
+    posts = rows.filter(x => x.nom.startsWith("post:")).map(x => ({ id:x.nom.slice(5), a:x.a, s:x.s, t:x.t || "", v:x.v || "", h:x.h === "true", x:x.x === "true", d:x.d || x.maj, m:x.m || "" }));
     moments = rows.filter(x => x.nom.startsWith("mom:")).map(x => ({ id:x.nom.slice(4), a:x.a, s:x.s, x:x.x === "true", d:x.d || x.maj }));
     reacts = rows.filter(x => x.nom.startsWith("rea:") && x.x !== "true" && x.e).map(x => ({ p:x.p, a:x.a, e:x.e }));
     liveState = "ok";
@@ -695,6 +702,41 @@ function tickClocks(){
   const om = openMoment(), cd = document.getElementById("momCount");
   if(cd && om){ const left = MOMENT_SEC - Math.floor((Date.now() - Date.parse(om.d)) / 1000);
     cd.textContent = left > 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} pour poster` : "Temps écoulé : tu peux encore poster, en retard 😏"; }
+}
+// --- Vidéos courtes : le fichier va dans le stockage Supabase « vegas-videos », le post garde son adresse et une image d'aperçu ---
+const VID_BUCKET = "vegas-videos", MAX_VID_SEC = 30, MAX_VID_MB = 25;
+const SB_BASE = SB_URL.replace(/\/rest\/v1\/.*$/, "");
+let storyMuted = true;
+function videoMeta(file){
+  return new Promise((ok, ko) => {
+    const url = URL.createObjectURL(file), v = document.createElement("video");
+    let done = false; const fin = r => { if(done) return; done = true; ok(r); };
+    v.muted = true; v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto"; v.src = url;
+    const grab = () => { try{
+      const k = Math.min(1, 720 / Math.max(v.videoWidth || 1, v.videoHeight || 1));
+      const c = document.createElement("canvas"); c.width = Math.round((v.videoWidth || 720) * k); c.height = Math.round((v.videoHeight || 1280) * k);
+      c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+      fin({ dur:v.duration, poster:c.toDataURL("image/jpeg", .7), url });
+    }catch(e){ fin({ dur:v.duration, poster:"", url }); } };
+    v.onloadedmetadata = () => { if(!isFinite(v.duration)) return fin({ dur:0, poster:"", url }); v.currentTime = Math.min(.5, v.duration / 2); };
+    v.onseeked = grab;
+    v.onerror = () => { if(!done){ done = true; ko(new Error("video")); } };
+    setTimeout(() => fin({ dur:isFinite(v.duration) ? v.duration : 0, poster:"", url }), 7000);
+  });
+}
+function uploadVideo(id, file, onp){
+  return new Promise((ok, ko) => {
+    const ext = /webm/.test(file.type) ? "webm" : /quicktime/.test(file.type) ? "mov" : "mp4", path = id + "." + ext;
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", SB_BASE + "/storage/v1/object/" + VID_BUCKET + "/" + path);
+    xhr.setRequestHeader("apikey", SB_KEY);
+    xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+    xhr.upload.onprogress = e => { if(e.lengthComputable) onp(Math.round(e.loaded / e.total * 100)); };
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300) ? ok(SB_BASE + "/storage/v1/object/public/" + VID_BUCKET + "/" + path)
+      : ko(new Error(xhr.status + " " + xhr.responseText));
+    xhr.onerror = () => ko(new Error("network"));
+    xhr.send(file);
+  });
 }
 // --- Réactions ---
 function reactBar(pid){
@@ -745,11 +787,13 @@ function drawLive(){
       <div class="sides"><span>${esc(moi)} est</span><button type="button" class="side ${c === "vegas" ? "on v" : ""}" data-side="vegas">🎰 à Vegas</button><button type="button" class="side ${c === "france" ? "on f" : ""}" data-side="france">🥐 en France</button></div>
       ${liveDraft.m ? `<p class="k">⚡ Pour le Moment de ${esc((moments.find(m => m.id === liveDraft.m) || {}).a || "")}</p>` : ""}
       <textarea id="liveText" rows="2" maxlength="500" placeholder="${c === "vegas" ? "Ce qui se passe ici…" : "Pendant ce temps, en France…"}">${esc(liveDraft.t)}</textarea>
-      ${liveDraft.img ? `<div class="preview"><img src="${liveDraft.img}" alt="Photo à poster"><button type="button" class="link danger" id="liveNoImg">Retirer la photo</button></div>` : ""}
+      ${liveDraft.img && !liveDraft.vid ? `<div class="preview"><img src="${liveDraft.img}" alt="Photo à poster"><button type="button" class="link danger" id="liveNoImg">Retirer la photo</button></div>` : ""}
+      ${liveDraft.vid ? `<div class="preview"><video src="${liveDraft.vid.url}" controls playsinline muted></video><button type="button" class="link danger" id="liveNoImg">Retirer la vidéo</button></div>` : ""}
       <div class="actions"><label class="btn" for="livePhoto">📷 Photo</label><input id="livePhoto" type="file" accept="image/*" hidden>
+        <label class="btn" for="liveVideo">🎥 Vidéo</label><input id="liveVideo" type="file" accept="video/*" hidden>
         <button class="btn hot" type="button" id="liveSend" ${liveBusy ? "disabled" : ""}>${liveBusy ? "Envoi…" : "Publier"}</button></div>
       <p class="err" id="liveErr" hidden></p>
-      <p class="note">Les photos sont visibles par toute personne qui a le lien de l'appli.</p></section>`;
+      <p class="note">Vidéos : ${MAX_VID_SEC} s maximum. Photos et vidéos sont visibles par toute personne qui a le lien de l'appli.</p></section>`;
   }
   html += `<div id="feed"></div>`;
   box.innerHTML = html;
@@ -765,7 +809,14 @@ function drawLive(){
     drawLive(); const t2 = document.getElementById("liveText"); if(t2 && forMoment) t2.scrollIntoView({ block:"center" }); };
   const ph = document.getElementById("livePhoto"); if(ph) ph.onchange = () => pick(ph, "");
   const mp = document.getElementById("momPhoto"); if(mp) mp.onchange = () => pick(mp, om && om.id);
-  const ni = document.getElementById("liveNoImg"); if(ni) ni.onclick = () => { liveDraft.img = ""; liveDraft.m = ""; drawLive(); };
+  const ni = document.getElementById("liveNoImg"); if(ni) ni.onclick = () => { liveDraft.img = ""; liveDraft.m = ""; liveDraft.vid = null; drawLive(); };
+  const vi = document.getElementById("liveVideo");
+  if(vi) vi.onchange = async () => { const f = vi.files && vi.files[0]; if(!f) return; const er = document.getElementById("liveErr");
+    const say = t => { if(er){ er.textContent = t; er.hidden = false; } };
+    if(f.size > MAX_VID_MB * 1048576) return say(`Vidéo trop lourde (${Math.round(f.size / 1048576)} Mo). Filme plus court, ${MAX_VID_SEC} s maximum.`);
+    let meta; try{ meta = await videoMeta(f); }catch(e){ return say("Cette vidéo n'a pas pu être lue."); }
+    if(meta.dur > MAX_VID_SEC + 1) return say(`Vidéo trop longue (${Math.round(meta.dur)} s). ${MAX_VID_SEC} s maximum.`);
+    liveDraft.vid = { file:f, url:meta.url, dur:meta.dur }; liveDraft.img = meta.poster || ""; drawLive(); };
   const sm = document.getElementById("startMoment");
   if(sm) sm.onclick = async () => {
     const id = newId(), d = new Date().toISOString();
@@ -776,15 +827,21 @@ function drawLive(){
   const sd = document.getElementById("liveSend");
   if(sd) sd.onclick = async () => {
     const t = (liveDraft.t || "").trim(), er = document.getElementById("liveErr");
-    if(!t && !liveDraft.img){ er.textContent = "Écris quelque chose ou ajoute une photo."; er.hidden = false; return; }
+    if(!t && !liveDraft.img && !liveDraft.vid){ er.textContent = "Écris quelque chose ou ajoute une photo ou une vidéo."; er.hidden = false; return; }
     const id = newId(), d = new Date().toISOString();
     const data = { a:moi, s:cote(), t, d }; if(liveDraft.img){ data.h = true; data.i = liveDraft.img; } if(liveDraft.m) data.m = liveDraft.m;
     liveBusy = true; drawLive();
     try{
+      if(liveDraft.vid){
+        try{ data.v = await uploadVideo(id, liveDraft.vid.file, pc => { const b = document.getElementById("liveSend"); if(b) b.textContent = "Envoi… " + pc + " %"; }); }
+        catch(e){ liveBusy = false; drawLive(); const er3 = document.getElementById("liveErr");
+          if(er3){ er3.textContent = /bucket|not found|404|400/i.test(e.message) ? "Les vidéos ne sont pas encore activées (il manque l'étape Supabase)." : /413|size|large/i.test(e.message) ? "Vidéo trop lourde, filme plus court." : "Vidéo pas envoyée (réseau trop faible ?). Réessaie en wifi."; er3.hidden = false; }
+          return; }
+      }
       await sendRow("post:" + id, data);
       if(data.i) imgCache[id] = data.i;
-      posts.unshift({ id, a:moi, s:data.s, t, h:!!data.h, x:false, d, m:data.m || "" });
-      liveDraft = { t:"", img:"", m:"" }; liveBusy = false; drawLive(); loadLive();
+      posts.unshift({ id, a:moi, s:data.s, t, v:data.v || "", h:!!data.h, x:false, d, m:data.m || "" });
+      liveDraft = { t:"", img:"", m:"", vid:null }; liveBusy = false; drawLive(); loadLive();
     }catch(e){ liveBusy = false; drawLive(); const er2 = document.getElementById("liveErr"); if(er2){ er2.textContent = "Pas envoyé (pas de réseau ?). Ton texte est gardé, réessaie."; er2.hidden = false; } }
   };
 }
@@ -792,7 +849,8 @@ function postHTML(x, compact, m){
   const late = m ? lateMin(x, m) : -1;
   return `<li class="post ${x.s === "france" ? "f" : "v"} ${compact ? "mini" : ""}">
     <div class="who2"><b>${esc(x.a || "?")}</b><span>${x.s === "france" ? "🥐 en France" : "🎰 à Vegas"}</span>${late >= 0 ? `<span class="late">⏰ ${late + 1} min de retard</span>` : ""}</div>
-    ${x.h ? `<img class="ph" data-img="${esc(x.id)}" data-story="${esc(x.id)}" alt="Photo de ${esc(x.a || "")}" loading="lazy">` : ""}
+    ${x.v ? `<div class="vidwrap" data-story="${esc(x.id)}">${x.h ? `<img class="ph" data-img="${esc(x.id)}" alt="Vidéo de ${esc(x.a || "")}" loading="lazy">` : `<div class="vidph">🎥 Vidéo</div>`}<span class="play">▶</span></div>`
+      : x.h ? `<img class="ph" data-img="${esc(x.id)}" data-story="${esc(x.id)}" alt="Photo de ${esc(x.a || "")}" loading="lazy">` : ""}
     ${x.t ? `<p>${esc(x.t)}</p>` : ""}
     <p class="times"><b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France</p>
     ${reactBar(x.id)}
@@ -832,7 +890,7 @@ function drawFeed(){
 // --- Stories ---
 let story = null; // { list, i, t0, paused, timer }
 const STORY_MS = 6000;
-function storyList(){ return posts.filter(x => !x.x && x.h).sort((a, b) => a.d.localeCompare(b.d)); }
+function storyList(){ return posts.filter(x => !x.x && (x.h || x.v)).sort((a, b) => a.d.localeCompare(b.d)); }
 function openStory(startId){
   const list = storyList(); if(!list.length) return;
   let i = startId ? list.findIndex(x => x.id === startId) : list.findIndex(x => !seenStories[x.id]);
@@ -848,7 +906,7 @@ let storyClosedAt = 0;
 document.addEventListener("click", e => { if(Date.now() - storyClosedAt < 400){ e.stopPropagation(); e.preventDefault(); } }, true);
 function closeStory(){
   if(!story) return; clearInterval(story.timer); story = null; storyClosedAt = Date.now();
-  const ov = document.getElementById("story"); if(ov) ov.hidden = true;
+  const ov = document.getElementById("story"); if(ov){ ov.hidden = true; ov.innerHTML = ""; }
   document.documentElement.style.overflow = ""; if(cur === "live") drawLive();
 }
 function stepStory(d){
@@ -862,6 +920,8 @@ function runStory(){
   clearInterval(story.timer);
   story.timer = setInterval(() => {
     if(!story || story.paused) return;
+    const vid = document.getElementById("stVid");
+    if(vid){ const bar = document.querySelector("#story .seg.cur i"); if(bar && vid.duration) bar.style.width = (vid.currentTime / vid.duration * 100) + "%"; return; }
     const p = Math.min(1, (story.elapsed + Date.now() - story.t0) / STORY_MS);
     const bar = document.querySelector("#story .seg.cur i"); if(bar) bar.style.width = (p * 100) + "%";
     if(p >= 1) stepStory(1);
@@ -875,18 +935,27 @@ function drawStory(dir){
     <div class="segs">${story.list.map((y, k) => `<span class="seg ${k < story.i ? "done" : k === story.i ? "cur" : ""}"><i></i></span>`).join("")}</div>
     <div class="st-head"><div><b class="${x.s === "france" ? "f" : "v"}">${esc(x.a || "?")}</b> <span>${x.s === "france" ? "🥐 en France" : "🎰 à Vegas"}</span>${m ? ` <span class="k">⚡ Moment</span>` : ""}
       <p class="times"><b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France</p></div>
-      <button type="button" class="st-close" id="stClose" aria-label="Fermer">✕</button></div>
-    <div class="st-img" id="stArea"><img id="stImg" class="${dir > 0 ? "in-r" : dir < 0 ? "in-l" : ""}" alt="Photo de ${esc(x.a || "")}" draggable="false"></div>
+      <div class="st-btns">${x.v ? `<button type="button" class="st-close" id="stSound" aria-label="Son">${storyMuted ? "🔇" : "🔊"}</button>` : ""}<button type="button" class="st-close" id="stClose" aria-label="Fermer">✕</button></div></div>
+    <div class="st-img" id="stArea">${x.v ? `<video id="stVid" class="${dir > 0 ? "in-r" : dir < 0 ? "in-l" : ""}" src="${esc(x.v)}" playsinline ${storyMuted ? "muted" : ""}></video>`
+      : `<img id="stImg" class="${dir > 0 ? "in-r" : dir < 0 ? "in-l" : ""}" alt="Photo de ${esc(x.a || "")}" draggable="false">`}</div>
     <p class="st-help">Tape ou glisse ← → pour changer · glisse vers le bas pour fermer · doigt appuyé = pause</p>
     ${x.t ? `<p class="st-cap">${esc(x.t)}</p>` : ""}
     <div class="st-foot">${reactBar(x.id)}</div></div>`;
-  loadImg(x.id, document.getElementById("stImg"));
+  const vEl = document.getElementById("stVid");
+  if(vEl){
+    if(x.h && imgCache[x.id]) vEl.poster = imgCache[x.id];
+    const go = () => vEl.play().catch(() => { if(!vEl.muted){ vEl.muted = true; storyMuted = true; const sb = document.getElementById("stSound"); if(sb) sb.textContent = "🔇"; vEl.play().catch(() => {}); } });
+    vEl.onended = () => stepStory(1);
+    vEl.onerror = () => { const cap = document.createElement("p"); cap.className = "st-cap"; cap.textContent = "Cette vidéo ne peut pas être lue sur ce téléphone."; vEl.replaceWith(cap); };
+    go();
+    document.getElementById("stSound").onclick = () => { storyMuted = !storyMuted; vEl.muted = storyMuted; document.getElementById("stSound").textContent = storyMuted ? "🔇" : "🔊"; if(vEl.paused) go(); };
+  } else loadImg(x.id, document.getElementById("stImg"));
   document.getElementById("stClose").onclick = closeStory;
   // Gestes façon Snap / Insta : tap gauche/droite, glisser ← →, glisser vers le bas pour fermer, appui long = pause.
-  const area = document.getElementById("stArea"), img = document.getElementById("stImg");
+  const area = document.getElementById("stArea"), img = document.getElementById("stImg") || document.getElementById("stVid");
   let g = null;
-  const resume = () => { if(!story || !story.paused) return; story.paused = false; story.t0 = Date.now(); };
-  area.onpointerdown = e => { if(!story) return; g = { x:e.clientX, y:e.clientY, t:Date.now() };
+  const resume = () => { if(!story || !story.paused) return; story.paused = false; story.t0 = Date.now(); if(vEl && vEl.paused && !vEl.ended) vEl.play().catch(() => {}); };
+  area.onpointerdown = e => { if(!story) return; g = { x:e.clientX, y:e.clientY, t:Date.now() }; if(vEl) vEl.pause();
     story.paused = true; story.elapsed += Date.now() - story.t0; try{ area.setPointerCapture(e.pointerId); }catch(err){} };
   area.onpointermove = e => { if(!g) return; const dx = e.clientX - g.x, dy = e.clientY - g.y;
     img.style.transition = "none"; img.style.transform = Math.abs(dx) > Math.abs(dy) ? `translateX(${dx}px)` : dy > 0 ? `translateY(${dy}px) scale(${Math.max(.8, 1 - dy / 1200)})` : ""; };
