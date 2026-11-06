@@ -81,6 +81,7 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .book .tel{ font-family:var(--display); font-size:1.15rem; color:var(--sand); user-select:all; }
 .book .hrs{ font-size:.85rem; color:var(--mint); font-weight:700; }
 .book p{ font-size:.88rem; }
+.book .price b, .book p b{ color:var(--sand); }
 .book .alt{ color:var(--muted); font-size:.82rem; border-top:1px dashed var(--line); padding-top:6px; }
 .tip{ border-left:4px solid var(--amber); background:rgba(255,181,71,.1); border-radius:0 10px 10px 0; padding:8px 12px; font-size:.9rem; }
 .tip.pink{ border-left-color:var(--pink); background:rgba(255,79,139,.1); }
@@ -144,10 +145,13 @@ const DAYS = [
   { id:"j2", d:"Dim", n:"8", title:"Buggy dans le désert", sub:"Grosse matinée dans les dunes, puis récupération. Le décalage vous réveillera tôt : parfait pour le désert.",
     chips:[["Ouvert le dimanche","ok"],["Prise en charge à l'hôtel",""]],
     steps:[
-      { when:"Matin", name:"Prise en charge pour le buggy", addr:HOME,
-        info:"Navette depuis l'hôtel vers les dunes de Nellis (environ 30 min). Lunettes de soleil, vêtements qui peuvent se salir, foulard contre la poussière. Permis de conduire pour piloter.",
-        book:{ who:"Las Vegas ATV Dune Tours", tel:"+1 702-333-0999", web:"https://lasvegasatvdunetours.com/", hours:"Ouvert tous les jours, 6 h – 22 h", note:"4,9 ★ sur plus de 4 000 avis. Demandez un RZR (buggy) pour 5 et la prise en charge au Platinum.",
-          alt:"Plan B : Las Vegas ATV/UTV Tours, 7055 Las Vegas Blvd N · +1 702-750-9751 · 8 h – 21 h" } },
+      { when:"Matin", name:"Départ pour le buggy", addr:"4670 Polaris Ave, Las Vegas, NV 89103", mode:"driving", hop:"Uber · environ 10 min (si pas de prise en charge à l'hôtel)",
+        info:"Navette vers les dunes de Nellis, environ 30 min. Lunettes de soleil, vêtements qui peuvent se salir, foulard contre la poussière. Permis et pièce d'identité pour piloter (18 ans et plus).",
+        book:{ who:"Las Vegas ATV Dune Tours", tel:"+1 702-333-0999", web:"https://lasvegasatvdunetours.com/", hours:"Ouvert tous les jours, 6 h – 22 h",
+          price:"Quad : à partir de 105 $ par personne (1 h de conduite, 2 h en tout). Buggy RZR : prix sur demande.",
+          pickup:"Navette gratuite depuis les hôtels du Strip, mais pas depuis les Airbnb : indiquez « The Platinum Hotel ». S'ils refusent, rendez-vous à leur bureau (adresse ci-dessus), navette aller-retour gratuite.",
+          note:"4,9 ★ sur plus de 4 000 avis.",
+          alt:"Plan B : Awesome Adventures (awesomeadventures.com) · quad ou buggy RZR, 2 h, à partir de 136 $ par personne + frais, prise en charge au Strip incluse" } },
       { when:"Après-midi", name:"Repos, piscine, sieste", addr:HOME, info:"On recharge les batteries." },
       { when:"Soir", name:"La Sphere (de l'extérieur)", addr:"255 Sands Ave, Las Vegas, NV 89169", mode:"walking", hop:"À pied · environ 15 min",
         info:"La boule géante qui s'illumine la nuit. Elle se voit aussi depuis certaines chambres du Platinum." }
@@ -155,20 +159,32 @@ const DAYS = [
   { id:"j3", d:"Lun", n:"9", title:"Tir dans le désert, puis club", sub:"Le tir le matin, à jeun d'alcool, puis la grosse soirée club le soir.",
     chips:[["Passeport obligatoire","warn"],["Zéro alcool avant le tir","warn"],["Club : 21 ans +",""]],
     steps:[
-      { when:"Matin", name:"Tir en plein désert", addr:"8985 W Verde Way, Las Vegas, NV 89149", mode:"driving", hop:"Navette ou Uber · environ 35 min",
-        info:"Stand en extérieur, très apprécié des Européens qui n'ont jamais tiré. Prenez le passeport : il est demandé, et certaines armes sont réservées aux 21 ans et plus.",
-        book:{ who:"Gun Blast Vegas (Outdoor Range)", tel:"+1 702-935-6511", web:"https://www.gunblast.vegas/", hours:"Lun – sam, 7 h – 17 h · fermé le dimanche", note:"5,0 ★ sur plus de 1 300 avis. Le lundi tombe bien : il est fermé le dimanche. Demandez la prise en charge à l'hôtel.",
-          alt:"Plan B (en salle, sur le Strip) : Battlefield Vegas, 2771 S Sammy Davis Jr Dr · +1 702-566-1000 · Humvee gratuit depuis l'hôtel" } },
-      { when:"Après-midi", name:"Détente", addr:HOME, mode:"driving", hop:"Retour · environ 35 min", info:"Repos avant la soirée." },
+      { when:"Matin", name:"Rendez-vous navette du tir", addr:"3999 S Las Vegas Blvd, Las Vegas, NV 89119", mode:"driving", hop:"Uber · environ 10 min",
+        info:"Derrière le McDonald's, au sud du Strip. Pas de prise en charge à l'hôtel : c'est ici que la navette vous récupère.",
+        book:{ who:"Gun Blast Vegas (Outdoor Range)", tel:"+1 702-935-6511", web:"https://www.gunblast.vegas/packages-shooting-range-las-vegas/", hours:"Lun – sam, 7 h – 17 h · fermé le dimanche",
+          price:"Par personne : The Blast 199 $ · The BIG Blast 225 $ · The FULL Blast 289 $.",
+          pickup:"Navette aller-retour incluse, depuis le point de rendez-vous ci-dessus.",
+          note:"5,0 ★ sur plus de 1 300 avis. Le lundi tombe bien : il est fermé le dimanche.",
+          alt:"Plan B (en salle, près du Strip) : Battlefield Vegas, 2771 S Sammy Davis Jr Dr · +1 702-566-1000 · Humvee gratuit depuis l'hôtel · battlefieldvegas.com" } },
+      { when:"Matin", name:"Tir en plein désert", addr:"8985 W Verde Way, Las Vegas, NV 89149", mode:"driving", hop:"Navette incluse · environ 30 min",
+        info:"Stand en extérieur, très apprécié des Européens qui n'ont jamais tiré. Prenez le passeport : il est demandé, et certaines armes sont réservées aux 21 ans et plus." },
+      { when:"Après-midi", name:"Détente", addr:HOME, mode:"driving", hop:"Navette puis Uber · environ 45 min", info:"Repos avant la soirée." },
       { when:"Soir", name:"The Pinky Ring (Bellagio)", addr:"3600 S Las Vegas Blvd, Las Vegas, NV 89109", mode:"walking", hop:"À pied · environ 12 min",
         info:"Le club de Bruno Mars : groupe en live, ambiance soirée chic. Petit lieu, donc prenez une table. Tenue correcte exigée : chaussures de ville, pas de short ni de casquette. Passeport à l'entrée.",
-        book:{ who:"The Pinky Ring by Bruno Mars", tel:"+1 702-693-8393", web:"https://bellagio.mgmresorts.com/en/nightlife/the-pinky-ring.html", hours:"Ouvert le lundi, 20 h – 2 h", note:"Un client parle d'une table pour 4 un lundi à environ 300 $ de consommation minimum (bien plus cher le week-end). Demandez le prix pour 5." } }
+        book:{ who:"The Pinky Ring by Bruno Mars", tel:"+1 702-693-8393", web:"https://bellagio.mgmresorts.com/en/nightlife/the-pinky-ring.html", hours:"Ouvert le lundi, 20 h – 2 h",
+          price:"Entrée gratuite si vous restez debout au bar. Table (2 à 7 personnes) : environ 300 à 1 000 $ de consommation minimum, à partager. Cocktails : 20 à 30 $.",
+          pickup:"Pas besoin : 12 min à pied.",
+          note:"Réservez sur le site officiel du Bellagio, pas chez des revendeurs.",
+          alt:"Plan B : Marquee Mondays au Marquee (Cosmopolitan, 3708 S Las Vegas Blvd) · grosse boîte avec DJ le lundi · guest list ou table sur le site du Cosmopolitan" } }
     ] },
   { id:"j4", d:"Mar", n:"10", title:"Red Rock Canyon", sub:"Les falaises rouges à 30 min du Strip. Allez-y le matin, au frais.",
     chips:[["Transport inclus","ok"],["Réservation horaire","warn"]],
     steps:[
-      { when:"Matin", name:"Prise en charge pour Red Rock", addr:HOME, info:"Le Jeep vient vous chercher à l'hôtel.",
-        book:{ who:"Pink Jeep Tours Las Vegas", tel:"+1 800-873-3662", web:"https://www.pinkadventuretours.com/tours/las-vegas-tours", hours:"Ouvert tous les jours, 6 h – 20 h", note:"4,8 ★. Choisissez le tour Red Rock Canyon, en Jeep ouvert si possible. Ils gèrent le créneau d'entrée du parc.",
+      { when:"Matin", name:"Prise en charge pour Red Rock", addr:HOME, info:"Le Jeep vient vous chercher : l'endroit exact arrive par e-mail après la réservation.",
+        book:{ who:"Pink Jeep Tours Las Vegas", tel:"+1 800-873-3662", web:"https://www.pinkadventuretours.com/tours/las-vegas-tours", hours:"Ouvert tous les jours, 6 h – 20 h",
+          price:"Tour « Red Rock Canyon Classic » : environ 125 à 130 $ par adulte, 3 à 4 h.",
+          pickup:"Prise en charge gratuite à la plupart des hôtels du Strip. Indiquez « The Platinum Hotel » ; s'il n'est pas dans la liste, choisissez un hôtel voisin (Hard Rock / Virgin, ou Paris) à quelques minutes.",
+          note:"4,8 ★. Ils gèrent le créneau d'entrée du parc.",
           alt:"Plan B, en conduisant vous-mêmes : GoCar Tours, 723 S Casino Center Blvd · +1 702-323-4066 · 9 h – 17 h" } },
       { when:"Fin de matinée", name:"Red Rock Canyon, centre des visiteurs", addr:"1000 Scenic Loop Dr, Las Vegas, NV 89161", mode:"driving", hop:"Environ 35 min en voiture",
         info:"D'octobre à mai, l'entrée en voiture demande un créneau réservé (8 h à 17 h). Avec une excursion, l'agence s'en charge normalement : vérifiez-le. Eau, crème solaire, une veste." },
@@ -239,6 +255,8 @@ function drawDay(d){
           <p>${esc(s.info)}</p>
           ${s.book ? `<div class="book"><span class="k">À réserver</span><b>${esc(s.book.who)}</b>
             <span class="tel">${esc(s.book.tel)}</span><span class="hrs">${esc(s.book.hours)}</span>
+            ${s.book.price ? `<p class="price"><b>Prix :</b> ${esc(s.book.price)}</p>` : ""}
+            ${s.book.pickup ? `<p><b>Transport :</b> ${esc(s.book.pickup)}</p>` : ""}
             <p>${esc(s.book.note)}</p>
             <div class="actions"><a class="btn hot" href="${s.book.web}" target="_blank" rel="noopener">Site pour réserver</a><button class="btn" type="button" data-tel="${esc(s.book.tel)}">Copier le numéro</button></div>
             ${s.book.alt ? `<p class="alt">${esc(s.book.alt)}</p>` : ""}</div>` : ""}
