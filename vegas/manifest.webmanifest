@@ -1,0 +1,16 @@
+{
+  "name": "Vegas EVG Sobek",
+  "short_name": "Vegas EVG",
+  "description": "Le carnet de route de l'EVG à Las Vegas : programme, adresses, trajets et réservations.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#15102B",
+  "theme_color": "#15102B",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

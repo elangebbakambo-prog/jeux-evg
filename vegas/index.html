@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#15102B">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vegas EVG">
 <title>Vegas EVG Sobek</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,6 +19,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 
 /* Carnet de route de l'EVG : un jour à la fois, une ligne de trajets numérotés (l'ordre de la journée), façon enseigne lumineuse du Strip.
    Un seul thème de nuit, assumé : le Vegas du soir. */
@@ -325,6 +333,13 @@ function drawInfos(){
       <div class="actions"><a class="btn hot" href="https://www.gunblast.vegas/packages-shooting-range-las-vegas/" target="_blank" rel="noopener">Réserver le tir</a></div>
       <p class="note">Rendez-vous lundi à 6 h 50 derrière le McDonald's, 3999 S Las Vegas Blvd. Départ de l'hôtel en Uber vers 6 h 35.</p>
     </section>
+    <section class="panel"><h3>Installer l'appli sur le téléphone</h3>
+      <ul class="what">
+        <li><b>iPhone</b> : ouvrez ce lien dans <b>Safari</b>, touchez le bouton Partager (le carré avec la flèche), puis <b>« Sur l'écran d'accueil »</b>.</li>
+        <li><b>Android</b> : ouvrez le lien dans <b>Chrome</b>, touchez les 3 points en haut à droite, puis <b>« Ajouter à l'écran d'accueil »</b> ou <b>« Installer l'application »</b>.</li>
+        <li>L'icône « Vegas EVG » apparaît comme une appli. Ouvrez-la une fois avec du réseau : ensuite, elle marche même sans internet.</li>
+      </ul>
+    </section>
     <section class="panel"><h3>À avoir sur soi</h3>
       <ul class="what">
         <li><b>Passeport</b> : tout le temps. Il est demandé au tir, au club, au casino et pour acheter de l'alcool.</li>
@@ -381,5 +396,8 @@ document.getElementById("copyHome").onclick = e => {
 draw();
 </script>
 
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); }); }
+</script>
 </body>
 </html>
