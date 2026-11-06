@@ -983,7 +983,7 @@ function storyList(){ return posts.filter(x => !x.x && (x.h || x.v)).sort((a, b)
 function openStory(startId){
   const list = storyList(); if(!list.length) return;
   let i = startId ? list.findIndex(x => x.id === startId) : list.findIndex(x => !seenStories[x.id]);
-  if(i < 0) i = startId ? 0 : Math.max(0, list.length - 1);
+  if(i < 0) i = 0; // tout déjà vu : on repart du début, comme sur Insta
   story = { list, i, t0:Date.now(), paused:false, elapsed:0 };
   let ov = document.getElementById("story");
   if(!ov){ ov = document.createElement("div"); ov.id = "story"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "Stories"); document.body.appendChild(ov); }
