@@ -151,6 +151,47 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .post .ph{ border-radius:12px; width:100%; min-height:120px; background:var(--card2); object-fit:cover; }
 .post .times{ font-size:.75rem; color:var(--muted); } .post .times b{ color:var(--sand); }
 .day.extra.live{ border-color:var(--pink); }
+.livebar{ display:flex; flex-wrap:wrap; gap:8px; }
+.story-btn.new{ box-shadow:0 0 0 3px var(--night), 0 0 0 5px var(--pink); }
+.story-btn[disabled]{ opacity:.45; cursor:default; }
+.moment-btn{ border-color:var(--amber); color:var(--amber); }
+.moment-live{ border:2px solid var(--amber); box-shadow:0 0 22px rgba(255,181,71,.35); }
+.moment-live .k, .compose .k, .moment .k{ margin:0; font-family:var(--display); color:var(--amber); font-size:1.15rem; }
+.moment-live p{ margin:0; }
+.moment-live .count{ font-family:var(--display); font-size:1.5rem; color:var(--pink); }
+.btn.big{ font-size:1.05rem; padding:12px 18px; align-self:flex-start; }
+.moment{ background:var(--card); border:1px solid var(--amber); border-radius:16px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+.moment .times{ margin:0; font-size:.78rem; color:var(--muted); } .moment .times b{ color:var(--sand); }
+.cols{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; }
+.colh{ margin:0 0 6px; font-weight:800; font-size:.8rem; } .colh.v{ color:var(--amber); } .colh.f{ color:var(--mint); }
+.post.mini{ max-width:100%; padding:8px; border-radius:12px; font-size:.85rem; }
+.post.mini .ph{ min-height:80px; aspect-ratio:3/4; }
+.late{ color:var(--pink); font-weight:800; font-size:.75rem; }
+.post .ph{ cursor:zoom-in; }
+.reacts{ display:flex; flex-wrap:wrap; gap:4px; }
+.re{ all:unset; cursor:pointer; font-size:1rem; line-height:1; padding:4px 7px; border-radius:999px; background:var(--card2); display:inline-flex; align-items:center; gap:3px; }
+.re small{ font-size:.72rem; font-weight:800; color:var(--sand); }
+.re.on{ background:rgba(255,79,139,.25); outline:1px solid var(--pink); }
+.re:focus-visible{ outline:2px solid var(--mint); }
+.post.mini .re{ font-size:.85rem; padding:3px 5px; }
+#story{ position:fixed; inset:0; z-index:100; background:#000; color:#fff; display:flex; justify-content:center;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); }
+#story .st-wrap{ width:100%; max-width:520px; height:100%; display:flex; flex-direction:column; gap:8px; padding:10px 12px 14px; box-sizing:border-box; }
+#story .segs{ display:flex; gap:3px; }
+#story .seg{ flex:1; height:3px; background:rgba(255,255,255,.3); border-radius:2px; overflow:hidden; }
+#story .seg i{ display:block; height:100%; width:0; background:#fff; } #story .seg.done i{ width:100%; }
+#story .st-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+#story .st-head b.v{ color:var(--amber); } #story .st-head b.f{ color:var(--mint); }
+#story .st-head span{ color:rgba(255,255,255,.75); font-size:.85rem; }
+#story .st-head .k{ color:var(--amber); font-weight:800; }
+#story .times{ margin:2px 0 0; font-size:.8rem; color:rgba(255,255,255,.75); } #story .times b{ color:#fff; }
+#story .st-close{ all:unset; cursor:pointer; font-size:1.4rem; padding:4px 8px; }
+#story .st-img{ position:relative; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; touch-action:manipulation; user-select:none; -webkit-user-select:none; }
+#story .st-img img{ max-width:100%; max-height:100%; object-fit:contain; border-radius:10px; -webkit-touch-callout:none; }
+#story .st-prev, #story .st-next{ all:unset; position:absolute; top:0; bottom:0; cursor:pointer; }
+#story .st-prev{ left:0; width:35%; } #story .st-next{ right:0; width:65%; }
+#story .st-cap{ margin:0; font-size:1rem; overflow-wrap:anywhere; white-space:pre-wrap; }
+#story .re{ background:rgba(255,255,255,.12); font-size:1.3rem; padding:6px 10px; } #story .re small{ color:#fff; }
 .moves{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
 .moves li{ background:var(--card2); border-radius:10px; padding:9px 12px; font-size:.95rem; }
 .amt{ color:var(--amber); font-weight:800; white-space:nowrap; }
@@ -374,10 +415,10 @@ const SB_KEY = "sb_publishable_SMy5j__0GTgrJHhJ4GmYQg_2OQ8fTLh";
 let team = [], teamState = "load", pushTimer = 0;
 async function loadTeam(){
   try{
-    const r = await fetch(SB_URL + "?select=nom,coches,maj&nom=not.like.post%3A*&order=nom.asc", { headers:{ apikey:SB_KEY }, cache:"no-store" });
+    const r = await fetch(SB_URL + "?select=nom,coches,maj&nom=not.like.post%3A*&nom=not.like.rea%3A*&nom=not.like.mom%3A*&order=nom.asc", { headers:{ apikey:SB_KEY }, cache:"no-store" });
     if(!r.ok) throw new Error(r.status);
     const rows = await r.json(); teamState = "ok";
-    team = rows.filter(t => !t.nom.startsWith("dep:"));
+    team = rows.filter(t => !/^(dep|post|mom|rea):/.test(t.nom));
     deps = rows.filter(t => t.nom.startsWith("dep:")).map(t => Object.assign({ id:t.nom.slice(4) }, t.coches || {}));
     // Avances déjà faites par Elange (réservations du 6 nov.) : ajoutées une seule fois, si elles n'existent pas encore.
     SEEDS.forEach(([id, data]) => { if(!rows.some(t => t.nom === "dep:" + id) && !seeded[id]){ seeded[id] = true; saveDep(id, data); } });
@@ -582,22 +623,41 @@ function drawComptes(){
   });
 }
 // ===== Live : le fil Vegas ↔ France =====
-// Chaque post est une ligne « post:… » de la même table. La photo (réduite dans le téléphone) est chargée à part, seulement quand on la voit.
+// Tout est dans la même table, une ligne par chose : « post:… » (message ou photo), « mom:… » (un Moment façon BeReal),
+// « rea:… » (une réaction d'une personne à un post). La photo (réduite dans le téléphone) est chargée à part, seulement quand on la voit.
 const VOYAGEURS = ["Elange", "Jovan", "Isma", "Ysly", "Chris"];
 const TZ = { vegas:"America/Los_Angeles", france:"Europe/Paris" };
-let posts = [], liveState = "load", liveDraft = { t:"", img:"" }, liveCote = "", imgCache = {}, liveBusy = false, liveDel = "";
-try{ liveCote = localStorage.getItem("vegas-cote") || ""; }catch(e){}
+const EMOJIS = ["🔥", "😂", "😍", "😮", "👏"];
+const MOMENT_SEC = 120, MOMENT_OPEN_MIN = 30;
+let posts = [], moments = [], reacts = [], liveState = "load", liveDraft = { t:"", img:"", m:"" }, liveCote = "", imgCache = {}, liveBusy = false, liveDel = "";
+let seenStories = {}, buzzed = {};
+try{ liveCote = localStorage.getItem("vegas-cote") || ""; seenStories = JSON.parse(localStorage.getItem("vegas-vus") || "{}"); }catch(e){}
 const cote = () => liveCote || (VOYAGEURS.some(n => n.toLowerCase() === (moi || "").toLowerCase()) ? "vegas" : "france");
 const hm = (iso, tz) => { try{ return new Date(iso).toLocaleTimeString("fr-FR", { timeZone:tz, hour:"2-digit", minute:"2-digit" }); }catch(e){ return ""; } };
 const dayOf = (iso, tz) => { try{ return new Date(iso).toLocaleDateString("fr-FR", { timeZone:tz, weekday:"long", day:"numeric", month:"long" }); }catch(e){ return ""; } };
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const isMe = n => !!(moi && n && n.toLowerCase() === moi.toLowerCase());
+const openMoment = () => moments.filter(m => !m.x && Date.now() - Date.parse(m.d) < MOMENT_OPEN_MIN * 60000).sort((a, b) => b.d.localeCompare(a.d))[0];
+const lateMin = (p, m) => Math.floor((Date.parse(p.d) - Date.parse(m.d)) / 60000 - MOMENT_SEC / 60);
+async function sendRow(nom, data){
+  const r = await fetch(SB_URL + "?on_conflict=nom", { method:"POST",
+    headers:{ apikey:SB_KEY, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal" },
+    body:JSON.stringify({ nom, coches:data, maj:new Date().toISOString() }) });
+  if(!r.ok) throw new Error(r.status);
+}
 async function loadLive(){
   try{
-    const q = "?nom=like.post%3A*&select=nom,maj,a:coches->>a,s:coches->>s,t:coches->>t,h:coches->>h,x:coches->>x,d:coches->>d&order=maj.desc&limit=300";
+    const q = "?or=(nom.like.post%3A*,nom.like.mom%3A*,nom.like.rea%3A*)&select=nom,maj,a:coches->>a,s:coches->>s,t:coches->>t,h:coches->>h,x:coches->>x,d:coches->>d,m:coches->>m,p:coches->>p,e:coches->>e&order=maj.desc&limit=2000";
     const r = await fetch(SB_URL + q, { headers:{ apikey:SB_KEY }, cache:"no-store" });
     if(!r.ok) throw new Error(r.status);
-    posts = (await r.json()).map(x => ({ id:x.nom.slice(5), a:x.a, s:x.s, t:x.t || "", h:x.h === "true", x:x.x === "true", d:x.d || x.maj }));
+    const rows = await r.json();
+    posts = rows.filter(x => x.nom.startsWith("post:")).map(x => ({ id:x.nom.slice(5), a:x.a, s:x.s, t:x.t || "", h:x.h === "true", x:x.x === "true", d:x.d || x.maj, m:x.m || "" }));
+    moments = rows.filter(x => x.nom.startsWith("mom:")).map(x => ({ id:x.nom.slice(4), a:x.a, s:x.s, x:x.x === "true", d:x.d || x.maj }));
+    reacts = rows.filter(x => x.nom.startsWith("rea:") && x.x !== "true" && x.e).map(x => ({ p:x.p, a:x.a, e:x.e }));
     liveState = "ok";
   }catch(e){ liveState = posts.length ? "stale" : "err"; }
+  const om = openMoment();
+  if(om && !isMe(om.a) && !buzzed[om.id] && Date.now() - Date.parse(om.d) < MOMENT_SEC * 1000){ buzzed[om.id] = true; try{ navigator.vibrate && navigator.vibrate([200, 100, 200]); }catch(e){} }
   drawLive();
 }
 async function loadImg(id, el){
@@ -622,17 +682,31 @@ function shrink(file){
     im.src = url;
   });
 }
-async function sendPost(id, data){
-  const r = await fetch(SB_URL + "?on_conflict=nom", { method:"POST",
-    headers:{ apikey:SB_KEY, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal" },
-    body:JSON.stringify({ nom:"post:" + id, coches:data, maj:new Date().toISOString() }) });
-  if(!r.ok) throw new Error(r.status);
-}
 function tickClocks(){
   const now = new Date().toISOString();
   const a = document.getElementById("clkV"), b = document.getElementById("clkF");
   if(a) a.textContent = hm(now, TZ.vegas); if(b) b.textContent = hm(now, TZ.france);
+  const om = openMoment(), cd = document.getElementById("momCount");
+  if(cd && om){ const left = MOMENT_SEC - Math.floor((Date.now() - Date.parse(om.d)) / 1000);
+    cd.textContent = left > 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} pour poster` : "Temps écoulé : tu peux encore poster, en retard 😏"; }
 }
+// --- Réactions ---
+function reactBar(pid){
+  const mine = reacts.find(r => r.p === pid && isMe(r.a));
+  return `<div class="reacts">${EMOJIS.map(e => { const n = reacts.filter(r => r.p === pid && r.e === e).length;
+    return `<button type="button" class="re ${mine && mine.e === e ? "on" : ""}" data-re="${esc(pid)}" data-e="${e}" aria-label="Réagir ${e}">${e}${n ? `<small>${n}</small>` : ""}</button>`; }).join("")}</div>`;
+}
+async function toggleReact(pid, e){
+  if(!moi){ cur = "live"; draw(); const i = document.getElementById("liveName"); if(i) i.focus(); return; }
+  const mine = reacts.find(r => r.p === pid && isMe(r.a));
+  const off = mine && mine.e === e;
+  reacts = reacts.filter(r => !(r.p === pid && isMe(r.a)));
+  if(!off) reacts.push({ p:pid, a:moi, e });
+  drawFeed(); drawStory();
+  try{ await sendRow("rea:" + pid + ":" + moi.toLowerCase().slice(0, 12), { p:pid, a:moi, e:off ? "" : e, x:off }); }catch(err){}
+}
+function bindReacts(root){ root.querySelectorAll("[data-re]").forEach(b => b.onclick = ev => { ev.stopPropagation(); toggleReact(b.dataset.re, b.dataset.e); }); }
+// --- Écran Live ---
 function drawLiveView(){
   return `<div style="display:flex;flex-direction:column;gap:12px">
     <div class="dhead"><p class="eyebrow">Vegas ↔ France</p><h2>Le live</h2><p>Ceux de Vegas et ceux restés en France postent ce qu'ils font. Chaque post montre l'heure des deux côtés.</p></div>
@@ -643,13 +717,27 @@ function drawLive(){
   const box = document.getElementById("live"); if(!box) return;
   const ae = document.activeElement;
   if(ae && box.contains(ae) && (ae.tagName === "TEXTAREA" || ae.id === "liveName")) { drawFeed(); return; }
+  const om = openMoment(), c = cote();
   let html = "";
+  const storyCount = storyList().length, unseen = storyList().filter(p => !seenStories[p.id]).length;
+  html += `<div class="livebar"><button type="button" class="btn hot story-btn ${unseen ? "new" : ""}" id="openStories" ${storyCount ? "" : "disabled"}>▶ Stories${unseen ? ` · ${unseen} nouvelle${unseen > 1 ? "s" : ""}` : ""}</button>
+    ${moi && !om ? `<button type="button" class="btn moment-btn" id="startMoment">⚡ Lancer un Moment</button>` : ""}</div>`;
+  if(om){
+    const done = posts.some(p => p.m === om.id && isMe(p.a) && !p.x);
+    html += `<section class="panel moment-live"><p class="k">⚡ C'est l'heure du Moment !</p>
+      <p>Lancé par <b>${esc(om.a)}</b> à ${hm(om.d, TZ.vegas)} (Vegas) · ${hm(om.d, TZ.france)} (France). Tout le monde poste une photo de ce qu'il fait, là, maintenant.</p>
+      <p class="count" id="momCount"></p>
+      ${!moi ? `<p class="note">Entre ton prénom en dessous pour participer.</p>` : done ? `<p class="miss ok">Ta photo est postée ✓</p>`
+        : `<label class="btn hot big" for="momPhoto">📸 Prendre ma photo</label><input id="momPhoto" type="file" accept="image/*" capture="environment" hidden>`}
+      <a class="btn" href="https://wa.me/?text=${encodeURIComponent("⚡ MOMENT ! T'as 2 min pour poster ta photo sur l'appli : " + location.href.split("#")[0])}" target="_blank" rel="noopener">Prévenir sur WhatsApp</a>
+    </section>`;
+  }
   if(!moi){
-    html += `<section class="panel"><form class="who" id="liveWho"><label for="liveName">Ton prénom pour poster :</label><div class="row"><input id="liveName" maxlength="30" autocomplete="given-name" placeholder="Ex. Jovan" required><button class="btn hot" type="submit">C'est moi</button></div></form></section>`;
+    html += `<section class="panel"><form class="who" id="liveWho"><label for="liveName">Ton prénom pour poster et réagir :</label><div class="row"><input id="liveName" maxlength="30" autocomplete="given-name" placeholder="Ex. Jovan" required><button class="btn hot" type="submit">C'est moi</button></div></form></section>`;
   } else {
-    const c = cote();
     html += `<section class="panel compose">
       <div class="sides"><span>${esc(moi)} est</span><button type="button" class="side ${c === "vegas" ? "on v" : ""}" data-side="vegas">🎰 à Vegas</button><button type="button" class="side ${c === "france" ? "on f" : ""}" data-side="france">🥐 en France</button></div>
+      ${liveDraft.m ? `<p class="k">⚡ Pour le Moment de ${esc((moments.find(m => m.id === liveDraft.m) || {}).a || "")}</p>` : ""}
       <textarea id="liveText" rows="2" maxlength="500" placeholder="${c === "vegas" ? "Ce qui se passe ici…" : "Pendant ce temps, en France…"}">${esc(liveDraft.t)}</textarea>
       ${liveDraft.img ? `<div class="preview"><img src="${liveDraft.img}" alt="Photo à poster"><button type="button" class="link danger" id="liveNoImg">Retirer la photo</button></div>` : ""}
       <div class="actions"><label class="btn" for="livePhoto">📷 Photo</label><input id="livePhoto" type="file" accept="image/*" hidden>
@@ -659,61 +747,142 @@ function drawLive(){
   }
   html += `<div id="feed"></div>`;
   box.innerHTML = html;
-  drawFeed();
+  tickClocks(); drawFeed();
   const w = document.getElementById("liveWho");
-  if(w) w.onsubmit = e => { e.preventDefault(); const n = document.getElementById("liveName").value.trim().slice(0, 30); if(!n || /^(dep|post):/i.test(n)) return;
+  if(w) w.onsubmit = e => { e.preventDefault(); const n = document.getElementById("liveName").value.trim().slice(0, 30); if(!n || /^(dep|post|mom|rea):/i.test(n)) return;
     document.getElementById("liveName").blur(); moi = n; save(); drawLive(); };
   box.querySelectorAll("[data-side]").forEach(b => b.onclick = () => { liveCote = b.dataset.side; try{ localStorage.setItem("vegas-cote", liveCote); }catch(e){} drawLive(); });
   const ta = document.getElementById("liveText"); if(ta) ta.oninput = () => { liveDraft.t = ta.value; };
-  const ph = document.getElementById("livePhoto");
-  if(ph) ph.onchange = async () => { const f = ph.files && ph.files[0]; if(!f) return;
-    try{ liveDraft.img = await shrink(f); }catch(e){ const er = document.getElementById("liveErr"); er.textContent = "Cette photo n'a pas pu être lue."; er.hidden = false; return; }
-    drawLive(); };
-  const ni = document.getElementById("liveNoImg"); if(ni) ni.onclick = () => { liveDraft.img = ""; drawLive(); };
+  const pick = async (input, forMoment) => { const f = input.files && input.files[0]; if(!f) return;
+    try{ liveDraft.img = await shrink(f); if(forMoment) liveDraft.m = forMoment; }
+    catch(e){ const er = document.getElementById("liveErr"); if(er){ er.textContent = "Cette photo n'a pas pu être lue."; er.hidden = false; } return; }
+    drawLive(); const t2 = document.getElementById("liveText"); if(t2 && forMoment) t2.scrollIntoView({ block:"center" }); };
+  const ph = document.getElementById("livePhoto"); if(ph) ph.onchange = () => pick(ph, "");
+  const mp = document.getElementById("momPhoto"); if(mp) mp.onchange = () => pick(mp, om && om.id);
+  const ni = document.getElementById("liveNoImg"); if(ni) ni.onclick = () => { liveDraft.img = ""; liveDraft.m = ""; drawLive(); };
+  const sm = document.getElementById("startMoment");
+  if(sm) sm.onclick = async () => {
+    const id = newId(), d = new Date().toISOString();
+    moments.push({ id, a:moi, s:cote(), x:false, d }); buzzed[id] = true; drawLive();
+    try{ await sendRow("mom:" + id, { a:moi, s:cote(), d }); }catch(e){}
+  };
+  const os = document.getElementById("openStories"); if(os) os.onclick = () => openStory();
   const sd = document.getElementById("liveSend");
   if(sd) sd.onclick = async () => {
     const t = (liveDraft.t || "").trim(), er = document.getElementById("liveErr");
     if(!t && !liveDraft.img){ er.textContent = "Écris quelque chose ou ajoute une photo."; er.hidden = false; return; }
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6), d = new Date().toISOString();
-    const data = { a:moi, s:cote(), t, d }; if(liveDraft.img){ data.h = true; data.i = liveDraft.img; }
+    const id = newId(), d = new Date().toISOString();
+    const data = { a:moi, s:cote(), t, d }; if(liveDraft.img){ data.h = true; data.i = liveDraft.img; } if(liveDraft.m) data.m = liveDraft.m;
     liveBusy = true; drawLive();
     try{
-      await sendPost(id, data);
+      await sendRow("post:" + id, data);
       if(data.i) imgCache[id] = data.i;
-      posts.unshift({ id, a:moi, s:data.s, t, h:!!data.h, x:false, d });
-      liveDraft = { t:"", img:"" }; liveBusy = false; drawLive(); loadLive();
+      posts.unshift({ id, a:moi, s:data.s, t, h:!!data.h, x:false, d, m:data.m || "" });
+      liveDraft = { t:"", img:"", m:"" }; liveBusy = false; drawLive(); loadLive();
     }catch(e){ liveBusy = false; drawLive(); const er2 = document.getElementById("liveErr"); if(er2){ er2.textContent = "Pas envoyé (pas de réseau ?). Ton texte est gardé, réessaie."; er2.hidden = false; } }
   };
 }
+function postHTML(x, compact, m){
+  const late = m ? lateMin(x, m) : -1;
+  return `<li class="post ${x.s === "france" ? "f" : "v"} ${compact ? "mini" : ""}">
+    <div class="who2"><b>${esc(x.a || "?")}</b><span>${x.s === "france" ? "🥐 en France" : "🎰 à Vegas"}</span>${late >= 0 ? `<span class="late">⏰ ${late + 1} min de retard</span>` : ""}</div>
+    ${x.h ? `<img class="ph" data-img="${esc(x.id)}" data-story="${esc(x.id)}" alt="Photo de ${esc(x.a || "")}" loading="lazy">` : ""}
+    ${x.t ? `<p>${esc(x.t)}</p>` : ""}
+    <p class="times"><b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France</p>
+    ${reactBar(x.id)}
+    ${isMe(x.a) ? `<button class="link danger" type="button" data-pdel="${esc(x.id)}">${liveDel === x.id ? "Confirmer la suppression ?" : "Supprimer"}</button>` : ""}
+  </li>`;
+}
 function drawFeed(){
   const box = document.getElementById("feed"); if(!box) return;
-  const live = posts.filter(x => !x.x).sort((a, b) => b.d.localeCompare(a.d));
+  const live = posts.filter(x => !x.x);
+  const items = live.filter(x => !x.m || !moments.some(m => m.id === x.m && !m.x)).map(x => ({ k:"p", d:x.d, x }))
+    .concat(moments.filter(m => !m.x).map(m => ({ k:"m", d:m.d, m }))).sort((a, b) => b.d.localeCompare(a.d));
   let html = "";
   if(liveState === "err") html = `<p class="note">Le live n'est pas joignable pour l'instant (pas de réseau). Ça revient tout seul.</p>`;
-  else if(!live.length && liveState !== "load") html = `<p class="note">Rien encore. Lance le premier post !</p>`;
+  else if(!items.length && liveState !== "load") html = `<p class="note">Rien encore. Lance le premier post, ou un Moment !</p>`;
   let lastDay = "";
-  html += `<ol class="feed">` + live.map(x => {
-    const day = dayOf(x.d, TZ.vegas), sep = day !== lastDay ? `<li class="daysep">${esc(day)} (à Vegas)</li>` : ""; lastDay = day;
-    const mine = moi && x.a && x.a.toLowerCase() === moi.toLowerCase();
-    return sep + `<li class="post ${x.s === "france" ? "f" : "v"}">
-      <div class="who2"><b>${esc(x.a || "?")}</b><span>${x.s === "france" ? "🥐 en France" : "🎰 à Vegas"}</span></div>
-      ${x.t ? `<p>${esc(x.t)}</p>` : ""}
-      ${x.h ? `<img class="ph" data-img="${esc(x.id)}" alt="Photo de ${esc(x.a || "")}" loading="lazy">` : ""}
-      <p class="times"><b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France</p>
-      ${mine ? `<button class="link danger" type="button" data-pdel="${esc(x.id)}">${liveDel === x.id ? "Confirmer la suppression ?" : "Supprimer"}</button>` : ""}
-    </li>`;
+  html += `<ol class="feed">` + items.map(it => {
+    const day = dayOf(it.d, TZ.vegas), sep = day !== lastDay ? `<li class="daysep">${esc(day)} (à Vegas)</li>` : ""; lastDay = day;
+    if(it.k === "p") return sep + postHTML(it.x, false);
+    const m = it.m, ps = live.filter(x => x.m === m.id).sort((a, b) => a.d.localeCompare(b.d));
+    const col = side => { const l = ps.filter(x => (x.s === "france" ? "france" : "vegas") === side);
+      return l.length ? `<ol class="feed">${l.map(x => postHTML(x, true, m)).join("")}</ol>` : `<p class="note">Personne encore.</p>`; };
+    return sep + `<li class="moment"><p class="k">⚡ Moment de ${esc(m.a)}</p>
+      <p class="times"><b>${hm(m.d, TZ.vegas)}</b> à Vegas · <b>${hm(m.d, TZ.france)}</b> en France · ${ps.length} photo${ps.length > 1 ? "s" : ""}</p>
+      <div class="cols"><div><p class="colh v">🎰 Vegas</p>${col("vegas")}</div><div><p class="colh f">🥐 France</p>${col("france")}</div></div></li>`;
   }).join("") + `</ol>`;
   box.innerHTML = html;
   const io = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if(e.isIntersecting){ io.unobserve(e.target); loadImg(e.target.dataset.img, e.target); } }), { rootMargin:"300px" }) : null;
   box.querySelectorAll("[data-img]").forEach(im => { if(imgCache[im.dataset.img]) im.src = imgCache[im.dataset.img]; else if(io) io.observe(im); else loadImg(im.dataset.img, im); });
+  box.querySelectorAll("[data-story]").forEach(im => im.onclick = () => openStory(im.dataset.story));
+  bindReacts(box);
   box.querySelectorAll("[data-pdel]").forEach(b => b.onclick = async () => {
     const id = b.dataset.pdel; if(liveDel !== id){ liveDel = id; drawFeed(); return; }
     liveDel = ""; const x = posts.find(y => y.id === id); if(!x) return; x.x = true; drawFeed();
-    try{ await sendPost(id, { a:x.a, s:x.s, t:"", d:x.d, x:true }); }catch(e){}
+    try{ await sendRow("post:" + id, { a:x.a, s:x.s, t:"", d:x.d, m:x.m || "", x:true }); }catch(e){}
   });
 }
-setInterval(() => { if(cur === "live" && !document.hidden) loadLive(); }, 15000);
-setInterval(() => { if(cur === "live") tickClocks(); }, 20000);
+// --- Stories ---
+let story = null; // { list, i, t0, paused, timer }
+const STORY_MS = 6000;
+function storyList(){ return posts.filter(x => !x.x && x.h).sort((a, b) => a.d.localeCompare(b.d)); }
+function openStory(startId){
+  const list = storyList(); if(!list.length) return;
+  let i = startId ? list.findIndex(x => x.id === startId) : list.findIndex(x => !seenStories[x.id]);
+  if(i < 0) i = startId ? 0 : Math.max(0, list.length - 1);
+  story = { list, i, t0:Date.now(), paused:false, elapsed:0 };
+  let ov = document.getElementById("story");
+  if(!ov){ ov = document.createElement("div"); ov.id = "story"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "Stories"); document.body.appendChild(ov); }
+  ov.hidden = false; document.documentElement.style.overflow = "hidden";
+  drawStory(); runStory();
+}
+function closeStory(){
+  if(!story) return; clearInterval(story.timer); story = null;
+  const ov = document.getElementById("story"); if(ov) ov.hidden = true;
+  document.documentElement.style.overflow = ""; if(cur === "live") drawLive();
+}
+function stepStory(d){
+  if(!story) return; const n = story.i + d;
+  if(n < 0){ story.t0 = Date.now(); story.elapsed = 0; return drawStory(); }
+  if(n >= story.list.length) return closeStory();
+  story.i = n; story.t0 = Date.now(); story.elapsed = 0; drawStory();
+}
+function runStory(){
+  clearInterval(story.timer);
+  story.timer = setInterval(() => {
+    if(!story || story.paused) return;
+    const p = Math.min(1, (story.elapsed + Date.now() - story.t0) / STORY_MS);
+    const bar = document.querySelector("#story .seg.cur i"); if(bar) bar.style.width = (p * 100) + "%";
+    if(p >= 1) stepStory(1);
+  }, 50);
+}
+function drawStory(){
+  const ov = document.getElementById("story"); if(!ov || !story) return;
+  const x = story.list[story.i]; seenStories[x.id] = 1; try{ localStorage.setItem("vegas-vus", JSON.stringify(seenStories)); }catch(e){}
+  const m = x.m ? moments.find(y => y.id === x.m) : null;
+  ov.innerHTML = `<div class="st-wrap">
+    <div class="segs">${story.list.map((y, k) => `<span class="seg ${k < story.i ? "done" : k === story.i ? "cur" : ""}"><i></i></span>`).join("")}</div>
+    <div class="st-head"><div><b class="${x.s === "france" ? "f" : "v"}">${esc(x.a || "?")}</b> <span>${x.s === "france" ? "🥐 en France" : "🎰 à Vegas"}</span>${m ? ` <span class="k">⚡ Moment</span>` : ""}
+      <p class="times"><b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France</p></div>
+      <button type="button" class="st-close" id="stClose" aria-label="Fermer">✕</button></div>
+    <div class="st-img"><img id="stImg" alt="Photo de ${esc(x.a || "")}"><button type="button" class="st-prev" aria-label="Précédente"></button><button type="button" class="st-next" aria-label="Suivante"></button></div>
+    ${x.t ? `<p class="st-cap">${esc(x.t)}</p>` : ""}
+    <div class="st-foot">${reactBar(x.id)}</div></div>`;
+  loadImg(x.id, document.getElementById("stImg"));
+  document.getElementById("stClose").onclick = closeStory;
+  ov.querySelector(".st-prev").onclick = () => stepStory(-1);
+  ov.querySelector(".st-next").onclick = () => stepStory(1);
+  const area = ov.querySelector(".st-img");
+  area.onpointerdown = () => { if(!story) return; story.paused = true; story.elapsed += Date.now() - story.t0; };
+  const resume = () => { if(!story || !story.paused) return; story.paused = false; story.t0 = Date.now(); };
+  area.onpointerup = resume; area.onpointerleave = resume; area.onpointercancel = resume;
+  bindReacts(ov);
+}
+document.addEventListener("keydown", e => { if(!story) return; if(e.key === "Escape") closeStory(); else if(e.key === "ArrowRight") stepStory(1); else if(e.key === "ArrowLeft") stepStory(-1); });
+setInterval(() => { if(cur === "live" && !document.hidden && !story) loadLive(); }, 15000);
+setInterval(() => { if(cur === "live" && !document.hidden && openMoment()) loadLive(); }, 5000);
+setInterval(() => { if(cur === "live") tickClocks(); }, 1000);
 document.addEventListener("visibilitychange", () => { if(!document.hidden && cur === "live") loadLive(); });
 function drawComptesView(){
   return `<div style="display:flex;flex-direction:column;gap:12px">
