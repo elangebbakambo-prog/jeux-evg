@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Les jeux de l'EVG</title>
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
@@ -45,12 +46,15 @@ h1 em{ font-style:normal; color:var(--red); }
 .btn:focus-visible{ outline:3px solid var(--gold); outline-offset:2px; }
 .btn.main:hover{ background:var(--red-dark); }
 .btn.ghost:hover{ background:var(--ink); color:var(--paper); }
+.carnet{ align-self:flex-start; color:var(--gold); font-weight:800; text-decoration:none; border:1px solid var(--gold); border-radius:999px; padding:6px 14px; font-size:.9rem; }
+.carnet:focus-visible{ outline:3px solid var(--paper); outline-offset:2px; }
 .note{ margin:4px 0 0; font-size:.85rem; color:var(--muted); }
 @media (max-width:360px){ .ways{ grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
 <main>
+  <a class="carnet" href="vegas/">← Carnet Vegas</a>
   <p class="eyebrow">EVG · samedi 7 novembre</p>
   <h1>Les jeux<br><em>de l'EVG</em></h1>
   <p class="lead">Trois jeux entre anciens danseurs. Sur un seul téléphone qu'on se passe, ou chacun sur le sien avec un écran hôte.</p>
