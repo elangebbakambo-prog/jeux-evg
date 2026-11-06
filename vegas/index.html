@@ -124,6 +124,8 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .who input{ flex:1 1 160px; min-width:0; font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:9px 12px; }
 .who input:focus-visible{ outline:2px solid var(--mint); }
 .link{ all:unset; cursor:pointer; color:var(--mint); text-decoration:underline; font-weight:700; }
+.perso{ margin:0; font-size:.88rem; }
+.part{ margin:0; font-size:.9rem; } .part b{ color:var(--amber); }
 .moves{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
 .moves li{ background:var(--card2); border-radius:10px; padding:9px 12px; font-size:.95rem; }
 .amt{ color:var(--amber); font-weight:800; white-space:nowrap; }
@@ -506,7 +508,7 @@ function drawComptes(){
   html += `<section class="panel"><h3>Qui doit quoi à qui</h3>` + (curs.length ? curs.map(c => {
     const { bal, moves } = settle(live, c), tot = live.filter(d => d.c === c).reduce((a, d) => a + d.m, 0);
     return `<p class="note">Total dépensé : <b>${money(tot, c)}</b></p>
-      ${moves.length ? `<ul class="moves">${moves.map(([a, b, x]) => `<li><b>${esc(a)}</b> doit <b class="amt">${money(x, c)}</b> à <b>${esc(b)}</b></li>`).join("")}</ul>` : `<p class="miss ok">Tout le monde est quitte ✓</p>`}
+      ${moves.length ? `<p class="perso">Ce que <b>chacun</b> doit rembourser, personne par personne (pas le total) :</p><ul class="moves">${moves.map(([a, b, x]) => `<li><b>${esc(a)}</b> doit <b class="amt">${money(x, c)}</b> à <b>${esc(b)}</b></li>`).join("")}</ul>` : `<p class="miss ok">Tout le monde est quitte ✓</p>`}
       <ul class="bals">${PAYEURS.map(n => `<li><span>${esc(n)}</span><b class="${bal[n] > 0 ? "plus" : bal[n] < 0 ? "minus" : ""}">${bal[n] > 0 ? "+" : ""}${money(bal[n], c)}</b></li>`).join("")}</ul>`;
   }).join("<hr>") : `<p class="note">Aucune dépense pour l'instant.</p>`) + `<p class="note">${esc(MARIE)} est invité : sa part est répartie entre ceux qui partagent chaque dépense.</p></section>`;
   const f = depForm;
@@ -523,6 +525,9 @@ function drawComptes(){
     </form></section>`;
   html += `<section class="panel"><h3>Dépenses</h3>` + (live.length ? `<ul class="deps">${live.map(d => `<li>
       <div class="top"><b>${esc(d.t)}</b><span class="amt">${money(d.m, d.c)}</span></div>
+      ${(() => { const pour = (d.pour || []).filter(n => n !== MARIE); if(!pour.length) return "";
+        const part = money(Math.round(d.m / pour.length), d.c), autres = pour.filter(n => n !== d.p);
+        return `<p class="part">Soit <b>${part} par personne</b>${autres.length ? ` : ${esc(autres.join(", "))} ${autres.length > 1 ? "doivent chacun" : "doit"} <b>${part}</b> à ${esc(d.p)}` : ""}.</p>`; })()}
       <p class="maj">Payé par <b>${esc(d.p)}</b> · pour ${esc((d.pour || []).join(", "))}${d.par ? " · noté par " + esc(d.par) : ""} · ${esc(when(d.d))}</p>
       <button class="link danger" type="button" data-del="${esc(d.id)}">${delAsk === d.id ? "Confirmer la suppression ?" : "Supprimer"}</button></li>`).join("")}</ul>` : `<p class="note">Rien pour l'instant.</p>`) + `</section>`;
   box.innerHTML = html;
