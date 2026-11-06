@@ -371,7 +371,7 @@ function drawInfos(){
       </ol>
       <p class="note">Budget version économique, par personne : environ 320 $ (quad 105 + tir 179 + grande roue 35, AREA15 et club au bar gratuits). Plus taxes et pourboires des guides (10 à 20 $ par guide) : comptez environ 10 % de plus.</p>
     </section>
-    <section class="panel"><ul class="checks">${CHECK.map((c, i) => `<li><label><input type="checkbox" data-c="${i}" ${checked[i] ? "checked" : ""}><span>${esc(c)}</span></label></li>`).join("")}</ul></section>
+    <section class="panel"><ul class="checks">${CHECK.map((c, i) => `<li><label><input type="checkbox" data-c="${esc(c)}" ${checked[c] ? "checked" : ""}><span>${esc(c)}</span></label></li>`).join("")}</ul></section>
     <section class="panel"><h3>Bon à savoir</h3>
       <ul class="facts">
         <li><b>−9 h</b><span>Décalage avec Paris</span></li>
