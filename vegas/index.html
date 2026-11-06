@@ -124,6 +124,30 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .who input{ flex:1 1 160px; min-width:0; font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:9px 12px; }
 .who input:focus-visible{ outline:2px solid var(--mint); }
 .link{ all:unset; cursor:pointer; color:var(--mint); text-decoration:underline; font-weight:700; }
+.moves{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.moves li{ background:var(--card2); border-radius:10px; padding:9px 12px; font-size:.95rem; }
+.amt{ color:var(--amber); font-weight:800; white-space:nowrap; }
+.bals{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.bals li{ display:flex; justify-content:space-between; gap:6px; font-size:.85rem; background:var(--card2); border-radius:8px; padding:6px 9px; min-width:0; }
+.bals .plus{ color:var(--mint); } .bals .minus{ color:var(--pink); }
+.panel hr{ border:0; border-top:1px dashed var(--line); margin:4px 0; width:100%; }
+.dep{ display:flex; flex-direction:column; gap:10px; font-size:.88rem; }
+.dep label{ display:flex; flex-direction:column; gap:4px; color:var(--muted); font-weight:700; }
+.dep input:not([type=checkbox]), .dep select{ font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:9px 12px; min-width:0; }
+.dep input:focus-visible, .dep select:focus-visible{ outline:2px solid var(--mint); }
+.dep .row2{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; }
+.dep label{ min-width:0; } .dep select, .dep input:not([type=checkbox]){ width:100%; box-sizing:border-box; }
+.dep button[type=submit]{ align-self:flex-start; }
+#comptes{ display:flex; flex-direction:column; gap:12px; }
+.dep fieldset{ border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin:0; display:flex; flex-wrap:wrap; gap:6px 16px; }
+.dep legend{ color:var(--muted); font-weight:700; padding:0 4px; }
+.dep .chk{ flex-direction:row; align-items:center; gap:6px; color:var(--sand); }
+.dep .chk input{ width:20px; height:20px; accent-color:var(--pink); }
+.err{ margin:0; color:var(--pink); font-weight:700; }
+.deps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.deps li{ background:var(--card2); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:4px; min-width:0; }
+.deps .top{ display:flex; justify-content:space-between; gap:8px; } .deps .top b{ overflow-wrap:anywhere; }
+.link.danger{ color:var(--pink); font-size:.8rem; align-self:flex-start; }
 .resa{ border:1px solid var(--pink); }
 .order b{ color:var(--sand); }
 .order .t{ color:var(--pink); font-weight:800; } .order .l{ color:var(--mint); font-weight:800; }
@@ -325,9 +349,11 @@ async function loadTeam(){
   try{
     const r = await fetch(SB_URL + "?select=nom,coches,maj&order=nom.asc", { headers:{ apikey:SB_KEY }, cache:"no-store" });
     if(!r.ok) throw new Error(r.status);
-    team = await r.json(); teamState = "ok";
+    const rows = await r.json(); teamState = "ok";
+    team = rows.filter(t => !t.nom.startsWith("dep:"));
+    deps = rows.filter(t => t.nom.startsWith("dep:")).map(t => Object.assign({ id:t.nom.slice(4) }, t.coches || {}));
   }catch(e){ teamState = team.length ? "stale" : "err"; }
-  drawTeam();
+  drawTeam(); drawComptes();
 }
 function pushMe(){
   if(!moi) return;
@@ -371,6 +397,7 @@ function drawTeam(){
   const f = document.getElementById("whoForm");
   if(f) f.onsubmit = e => { e.preventDefault(); const inp = document.getElementById("whoName"); const n = inp.value.trim().slice(0, 30); if(!n) return;
     inp.blur();
+    if(n.toLowerCase().startsWith("dep:")) return;
     const row = team.find(t => t.nom.toLowerCase() === n.toLowerCase());
     const first = !moi; moi = row ? row.nom : n;
     if(row) checked = Object.assign({}, row.coches || {}); else if(!first) checked = {};
@@ -378,12 +405,13 @@ function drawTeam(){
   const ch = document.getElementById("changeMe");
   if(ch) ch.onclick = () => { moi = ""; save(); draw(); const i = document.getElementById("whoName"); if(i) i.focus(); };
 }
-setInterval(() => { if(cur === "infos" && !document.hidden) loadTeam(); }, 30000);
-document.addEventListener("visibilitychange", () => { if(!document.hidden && cur === "infos") loadTeam(); });
+setInterval(() => { if((cur === "infos" || cur === "comptes") && !document.hidden) loadTeam(); }, 30000);
+document.addEventListener("visibilitychange", () => { if(!document.hidden && (cur === "infos" || cur === "comptes")) loadTeam(); });
 
 function drawTabs(){
   const tabs = document.getElementById("tabs");
   tabs.innerHTML = `<button class="day extra" data-id="infos" aria-pressed="${cur === "infos"}"><small>Équipe</small><b>Check-list</b></button>`
+    + `<button class="day extra" data-id="comptes" aria-pressed="${cur === "comptes"}"><small>Tricount</small><b>Comptes</b></button>`
     + DAYS.map(d => `<button class="day" data-id="${d.id}" aria-pressed="${cur === d.id}"><small>${d.d}</small><b>${d.n}</b></button>`).join("");
   tabs.querySelectorAll("[data-id]").forEach(b => b.onclick = () => { cur = b.dataset.id; save(); draw(); b.scrollIntoView({ block:"nearest", inline:"center" }); });
 }
@@ -418,6 +446,107 @@ function drawDay(d){
     <div class="dhead"><p class="eyebrow">${esc(d.d)}. ${esc(d.n)} novembre</p><h2>${esc(d.title)}</h2><p>${esc(d.sub)}</p></div>
     <div class="chips">${d.chips.map(([t, k]) => `<span class="chip ${k}">${esc(t)}</span>`).join("")}</div>
     <ol class="tl">${steps}</ol></div>`;
+}
+// ===== Comptes (façon Tricount) =====
+// Chaque dépense est une ligne « dep:… » de la même table Supabase : deux personnes peuvent en ajouter en même temps sans s'écraser.
+// Chris est le marié : il ne paie rien, sa part est déjà répartie entre ceux qui partagent la dépense.
+const PAYEURS = ["Elange", "Jovan", "Isma", "Ysly"];
+const MARIE = "Chris";
+let deps = [], depForm = { pour: PAYEURS.slice() }, delAsk = "";
+const money = (cents, c) => { try{ return (cents / 100).toLocaleString("fr-FR", { style:"currency", currency:c || "USD", currencyDisplay:"narrowSymbol" }); }catch(e){ return (cents / 100).toFixed(2) + " " + c; } };
+function settle(list, cur){
+  const bal = {}; PAYEURS.concat(MARIE).forEach(n => bal[n] = 0);
+  list.filter(d => d.c === cur).forEach(d => {
+    const pour = (d.pour || []).filter(n => n !== MARIE); if(!pour.length) return;
+    bal[d.p] = (bal[d.p] || 0) + d.m;
+    const part = Math.floor(d.m / pour.length); let reste = d.m - part * pour.length;
+    pour.forEach(n => { bal[n] = (bal[n] || 0) - part - (reste > 0 ? 1 : 0); reste--; });
+  });
+  const cred = [], debt = [];
+  Object.keys(bal).forEach(n => { if(bal[n] > 0) cred.push([n, bal[n]]); else if(bal[n] < 0) debt.push([n, -bal[n]]); });
+  cred.sort((a, b) => b[1] - a[1]); debt.sort((a, b) => b[1] - a[1]);
+  const moves = []; let i = 0, j = 0;
+  while(i < debt.length && j < cred.length){
+    const x = Math.min(debt[i][1], cred[j][1]);
+    if(x > 0) moves.push([debt[i][0], cred[j][0], x]);
+    debt[i][1] -= x; cred[j][1] -= x;
+    if(debt[i][1] === 0) i++; if(cred[j][1] === 0) j++;
+  }
+  return { bal, moves };
+}
+async function saveDep(id, data){
+  const row = { nom:"dep:" + id, coches:data, maj:new Date().toISOString() };
+  const k = deps.findIndex(d => d.id === id);
+  const local = Object.assign({ id }, data);
+  if(k >= 0) deps[k] = local; else deps.unshift(local);
+  drawComptes();
+  try{
+    const r = await fetch(SB_URL + "?on_conflict=nom", { method:"POST",
+      headers:{ apikey:SB_KEY, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal" }, body:JSON.stringify(row) });
+    if(!r.ok) throw new Error(r.status);
+    loadTeam();
+  }catch(e){ teamState = "err-save"; drawComptes(); }
+}
+function drawComptes(){
+  const box = document.getElementById("comptes"); if(!box) return;
+  const ae = document.activeElement;
+  if(ae && box.contains(ae) && /INPUT|SELECT/.test(ae.tagName) && ae.type !== "checkbox") return; // ne pas effacer une saisie en cours
+  const live = deps.filter(d => !d.x).sort((a, b) => (b.d || "").localeCompare(a.d || ""));
+  const curs = Array.from(new Set(live.map(d => d.c)));
+  let html = "";
+  if(teamState === "err") html += `<p class="note">Les comptes ne sont pas joignables pour l'instant (pas de réseau). Réessaie dans un moment.</p>`;
+  if(teamState === "err-save") html += `<p class="note">La dernière dépense n'a pas pu être enregistrée (pas de réseau). Ajoute-la à nouveau plus tard.</p>`;
+  html += `<section class="panel"><h3>Qui doit quoi à qui</h3>` + (curs.length ? curs.map(c => {
+    const { bal, moves } = settle(live, c), tot = live.filter(d => d.c === c).reduce((a, d) => a + d.m, 0);
+    return `<p class="note">Total dépensé : <b>${money(tot, c)}</b></p>
+      ${moves.length ? `<ul class="moves">${moves.map(([a, b, x]) => `<li><b>${esc(a)}</b> doit <b class="amt">${money(x, c)}</b> à <b>${esc(b)}</b></li>`).join("")}</ul>` : `<p class="miss ok">Tout le monde est quitte ✓</p>`}
+      <ul class="bals">${PAYEURS.map(n => `<li><span>${esc(n)}</span><b class="${bal[n] > 0 ? "plus" : bal[n] < 0 ? "minus" : ""}">${bal[n] > 0 ? "+" : ""}${money(bal[n], c)}</b></li>`).join("")}</ul>`;
+  }).join("<hr>") : `<p class="note">Aucune dépense pour l'instant.</p>`) + `<p class="note">${esc(MARIE)} est invité : sa part est répartie entre ceux qui partagent chaque dépense.</p></section>`;
+  const f = depForm;
+  html += `<section class="panel"><h3>Ajouter une dépense</h3>
+    <form class="dep" id="depForm">
+      <label>Quoi<input id="dT" maxlength="60" placeholder="Ex. Uber pour le tir" value="${esc(f.t || "")}" required></label>
+      <div class="row2"><label>Montant<input id="dM" inputmode="decimal" placeholder="0,00" value="${esc(f.m || "")}" required></label>
+        <label>Devise<select id="dC"><option value="USD" ${f.c !== "EUR" ? "selected" : ""}>$ dollars</option><option value="EUR" ${f.c === "EUR" ? "selected" : ""}>€ euros</option></select></label></div>
+      <label>Payé par<select id="dP">${PAYEURS.concat(MARIE).map(n => `<option ${(f.p || (PAYEURS.includes(moi) ? moi : "Elange")) === n ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
+      <fieldset><legend>Partagé entre (la part de ${esc(MARIE)} est incluse)</legend>
+        ${PAYEURS.map(n => `<label class="chk"><input type="checkbox" data-pour="${esc(n)}" ${f.pour.includes(n) ? "checked" : ""}> ${esc(n)}</label>`).join("")}</fieldset>
+      <p class="err" id="dErr" hidden></p>
+      <button class="btn hot" type="submit">Ajouter</button>
+    </form></section>`;
+  html += `<section class="panel"><h3>Dépenses</h3>` + (live.length ? `<ul class="deps">${live.map(d => `<li>
+      <div class="top"><b>${esc(d.t)}</b><span class="amt">${money(d.m, d.c)}</span></div>
+      <p class="maj">Payé par <b>${esc(d.p)}</b> · pour ${esc((d.pour || []).join(", "))}${d.par ? " · noté par " + esc(d.par) : ""} · ${esc(when(d.d))}</p>
+      <button class="link danger" type="button" data-del="${esc(d.id)}">${delAsk === d.id ? "Confirmer la suppression ?" : "Supprimer"}</button></li>`).join("")}</ul>` : `<p class="note">Rien pour l'instant.</p>`) + `</section>`;
+  box.innerHTML = html;
+  const form = document.getElementById("depForm");
+  const keep = () => { depForm = { t:document.getElementById("dT").value, m:document.getElementById("dM").value, c:document.getElementById("dC").value, p:document.getElementById("dP").value,
+    pour:Array.from(box.querySelectorAll("[data-pour]")).filter(x => x.checked).map(x => x.dataset.pour) }; };
+  form.oninput = keep; form.onchange = keep;
+  form.onsubmit = e => {
+    e.preventDefault(); keep();
+    const err = document.getElementById("dErr");
+    const m = Math.round(parseFloat(String(depForm.m).replace(/\s/g, "").replace(",", ".")) * 100);
+    const t = depForm.t.trim();
+    const bad = !t ? "Écris ce que c'est." : !(m > 0) ? "Le montant n'est pas valide." : !depForm.pour.length ? "Coche au moins une personne." : "";
+    if(bad){ err.textContent = bad; err.hidden = false; return; }
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const data = { t, m, c:depForm.c, p:depForm.p, pour:depForm.pour, par:moi || "", d:new Date().toISOString() };
+    depForm = { pour: PAYEURS.slice(), c:depForm.c, p:depForm.p };
+    if(document.activeElement) document.activeElement.blur();
+    saveDep(id, data);
+  };
+  box.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
+    const id = b.dataset.del;
+    if(delAsk !== id){ delAsk = id; drawComptes(); return; }
+    delAsk = ""; const d = deps.find(x => x.id === id); if(!d) return;
+    const data = Object.assign({}, d, { x:true }); delete data.id; saveDep(id, data);
+  });
+}
+function drawComptesView(){
+  return `<div style="display:flex;flex-direction:column;gap:12px">
+    <div class="dhead"><p class="eyebrow">Façon Tricount</p><h2>Les comptes</h2><p>Chacun note ce qu'il avance. L'appli divise, ajoute la part de ${esc(MARIE)}, et dit qui rembourse qui.</p></div>
+    <div id="comptes" aria-live="polite"><p class="note">Chargement…</p></div></div>`;
 }
 function drawInfos(){
   return `<div style="display:flex;flex-direction:column;gap:12px">
@@ -488,7 +617,7 @@ function draw(){
   drawTabs();
   const v = document.getElementById("view");
   v.style.animation = "none"; void v.offsetWidth; v.style.animation = "";
-  v.innerHTML = cur === "infos" ? drawInfos() : drawDay(DAYS.find(d => d.id === cur) || DAYS[0]);
+  v.innerHTML = cur === "infos" ? drawInfos() : cur === "comptes" ? drawComptesView() : drawDay(DAYS.find(d => d.id === cur) || DAYS[0]);
   v.querySelectorAll("[data-tel]").forEach(b => b.onclick = () => {
     const ok = () => { b.textContent = "Numéro copié"; setTimeout(() => b.textContent = "Copier le numéro", 1800); };
     try{ navigator.clipboard.writeText(b.dataset.tel).then(ok, () => { getSelection().selectAllChildren(b.parentNode.parentNode.querySelector(".tel")); b.textContent = "Sélectionné"; }); }
@@ -496,6 +625,7 @@ function draw(){
   });
   v.querySelectorAll("[data-c]").forEach(c => c.onchange = () => { if(c.checked) checked[c.dataset.c] = true; else delete checked[c.dataset.c]; save(); pushMe(); });
   if(cur === "infos"){ drawTeam(); loadTeam(); }
+  if(cur === "comptes"){ drawComptes(); loadTeam(); }
 }
 document.getElementById("goResa").onclick = () => { cur = "infos"; save(); draw(); document.getElementById("tabs").scrollIntoView({ behavior:"smooth" }); };
 document.getElementById("copyHome").onclick = e => {
