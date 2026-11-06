@@ -352,6 +352,8 @@ async function loadTeam(){
     const rows = await r.json(); teamState = "ok";
     team = rows.filter(t => !t.nom.startsWith("dep:"));
     deps = rows.filter(t => t.nom.startsWith("dep:")).map(t => Object.assign({ id:t.nom.slice(4) }, t.coches || {}));
+    // Avances déjà faites par Elange (réservations du 6 nov.) : ajoutées une seule fois, si elles n'existent pas encore.
+    SEEDS.forEach(([id, data]) => { if(!rows.some(t => t.nom === "dep:" + id) && !seeded[id]){ seeded[id] = true; saveDep(id, data); } });
   }catch(e){ teamState = team.length ? "stale" : "err"; }
   drawTeam(); drawComptes();
 }
@@ -452,6 +454,11 @@ function drawDay(d){
 // Chris est le marié : il ne paie rien, sa part est déjà répartie entre ceux qui partagent la dépense.
 const PAYEURS = ["Elange", "Jovan", "Isma", "Ysly"];
 const MARIE = "Chris";
+const SEEDS = [
+  ["resa-quad-chris", { t:"Quad – part de Chris (dim. 8, 11 h)", m:11813, c:"USD", p:"Elange", pour:["Elange","Jovan","Isma","Ysly"], par:"Elange", d:"2026-11-06T14:52:00Z" }],
+  ["resa-tir-chris", { t:"Tir – part de Chris (lun. 9, 7 h)", m:17910, c:"USD", p:"Elange", pour:["Elange","Jovan","Isma","Ysly"], par:"Elange", d:"2026-11-06T14:57:00Z" }]
+];
+const seeded = {};
 let deps = [], depForm = { pour: PAYEURS.slice() }, delAsk = "";
 const money = (cents, c) => { try{ return (cents / 100).toLocaleString("fr-FR", { style:"currency", currency:c || "USD", currencyDisplay:"narrowSymbol" }); }catch(e){ return (cents / 100).toFixed(2) + " " + c; } };
 function settle(list, cur){
