@@ -91,6 +91,12 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .money small{ font-size:.72rem; color:var(--muted); }
 .money b{ color:var(--sand); font-size:.95rem; }
 .order{ margin:0; padding-left:20px; display:flex; flex-direction:column; gap:6px; font-size:.93rem; }
+.cta{ all:unset; cursor:pointer; display:flex; flex-direction:column; gap:2px; background:var(--pink); color:var(--night); border-radius:14px; padding:12px 16px; box-shadow:0 0 18px rgba(255,79,139,.4); }
+.cta b{ font-family:var(--display); font-weight:400; font-size:1.15rem; }
+.cta span{ font-size:.88rem; font-weight:700; }
+.cta:focus-visible{ outline:3px solid var(--amber); outline-offset:2px; }
+.resa{ border:1px solid var(--pink); }
+.order b{ color:var(--sand); }
 .order .t{ color:var(--pink); font-weight:800; } .order .l{ color:var(--mint); font-weight:800; }
 .book .alt{ color:var(--muted); font-size:.82rem; border-top:1px dashed var(--line); padding-top:6px; }
 .tip{ border-left:4px solid var(--amber); background:rgba(255,181,71,.1); border-radius:0 10px 10px 0; padding:8px 12px; font-size:.9rem; }
@@ -130,6 +136,7 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
     </div>
   </section>
 
+  <button class="cta" id="goResa" type="button"><b>Chacun réserve sa place</b><span>Quad et tir : à faire aujourd'hui. Voir comment →</span></button>
   <nav class="tabs" id="tabs" aria-label="Jours"></nav>
   <section id="view" aria-live="polite"></section>
 </main>
@@ -175,7 +182,7 @@ const DAYS = [
       { when:"Matin", name:"Rendez-vous navette du tir", addr:"3999 S Las Vegas Blvd, Las Vegas, NV 89119", mode:"driving", hop:"Uber · environ 10 min",
         info:"Derrière le McDonald's, au sud du Strip. Pas de prise en charge à l'hôtel : c'est ici que la navette vous récupère.",
         book:{ who:"Gun Blast Vegas (Outdoor Range)", tel:"+1 702-935-6511", web:"https://www.gunblast.vegas/packages-shooting-range-las-vegas/", hours:"Lun – sam, 7 h – 17 h · fermé le dimanche",
-          urgent:"today", whenBook:"À réserver aujourd'hui : seulement 3 départs par jour, et aucun client sans réservation. Prenez le départ de 8 h.",
+          urgent:"today", whenBook:"À réserver aujourd'hui : seulement 3 départs par jour, et aucun client sans réservation. Prenez le départ de 7 h.",
           what:["Stand de tir en plein air, dans le désert au nord-ouest de Vegas, face aux montagnes.","Formule The Blast : pistolet 9 mm (16 balles), fusil AR-15 (20), AK-47 (20), fusil à pompe (5), soit 61 tirs. Pas de cibles explosives, de fumigène ni de grenade assourdissante (ils sont dans BIG et FULL).","Instructeur, lunettes, casque antibruit, eau et navette compris. Environ 4 h en tout.","Les 3 formules ont les mêmes armes : BIG et FULL ajoutent seulement cibles explosives, fumigène et grenade assourdissante. The Blast suffit."],
           pp:"179 $ avec le code BLAST10", share:"223,75 $",
           price:"The Blast 199 $ · BIG Blast 225 $ · FULL Blast 289 $ par personne, taxes comprises. Code promo BLAST10 : −10 %.",
@@ -246,7 +253,7 @@ const DAYS = [
 
 const CHECK = [
   "Passeport (celui de l'ESTA)", "ESTA « Approved » (capture sur le téléphone)", "Attestation Ebola imprimée et signée",
-  "Buggy réservé : Las Vegas ATV Dune Tours, dim. 8", "Tir réservé : Gun Blast Vegas, lun. 9 matin", "Red Rock réservé : Pink Jeep Tours, mar. 10", "Table au Pinky Ring réservée, lun. 9 soir",
+  "Quad réservé : Las Vegas ATV Dune Tours, dim. 8", "Tir réservé : Gun Blast Vegas, lun. 9 à 7 h", "Red Rock réservé : Pink Jeep Tours, mar. 10", "Table au Pinky Ring réservée, lun. 9 soir",
   "Instructions d'arrivée de l'hôte", "eSIM installée (avant de partir, en wifi)", "Revolut + carte bancaire française pour la caution",
   "Adaptateur de prise américaine", "Ordinateur, enceinte, batteries en cabine", "Une veste pour le soir"
 ];
@@ -258,7 +265,7 @@ const save = () => { try{ localStorage.setItem("vegas-evg", JSON.stringify({ cur
 function drawTabs(){
   const tabs = document.getElementById("tabs");
   tabs.innerHTML = DAYS.map(d => `<button class="day" data-id="${d.id}" aria-pressed="${cur === d.id}"><small>${d.d}</small><b>${d.n}</b></button>`).join("")
-    + `<button class="day extra" data-id="infos" aria-pressed="${cur === "infos"}"><small>Avant</small><b>Check-list</b></button>`;
+    + `<button class="day extra" data-id="infos" aria-pressed="${cur === "infos"}"><small>Réserver</small><b>&amp; infos</b></button>`;
   tabs.querySelectorAll("[data-id]").forEach(b => b.onclick = () => { cur = b.dataset.id; save(); draw(); b.scrollIntoView({ block:"nearest", inline:"center" }); });
 }
 function drawDay(d){
@@ -295,15 +302,50 @@ function drawDay(d){
 }
 function drawInfos(){
   return `<div style="display:flex;flex-direction:column;gap:12px">
-    <div class="dhead"><p class="eyebrow">Avant de partir</p><h2>La check-list</h2><p>Cochez au fur et à mesure (c'est gardé sur ce téléphone).</p></div>
+    <div class="dhead"><p class="eyebrow">Avant de partir</p><h2>Réserver et préparer</h2><p>Chacun réserve et paie sa propre place, sur le même créneau que les autres.</p></div>
+    <section class="panel resa"><h3>1 · Le quad (dim. 8) : aujourd'hui</h3>
+      <ol class="order">
+        <li>Ouvrez le site et choisissez <b>« Las Vegas ATVs Nellis Dunes Tour »</b> (105 $ par personne, avec guide).</li>
+        <li><b>Guests : 1</b> (votre place seulement).</li>
+        <li>Date : <b>dimanche 8 novembre</b>, le <b>même horaire du matin</b> que le reste du groupe (demandez sur le groupe lequel a été pris).</li>
+        <li>Prise en charge : <b>The Platinum Hotel</b>. Votre nom comme sur le passeport, votre e-mail, votre numéro en +33.</li>
+        <li>Faites une capture de la confirmation et envoyez-la sur le groupe.</li>
+      </ol>
+      <div class="actions"><a class="btn hot" href="https://lasvegasatvdunetours.com/" target="_blank" rel="noopener">Réserver le quad</a></div>
+    </section>
+    <section class="panel resa"><h3>2 · Le tir (lun. 9) : aujourd'hui</h3>
+      <ol class="order">
+        <li>Ouvrez le site et choisissez <b>« The Blast »</b> (199 $ par personne, taxes comprises).</li>
+        <li><b>Guests : 1</b> (votre place seulement).</li>
+        <li>Date : <b>lundi 9 novembre</b>, horaire <b>7 AM</b>.</li>
+        <li>Votre nom comme sur le passeport, votre e-mail, votre numéro en +33.</li>
+        <li>Code promo <b>BLAST10</b> au paiement : 179 $ au lieu de 199 $.</li>
+        <li>S'il y a un champ notes : « groupe de 5, EVG ». Capture de la confirmation sur le groupe.</li>
+      </ol>
+      <div class="actions"><a class="btn hot" href="https://www.gunblast.vegas/packages-shooting-range-las-vegas/" target="_blank" rel="noopener">Réserver le tir</a></div>
+      <p class="note">Rendez-vous lundi à 6 h 50 derrière le McDonald's, 3999 S Las Vegas Blvd. Départ de l'hôtel en Uber vers 6 h 35.</p>
+    </section>
+    <section class="panel"><h3>À avoir sur soi</h3>
+      <ul class="what">
+        <li><b>Passeport</b> : tout le temps. Il est demandé au tir, au club, au casino et pour acheter de l'alcool.</li>
+        <li><b>Permis de conduire</b> : pour piloter le quad.</li>
+        <li><b>Carte bancaire</b> française et Revolut, un peu de dollars en liquide pour les pourboires (10 à 20 $ par guide).</li>
+        <li><b>Téléphone chargé</b> avec l'eSIM et une batterie externe.</li>
+        <li><b>Quad</b> : lunettes de soleil, foulard ou cache-cou contre la poussière, vêtements qui peuvent se salir, chaussures fermées.</li>
+        <li><b>Tir</b> : chaussures fermées, pas de t-shirt décolleté (les douilles chaudes), casquette, et zéro alcool avant.</li>
+        <li><b>Red Rock</b> : eau, crème solaire, une veste (il fait frais le matin).</li>
+        <li><b>Club</b> : chaussures de ville, pantalon, chemise ou haut propre. Pas de short, de casquette, de jogging ni de baskets de sport.</li>
+      </ul>
+    </section>
+    <h2 style="margin:6px 0 0;font-family:var(--display);font-weight:400;color:var(--amber);font-size:1.3rem">La check-list</h2>
     <section class="panel"><h3>Ordre des réservations</h3>
       <ol class="order">
         <li><span class="t">Aujourd'hui</span> · Quad, dim. 8 : Las Vegas ATV Dune Tours</li>
-        <li><span class="t">Aujourd'hui</span> · Tir, lun. 9 à 8 h : Gun Blast, The Blast, code BLAST10</li>
+        <li><span class="t">Aujourd'hui</span> · Tir, lun. 9 à 7 h : Gun Blast, The Blast, code BLAST10</li>
         <li><span class="l">Sur place, la veille au plus tard</span> · Red Rock, mar. 10 : Pink Jeep</li>
         <li><span class="l">Sur place</span> · Pinky Ring, lun. 9 : au bar, rien à réserver (table seulement si vous la voulez)</li>
       </ol>
-      <p class="note">Budget version économique, pour chacun des 4 qui paient la part du marié : environ 517 $ (quad 131,25 + tir 223,75 + Red Rock 162,50, club au bar). Plus taxes et pourboires des guides (10 à 20 $ par guide) : comptez environ 10 % de plus.</p>
+      <p class="note">Budget version économique, par personne : environ 414 $ (quad 105 + tir 179 + Red Rock 130, club au bar). Plus taxes et pourboires des guides (10 à 20 $ par guide) : comptez environ 10 % de plus.</p>
     </section>
     <section class="panel"><ul class="checks">${CHECK.map((c, i) => `<li><label><input type="checkbox" data-c="${i}" ${checked[i] ? "checked" : ""}><span>${esc(c)}</span></label></li>`).join("")}</ul></section>
     <section class="panel"><h3>Bon à savoir</h3>
@@ -329,6 +371,7 @@ function draw(){
   });
   v.querySelectorAll("[data-c]").forEach(c => c.onchange = () => { checked[c.dataset.c] = c.checked; save(); });
 }
+document.getElementById("goResa").onclick = () => { cur = "infos"; save(); draw(); document.getElementById("tabs").scrollIntoView({ behavior:"smooth" }); };
 document.getElementById("copyHome").onclick = e => {
   const b = e.currentTarget;
   const done = () => { b.textContent = "Adresse copiée"; setTimeout(() => b.textContent = "Copier l'adresse", 1800); };
