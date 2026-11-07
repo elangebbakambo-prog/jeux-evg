@@ -220,6 +220,10 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 #story .bub b{ color:var(--amber); }
 #story .bub.new{ animation:bubIn .45s cubic-bezier(.2,1.4,.4,1); }
 @keyframes bubIn{ from{ transform:translateY(14px) scale(.85); opacity:0; } to{ transform:none; opacity:1; } }
+.pushbar{ margin:0; font-size:.85rem; color:var(--muted); background:var(--card); border-radius:12px; padding:9px 12px; }
+.pushbar.on{ color:var(--mint); font-weight:700; }
+.pushbar.ask{ display:flex; flex-direction:column; gap:8px; color:var(--sand); border:1px solid var(--pink); }
+.pushbar.ask .btn{ align-self:flex-start; }
 .memos{ display:flex; flex-direction:column; gap:6px; }
 .k2{ margin:0; font-size:.75rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
 .memo-row{ display:flex; gap:12px; overflow-x:auto; padding:4px 2px 6px; scrollbar-width:none; }
@@ -453,6 +457,7 @@ const CHECK = [
 const KEY_ITEMS = ["quad", "tir"];
 
 let cur = "infos", checked = {}, moi = "";
+const fromNotif = location.hash === "#live";
 try{
   const s = JSON.parse(localStorage.getItem("vegas-evg") || "null");
   if(s){ cur = s.cur || cur; moi = s.moi || ""; checked = s.checked || {};
@@ -464,6 +469,7 @@ try{
     Object.keys(checked).forEach(k => { if(!CHECK.some(c => c[0] === k) || !checked[k]) delete checked[k]; });
   }
 }catch(e){}
+if(fromNotif) cur = "live";
 const save = () => { try{ localStorage.setItem("vegas-evg", JSON.stringify({ cur, checked, moi })); }catch(e){} };
 
 // Suivi de l'équipe : une ligne par prénom dans la table Supabase « vegas_suivi » (clé publique, faite pour être visible).
@@ -720,7 +726,7 @@ async function loadLive(){
   }catch(e){ liveState = posts.length ? "stale" : "err"; }
   const om = openMoment();
   if(om && !isMe(om.a) && !buzzed[om.id] && Date.now() - Date.parse(om.d) < MOMENT_SEC * 1000){ buzzed[om.id] = true; try{ navigator.vibrate && navigator.vibrate([200, 100, 200]); }catch(e){} }
-  drawLive(); updateStorySocial();
+  drawLive(); updateStorySocial(); resyncPush();
 }
 async function loadImg(id, el){
   if(imgCache[id]){ el.src = imgCache[id]; return; }
@@ -1018,6 +1024,71 @@ async function runMontage(dayK, sec, withSound){
   };
   document.getElementById("mtGo").hidden = false;
 }
+// --- Notifications (Web Push) : le téléphone s'abonne, la base prévient à chaque nouveau post / Moment / commentaire ---
+const VAPID_PUB = "BLb6E3t8oiwhEBsWkhB_6RzoomIFJdbsuESKfgcppm9C6rdZ1_KwcDU7rWVRHituK-P3CnpeOgnNToe_EBvEs6U";
+let pushMsg = "", pushBusy = false;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const standalone = () => { try{ return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; }catch(e){ return false; } };
+const pushSaved = () => { try{ return JSON.parse(localStorage.getItem("vegas-push") || "null"); }catch(e){ return null; } };
+function pushState(){
+  if(!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return isIOS && !standalone() ? "install" : "unsupported";
+  if(isIOS && !standalone()) return "install";
+  if(Notification.permission === "denied") return "denied";
+  const sv = pushSaved();
+  if(Notification.permission === "granted" && sv && sv.e) return "on";
+  return "off";
+}
+function pushBarHTML(){
+  const st = pushState();
+  if(st === "on") return `<p class="pushbar on">🔔 Notifications activées${pushMsg ? " · " + esc(pushMsg) : ""} <button type="button" class="link" id="pushOff">Couper</button></p>`;
+  if(st === "install") return `<p class="pushbar">🔔 Pour recevoir les notifications sur iPhone : ajoute l'appli à l'écran d'accueil (Safari → Partager → « Sur l'écran d'accueil »), puis ouvre-la depuis l'icône LV EVG.</p>`;
+  if(st === "unsupported") return `<p class="pushbar">🔔 Ce navigateur ne gère pas les notifications. Ouvre l'appli dans Chrome (Android) ou depuis l'écran d'accueil (iPhone).</p>`;
+  if(st === "denied") return `<p class="pushbar">🔕 Notifications bloquées. Pour les réactiver : Réglages du téléphone → Notifications → Vegas EVG (ou Chrome).</p>`;
+  return `<div class="pushbar ask"><span>🔔 Sois prévenu à chaque nouvelle story, Moment ou commentaire.</span><button type="button" class="btn hot" id="pushOn" ${pushBusy ? "disabled" : ""}>${pushBusy ? "Activation…" : "Activer les notifications"}</button>${pushMsg ? `<span class="err">${esc(pushMsg)}</span>` : ""}</div>`;
+}
+async function savePushSub(sub, nom){
+  const r = await fetch(SB_BASE + "/rest/v1/rpc/vegas_push_save", { method:"POST",
+    headers:{ apikey:SB_KEY, "Content-Type":"application/json" }, body:JSON.stringify({ p_sub:sub.toJSON ? sub.toJSON() : sub, p_nom:nom }) });
+  if(!r.ok) throw new Error("save " + r.status);
+  try{ localStorage.setItem("vegas-push", JSON.stringify({ e:sub.endpoint, n:nom })); }catch(e){}
+}
+async function enablePush(){
+  if(!moi){ askName(); return; }
+  pushMsg = ""; pushBusy = true;
+  let perm;
+  try{ perm = await Notification.requestPermission(); }catch(e){ perm = Notification.permission; }
+  if(perm !== "granted"){ pushBusy = false; pushMsg = perm === "denied" ? "" : "Il faut accepter les notifications."; lastLiveSig = ""; drawLive(); return; }
+  lastLiveSig = ""; drawLive();
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:unb64u(VAPID_PUB) });
+    await savePushSub(sub, moi);
+    pushMsg = "";
+    try{ reg.showNotification("🔔 Notifications activées", { body:"Tu seras prévenu des stories, Moments et commentaires.", icon:"icon-192.png", tag:"evg-test" }).catch(() => {}); }catch(e){}
+  }catch(e){
+    pushMsg = /save/.test(e.message) ? "Le serveur des notifications n'est pas encore prêt. Réessaie plus tard." : "L'activation a échoué. Réessaie.";
+  }
+  pushBusy = false; lastLiveSig = ""; drawLive();
+}
+async function disablePush(){
+  const sv = pushSaved();
+  try{ const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if(sub) await sub.unsubscribe(); }catch(e){}
+  if(sv && sv.e){ try{ await fetch(SB_BASE + "/rest/v1/rpc/vegas_push_remove", { method:"POST", headers:{ apikey:SB_KEY, "Content-Type":"application/json" }, body:JSON.stringify({ p_endpoint:sv.e }) }); }catch(e){} }
+  try{ localStorage.removeItem("vegas-push"); }catch(e){}
+  pushMsg = ""; lastLiveSig = ""; drawLive();
+}
+// Si on change de prénom, ou si l'abonnement a été renouvelé par le téléphone, on le remet à jour sans rien demander.
+async function resyncPush(){
+  if(pushState() !== "on" || !moi) return;
+  try{
+    const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); const sv = pushSaved();
+    if(!sub){ try{ localStorage.removeItem("vegas-push"); }catch(e){} lastLiveSig = ""; drawLive(); return; }
+    if(sv.e !== sub.endpoint || sv.n !== moi) await savePushSub(sub, moi);
+  }catch(e){}
+}
+function unb64u(s){ const t = s.replace(/-/g, "+").replace(/_/g, "/"); const b = atob(t + "=".repeat((4 - t.length % 4) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", e => { if(e.data && e.data.goto === "live"){ if(story) closeStory(); cur = "live"; save(); draw(); } });
 // --- Écran Live ---
 function drawLiveView(){
   return `<div style="display:flex;flex-direction:column;gap:12px">
@@ -1030,7 +1101,7 @@ function drawLive(){
   const ae = document.activeElement;
   if(ae && box.contains(ae) && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) { drawFeed(); return; }
   const om = openMoment(), c = cote();
-  const sig = JSON.stringify([moi, c, om && om.id, om && posts.some(p => p.m === om.id && isMe(p.a) && !p.x), !!liveDraft.img, !!liveDraft.vid, liveDraft.m, liveBusy,
+  const sig = JSON.stringify([pushState(), pushMsg, pushBusy, moi, c, om && om.id, om && posts.some(p => p.m === om.id && isMe(p.a) && !p.x), !!liveDraft.img, !!liveDraft.vid, liveDraft.m, liveBusy,
     storyList().length, storyList().filter(p => !seenStories[p.id]).length, liveState]);
   if(sig === lastLiveSig && document.getElementById("feed")){ drawFeed(); return; }
   lastLiveSig = sig;
@@ -1038,6 +1109,7 @@ function drawLive(){
   const storyCount = storyList().length, unseen = storyList().filter(p => !seenStories[p.id]).length;
   html += `<div class="livebar"><button type="button" class="btn hot story-btn ${unseen ? "new" : ""}" id="openStories" ${storyCount ? "" : "disabled"}>▶ Stories${unseen ? ` · ${unseen} nouvelle${unseen > 1 ? "s" : ""}` : ""}</button>
     ${moi && !om ? `<button type="button" class="btn moment-btn" id="startMoment">⚡ Lancer un Moment</button>` : ""}</div>`;
+  html += pushBarHTML();
   html += memoriesHTML();
   if(om){
     const done = posts.some(p => p.m === om.id && isMe(p.a) && !p.x);
@@ -1093,6 +1165,8 @@ function drawLive(){
     try{ await sendRow("mom:" + id, { a:moi, s:cote(), d }); }catch(e){}
   };
   const os = document.getElementById("openStories"); if(os) os.onclick = () => openStory();
+  const pon = document.getElementById("pushOn"); if(pon) pon.onclick = enablePush;
+  const poff = document.getElementById("pushOff"); if(poff) poff.onclick = disablePush;
   bindMemories(box);
   const sd = document.getElementById("liveSend");
   if(sd) sd.onclick = async () => {
