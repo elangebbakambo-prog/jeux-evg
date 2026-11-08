@@ -69,9 +69,11 @@ self.addEventListener("push", e => {
 self.addEventListener("notificationclick", e => {
   e.notification.close();
   const url = (e.notification.data && e.notification.data.url) || new URL("vegas/#live", self.registration.scope).href;
-  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+  // On garde la destination : l'appli la relit en s'ouvrant (sur iPhone, le message ci-dessous n'arrive pas toujours).
+  const keep = caches.open("vegas-goto").then(c => c.put("goto", new Response(JSON.stringify({ url, t:Date.now() }), { headers:{ "Content-Type":"application/json" } }))).catch(() => {});
+  e.waitUntil(keep.then(() => self.clients.matchAll({ type:"window", includeUncontrolled:true })).then(list => {
     const app = list.find(c => c.url.includes("/vegas/"));
-    if(app){ app.postMessage({ goto: "live" }); return app.focus(); }
+    if(app){ app.postMessage({ goto:url }); return app.focus ? app.focus().catch(() => self.clients.openWindow(url)) : null; }
     return self.clients.openWindow(url);
   }));
 });

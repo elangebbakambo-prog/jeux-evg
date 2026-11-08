@@ -261,6 +261,9 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .pushbar{ margin:0; font-size:.85rem; color:var(--muted); background:var(--card); border-radius:12px; padding:9px 12px; }
 .sos-btn{ border:1px solid var(--pink); } .sos-btn.ask{ background:var(--pink); color:#fff; }
 .sosbar{ display:flex; flex-direction:column; gap:8px; align-items:flex-start; color:var(--sand); }
+.flash{ animation:flash 2.4s ease-out; border-radius:14px; }
+@keyframes flash{ 0%, 30%{ box-shadow:0 0 0 3px var(--pink); background-color:rgba(255,80,160,.18); } 100%{ box-shadow:0 0 0 0 transparent; } }
+.hl{ box-shadow:0 0 0 3px var(--pink); border-radius:14px; }
 .sosact{ display:flex; flex-wrap:wrap; gap:8px; margin:6px 0; }
 .pushbar.on{ color:var(--mint); font-weight:700; }
 .pushbar.ask{ display:flex; flex-direction:column; gap:8px; color:var(--sand); border:1px solid var(--pink); }
@@ -498,7 +501,18 @@ const CHECK = [
 const KEY_ITEMS = ["quad", "tir"];
 
 let cur = "infos", checked = {}, moi = "";
-const fromNotif = location.hash === "#live";
+// Lien d'une notification : #live, #p=<post>, #c=<post> (commentaire), #comptes, #dep=<dépense>
+let goPost = "", goDep = "", goOpen = false, hlDep = {};
+function readGoto(h){
+  h = (h || "").replace(/^.*#/, "");
+  let m;
+  if((m = /^(?:p|c)=(.+)$/.exec(h))){ goPost = decodeURIComponent(m[1]); goOpen = h[0] === "c"; return "live"; }
+  if((m = /^dep=(.+)$/.exec(h))){ goDep = decodeURIComponent(m[1]); return "comptes"; }
+  if(h === "comptes") return "comptes";
+  if(h === "live") return "live";
+  return "";
+}
+const fromNotif = readGoto(location.hash);
 try{
   const s = JSON.parse(localStorage.getItem("vegas-evg") || "null");
   if(s){ cur = s.cur || cur; moi = s.moi || ""; checked = s.checked || {};
@@ -510,7 +524,7 @@ try{
     Object.keys(checked).forEach(k => { if(!CHECK.some(c => c[0] === k) || !checked[k]) delete checked[k]; });
   }
 }catch(e){}
-if(fromNotif) cur = "live";
+if(fromNotif){ cur = fromNotif; try{ history.replaceState(null, "", location.pathname); }catch(e){} }
 const save = () => { try{ localStorage.setItem("vegas-evg", JSON.stringify({ cur, checked, moi })); }catch(e){} };
 
 // Suivi de l'équipe : une ligne par prénom dans la table Supabase « vegas_suivi » (clé publique, faite pour être visible).
@@ -828,7 +842,7 @@ function drawComptes(){
       <p class="err" id="dErr" hidden></p>
       <button class="btn hot" type="submit">Ajouter</button>
     </form></section>`;
-  html += `<section class="panel"><h3>Dépenses</h3>` + (live.length ? `<ul class="deps">${live.map(d => `<li>
+  html += `<section class="panel"><h3>Dépenses</h3>` + (live.length ? `<ul class="deps">${live.map(d => `<li id="dep-${esc(d.id)}">
       <div class="top"><b>${esc(d.t)}</b><span class="amt">${money(d.m, d.c)}</span></div>
       ${(() => { const pour = (d.pour || []).filter(n => n !== MARIE); if(!pour.length) return "";
         const part = money(Math.round(d.m / pour.length), d.c), autres = pour.filter(n => n !== d.p);
@@ -853,6 +867,8 @@ function drawComptes(){
     if(document.activeElement) document.activeElement.blur();
     saveDep(id, data);
   };
+  if(goDep){ const el = document.getElementById("dep-" + goDep); if(el){ const id = goDep; hlDep = { id, until:Date.now() + 4000 }; goDep = ""; setTimeout(() => { const e2 = document.getElementById("dep-" + id); if(e2) flashTo(e2); }, 60); } }
+  else if(hlDep.id && Date.now() < hlDep.until){ const el = document.getElementById("dep-" + hlDep.id); if(el) el.classList.add("hl"); }
   box.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
     const id = b.dataset.del;
     if(delAsk !== id){ delAsk = id; drawComptes(); return; }
@@ -1289,7 +1305,20 @@ async function resyncPush(){
   }catch(e){}
 }
 function unb64u(s){ const t = s.replace(/-/g, "+").replace(/_/g, "/"); const b = atob(t + "=".repeat((4 - t.length % 4) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); }
-if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", e => { if(e.data && e.data.goto === "live"){ if(story) closeStory(); cur = "live"; save(); draw(); } });
+function goTo(url){
+  const t = readGoto(url) || "live";
+  if(story) closeStory(); cur = t; save(); lastLiveSig = ""; lastFeedSig = ""; draw();
+}
+if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", e => { if(e.data && e.data.goto) goTo(e.data.goto === "live" ? "#live" : e.data.goto); });
+// Sur iPhone, l'appli ne reçoit pas toujours le message : le service worker garde aussi la destination, qu'on lit au retour.
+async function pendingGoto(){
+  try{ const c = await caches.open("vegas-goto"); const r = await c.match("goto"); if(!r) return;
+    await c.delete("goto"); const j = await r.json(); if(Date.now() - j.t < 120000) goTo(j.url); }catch(e){}
+}
+pendingGoto();
+document.addEventListener("visibilitychange", () => { if(!document.hidden) pendingGoto(); });
+// Une fois l'élément affiché : on défile jusqu'à lui et il clignote, pour voir tout de suite d'où vient la notif.
+function flashTo(el){ try{ el.scrollIntoView({ block:"center", behavior:"smooth" }); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }catch(e){} }
 // --- Écran Live ---
 function drawLiveView(){
   return `<div style="display:flex;flex-direction:column;gap:12px">
@@ -1418,7 +1447,7 @@ function sendSos(){
 }
 function postHTML(x, compact, m){
   const late = m ? lateMin(x, m) : -1;
-  return `<li class="post ${x.s === "france" ? "f" : "v"} ${compact ? "mini" : ""}">
+  return `<li class="post ${x.s === "france" ? "f" : "v"} ${compact ? "mini" : ""}" id="post-${esc(x.id)}">
     <div class="who2"><b>${esc(x.a || "?")}</b><span>${x.s === "france" ? "🥐 en France" : "🎰 à Vegas"}</span>${late >= 0 ? `<span class="late">⏰ ${late + 1} min de retard</span>` : ""}</div>
     ${x.v ? `<div class="vidwrap" data-story="${esc(x.id)}">${x.h ? `<img class="ph" data-img="${esc(x.id)}" alt="Vidéo de ${esc(x.a || "")}" loading="lazy">` : `<div class="vidph">🎥 Vidéo</div>`}<span class="play">▶</span></div>`
       : x.h ? `<img class="ph" data-img="${esc(x.id)}" data-story="${esc(x.id)}" alt="Photo de ${esc(x.a || "")}" loading="lazy">` : ""}
@@ -1433,6 +1462,7 @@ function postHTML(x, compact, m){
 function drawFeed(){
   const box = document.getElementById("feed"); if(!box) return;
   const ae = document.activeElement; if(ae && box.contains(ae) && ae.tagName === "INPUT") return; // quelqu'un écrit un commentaire
+  if(goPost && goOpen){ openCom[goPost] = 1; goOpen = false; }
   const fsig = JSON.stringify([posts.map(x => [x.id, x.x, x.h]), moments.map(m => [m.id, m.x]), reacts, comments.map(c => c.id), openCom, replyTo, liveDel, moi, liveState]);
   if(fsig === lastFeedSig && box.firstChild) return;
   lastFeedSig = fsig;
@@ -1458,6 +1488,7 @@ function drawFeed(){
   box.querySelectorAll("[data-img]").forEach(im => { if(imgCache[im.dataset.img]) im.src = imgCache[im.dataset.img]; else if(io) io.observe(im); else loadImg(im.dataset.img, im); });
   box.querySelectorAll("[data-story]").forEach(im => im.onclick = () => openStory(im.dataset.story));
   bindReacts(box); bindComs(box);
+  if(goPost){ const el = document.getElementById("post-" + goPost); if(el){ const id = goPost; goPost = ""; setTimeout(() => { const e2 = document.getElementById("post-" + id); if(e2) flashTo(e2); }, 60); } }
   box.querySelectorAll("[data-pdel]").forEach(b => b.onclick = async () => {
     const id = b.dataset.pdel; if(liveDel !== id){ liveDel = id; drawFeed(); return; }
     liveDel = ""; const x = posts.find(y => y.id === id); if(!x) return; x.x = true; drawFeed();
