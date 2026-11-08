@@ -1119,15 +1119,16 @@ function openMontagePanel(){
   if(!ov){ ov = document.createElement("div"); ov.id = "montage"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "Montage"); document.body.appendChild(ov); }
   ov.hidden = false; document.documentElement.style.overflow = "hidden";
   ov.innerHTML = `<div class="mt-box"><div class="mt-head"><h3>🎬 Créer un montage</h3><button type="button" class="st-close" id="mtClose" aria-label="Fermer">✕</button></div>
-    <p class="note">Le téléphone enchaîne les photos et les vidéos, avec les noms et l'heure Vegas / France. Il le fabrique en temps réel : garde l'appli ouverte jusqu'au bout.</p>
+    <p class="note">Le téléphone enchaîne les photos et un court extrait de chaque vidéo, avec les noms et l'heure Vegas / France. Il le fabrique en temps réel : garde l'appli ouverte jusqu'au bout.</p>
     <label class="mt-l">Quoi<select id="mtDay"><option value="all">Tout le séjour (${storyList().length})</option>${days.map(d => `<option value="${d.k}">${esc(dayLong(d.k))} (${d.list.length})</option>`).join("")}</select></label>
     <label class="mt-l">Photos<select id="mtSec"><option value="2">Rapide : 2 s par photo</option><option value="3" selected>Normal : 3 s par photo</option><option value="4">Tranquille : 4 s par photo</option></select></label>
+    <label class="mt-l">Vidéos<select id="mtClip"><option value="3">Extrait de 3 s</option><option value="5" selected>Extrait de 5 s</option><option value="8">Extrait de 8 s</option><option value="0">Vidéo entière</option></select></label>
     <label class="chk2"><input type="checkbox" id="mtSound" checked> Garder le son des vidéos</label>
     <p class="err" id="mtErr" hidden></p>
     <button type="button" class="btn hot" id="mtGo">Lancer le montage</button>
     <div id="mtStage"></div></div>`;
   document.getElementById("mtClose").onclick = closeMontage;
-  document.getElementById("mtGo").onclick = () => runMontage(document.getElementById("mtDay").value, +document.getElementById("mtSec").value, document.getElementById("mtSound").checked);
+  document.getElementById("mtGo").onclick = () => runMontage(document.getElementById("mtDay").value, +document.getElementById("mtSec").value, document.getElementById("mtSound").checked, +document.getElementById("mtClip").value);
 }
 function closeMontage(){
   if(montage){ montage.stop = true; }
@@ -1140,7 +1141,7 @@ function pickMime(){
   for(const m of c){ try{ if(MediaRecorder.isTypeSupported(m)) return m; }catch(e){} }
   return "";
 }
-async function runMontage(dayK, sec, withSound){
+async function runMontage(dayK, sec, withSound, clip){
   // Le son se prépare tout de suite, pendant le tap (sinon le téléphone le bloque) ; sans son qui tourne, l'enregistrement perdait les photos.
   let actx = null, dest = null;
   if(withSound){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); dest = actx.createMediaStreamDestination(); }catch(e){ actx = null; dest = null; } }
@@ -1200,18 +1201,40 @@ async function runMontage(dayK, sec, withSound){
     for(let n = 0; n < items.length && !montage.stop; n++){
       const x = items[n]; prog(`Montage ${n + 1} / ${items.length}…`);
       if(x.v){
-        const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.setAttribute("playsinline", ""); v.muted = !actx; v.src = x.v;
-        const ok = await new Promise(r => { v.oncanplay = () => r(true); v.onerror = () => r(false); setTimeout(() => r(false), 12000); v.load(); });
-        if(!ok) continue;
-        let src = null; if(actx){ try{ src = actx.createMediaElementSource(v); src.connect(dest); }catch(e){ v.muted = true; } }
-        try{ await v.play(); }catch(e){ v.muted = true; try{ await v.play(); }catch(e2){ continue; } }
-        const t0 = performance.now();
-        while(!montage.stop && !v.ended && performance.now() - t0 < (MAX_VID_SEC + 2) * 1000){
-          ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
-          if(v.videoWidth) cover(v, v.videoWidth, v.videoHeight, 1, 0, 0);
-          overlay(x, Math.min(1, (performance.now() - t0) / 400)); await frame();
+        // Extrait vidéo. Sur iPhone, une vidéo hors de la page ne se charge jamais tant qu'on ne la lance pas :
+        // avant, l'appli attendait qu'elle soit prête, abandonnait au bout de 12 s, et la vidéo sautait. Maintenant on la met
+        // (invisible) dans la page et on la lance directement. Si elle ne veut vraiment pas, on montre son image d'aperçu.
+        const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto";
+        v.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+        v.muted = !actx; v.src = x.v + (x.v.includes("?") ? "&" : "?") + "mt=1"; // adresse à part : évite la copie gardée par la story (sans CORS)
+        document.body.appendChild(v);
+        let src = null, gain = null;
+        if(actx){ try{ src = actx.createMediaElementSource(v); gain = actx.createGain(); src.connect(gain); gain.connect(dest); }catch(e){ v.muted = true; src = null; } }
+        const started = await new Promise(async r => {
+          const tm = setTimeout(() => r(false), 12000); v.onerror = () => { clearTimeout(tm); r(false); };
+          try{ await v.play(); }catch(e){ v.muted = true; try{ await v.play(); }catch(e2){ clearTimeout(tm); return r(false); } }
+          const wait = () => { if(v.readyState >= 2 && v.videoWidth){ clearTimeout(tm); r(true); } else if(!montage.stop) requestAnimationFrame(wait); };
+          wait();
+        });
+        if(started){
+          const full = isFinite(v.duration) && v.duration > 0 ? v.duration : MAX_VID_SEC;
+          const len = (clip > 0 ? Math.min(clip, full) : full) * 1000, t0 = performance.now();
+          while(!montage.stop && !v.ended){
+            const el = performance.now() - t0; if(el >= len || el > (MAX_VID_SEC + 2) * 1000) break;
+            ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+            cover(v, v.videoWidth, v.videoHeight, 1, 0, 0); overlay(x, Math.min(1, el / 400));
+            const fade = Math.max(el < 250 ? 1 - el / 250 : 0, len - el < 300 ? 1 - (len - el) / 300 : 0); // fondu au début et à la fin
+            if(fade > 0){ ctx.fillStyle = `rgba(0,0,0,${fade})`; ctx.fillRect(0, 0, cv.width, cv.height); }
+            if(gain) gain.gain.value = 1 - fade;
+            await frame();
+          }
         }
-        v.pause(); if(src) try{ src.disconnect(); }catch(e){}
+        v.pause(); if(src) try{ src.disconnect(); }catch(e){} v.removeAttribute("src"); v.load(); v.remove();
+        if(!started){ // vidéo illisible : on garde au moins son image d'aperçu
+          const im = x.h ? await getImg(x.id) : null; if(!im) continue;
+          await hold(sec * 1000, t => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+            cover(im, im.naturalWidth, im.naturalHeight, 1.02 + t * .08, 0, 0); overlay(x, Math.min(1, t * 4)); });
+        }
       } else {
         const im = await getImg(x.id); if(!im) continue;
         const dir = n % 2 ? 1 : -1;
