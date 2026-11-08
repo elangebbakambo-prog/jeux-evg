@@ -259,6 +259,9 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .chipb.on{ background:var(--mint); color:var(--night); border-color:var(--mint); }
 .chipb:focus-visible{ outline:2px solid var(--pink); }
 .pushbar{ margin:0; font-size:.85rem; color:var(--muted); background:var(--card); border-radius:12px; padding:9px 12px; }
+.sos-btn{ border:1px solid var(--pink); } .sos-btn.ask{ background:var(--pink); color:#fff; }
+.sosbar{ display:flex; flex-direction:column; gap:8px; align-items:flex-start; color:var(--sand); }
+.sosact{ display:flex; flex-wrap:wrap; gap:8px; margin:6px 0; }
 .pushbar.on{ color:var(--mint); font-weight:700; }
 .pushbar.ask{ display:flex; flex-direction:column; gap:8px; color:var(--sand); border:1px solid var(--pink); }
 .pushbar.ask .btn{ align-self:flex-start; }
@@ -867,6 +870,7 @@ const MOMENT_SEC = 120, MOMENT_OPEN_MIN = 30;
 let posts = [], moments = [], reacts = [], liveState = "load", liveDraft = { t:"", img:"", m:"", vid:null }, liveCote = "", imgCache = {}, liveBusy = false, liveDel = "";
 let comments = [], replyTo = {}, openCom = {}, pendingRe = {}, shownCom = {}, lastLiveSig = "", lastFeedSig = "";
 let seenStories = {}, buzzed = {};
+let sos = { ask:false, busy:false, msg:"", link:"" }; // « Je suis perdu » : envoie sa position sur le Live
 try{ liveCote = localStorage.getItem("vegas-cote") || ""; seenStories = JSON.parse(localStorage.getItem("vegas-vus") || "{}"); }catch(e){}
 const cote = () => liveCote || (VOYAGEURS.some(n => n.toLowerCase() === (moi || "").toLowerCase()) ? "vegas" : "france");
 const hm = (iso, tz) => { try{ return new Date(iso).toLocaleTimeString("fr-FR", { timeZone:tz, hour:"2-digit", minute:"2-digit" }); }catch(e){ return ""; } };
@@ -883,11 +887,11 @@ async function sendRow(nom, data){
 }
 async function loadLive(){
   try{
-    const q = "?or=(nom.like.post%3A*,nom.like.mom%3A*,nom.like.rea%3A*,nom.like.com%3A*)&select=nom,maj,a:coches->>a,s:coches->>s,t:coches->>t,v:coches->>v,h:coches->>h,x:coches->>x,d:coches->>d,m:coches->>m,p:coches->>p,e:coches->>e,r:coches->>r,o:coches->>o&order=maj.desc&limit=2000";
+    const q = "?or=(nom.like.post%3A*,nom.like.mom%3A*,nom.like.rea%3A*,nom.like.com%3A*)&select=nom,maj,a:coches->>a,s:coches->>s,t:coches->>t,v:coches->>v,h:coches->>h,x:coches->>x,d:coches->>d,m:coches->>m,p:coches->>p,e:coches->>e,g:coches->>g,r:coches->>r,o:coches->>o&order=maj.desc&limit=2000";
     const r = await fetch(SB_URL + q, { headers:{ apikey:SB_KEY }, cache:"no-store" });
     if(!r.ok) throw new Error(r.status);
     const rows = await r.json();
-    posts = rows.filter(x => x.nom.startsWith("post:")).map(x => ({ id:x.nom.slice(5), a:x.a, s:x.s, t:x.t || "", v:x.v || "", h:x.h === "true", x:x.x === "true", d:x.d || x.maj, m:x.m || "" }));
+    posts = rows.filter(x => x.nom.startsWith("post:")).map(x => ({ id:x.nom.slice(5), a:x.a, s:x.s, t:x.t || "", v:x.v || "", h:x.h === "true", x:x.x === "true", d:x.d || x.maj, m:x.m || "", g:x.g || "" }));
     moments = rows.filter(x => x.nom.startsWith("mom:")).map(x => ({ id:x.nom.slice(4), a:x.a, s:x.s, x:x.x === "true", d:x.d || x.maj }));
     reacts = rows.filter(x => x.nom.startsWith("rea:") && x.x !== "true" && x.e).map(x => ({ p:x.p, a:x.a, e:x.e }));
     comments = rows.filter(x => x.nom.startsWith("com:") && x.x !== "true" && x.t).map(x => ({ id:x.nom.slice(4), p:x.p, a:x.a, t:x.t, d:x.d || x.maj, s:x.s, r:x.r || "", o:x.o || "" }));
@@ -1298,14 +1302,16 @@ function drawLive(){
   const ae = document.activeElement;
   if(ae && box.contains(ae) && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) { drawFeed(); return; }
   const om = openMoment(), c = cote();
-  const sig = JSON.stringify([pushState(), pushMsg, pushBusy, moi, c, om && om.id, om && posts.some(p => p.m === om.id && isMe(p.a) && !p.x), !!liveDraft.img, !!liveDraft.vid, liveDraft.m, liveBusy,
+  const sig = JSON.stringify([sos, pushState(), pushMsg, pushBusy, moi, c, om && om.id, om && posts.some(p => p.m === om.id && isMe(p.a) && !p.x), !!liveDraft.img, !!liveDraft.vid, liveDraft.m, liveBusy,
     storyList().length, storyList().filter(p => !seenStories[p.id]).length, liveState]);
   if(sig === lastLiveSig && document.getElementById("feed")){ drawFeed(); return; }
   lastLiveSig = sig;
   let html = "";
   const storyCount = storyList().length, unseen = storyList().filter(p => !seenStories[p.id]).length;
   html += `<div class="livebar"><button type="button" class="btn hot story-btn ${unseen ? "new" : ""}" id="openStories" ${storyCount ? "" : "disabled"}>▶ Stories${unseen ? ` · ${unseen} nouvelle${unseen > 1 ? "s" : ""}` : ""}</button>
-    ${moi && !om ? `<button type="button" class="btn moment-btn" id="startMoment">⚡ Lancer un Moment</button>` : ""}</div>`;
+    ${moi && !om ? `<button type="button" class="btn moment-btn" id="startMoment">⚡ Lancer un Moment</button>` : ""}
+    ${moi ? `<button type="button" class="btn sos-btn ${sos.ask ? "ask" : ""}" id="sosBtn" ${sos.busy ? "disabled" : ""}>${sos.busy ? "📍 Localisation…" : sos.ask ? "📍 Confirmer : envoyer ma position" : "📍 Je suis perdu"}</button>` : ""}</div>
+    ${sos.msg ? `<p class="pushbar sosbar">${esc(sos.msg)}${sos.link ? ` <a class="btn" href="https://wa.me/?text=${encodeURIComponent("📍 Je suis perdu, je suis ici : " + sos.link)}" target="_blank" rel="noopener">Envoyer aussi sur WhatsApp</a>` : ""}</p>` : ""}`;
   html += pushBarHTML();
   html += memoriesHTML();
   if(om){
@@ -1362,6 +1368,7 @@ function drawLive(){
     try{ await sendRow("mom:" + id, { a:moi, s:cote(), d }); }catch(e){}
   };
   const os = document.getElementById("openStories"); if(os) os.onclick = () => openStory();
+  const sb = document.getElementById("sosBtn"); if(sb) sb.onclick = sendSos;
   const pon = document.getElementById("pushOn"); if(pon) pon.onclick = enablePush;
   const poff = document.getElementById("pushOff"); if(poff) poff.onclick = disablePush;
   bindMemories(box);
@@ -1386,6 +1393,29 @@ function drawLive(){
     }catch(e){ liveBusy = false; drawLive(); const er2 = document.getElementById("liveErr"); if(er2){ er2.textContent = "Pas envoyé (pas de réseau ?). Ton texte est gardé, réessaie."; er2.hidden = false; } }
   };
 }
+function sendSos(){
+  if(!moi) return askName();
+  if(!sos.ask){ sos = { ask:true, busy:false, msg:"", link:"" }; drawLive(); setTimeout(() => { if(sos.ask){ sos.ask = false; drawLive(); } }, 6000); return; }
+  if(!("geolocation" in navigator)){ sos = { ask:false, busy:false, msg:"Ce téléphone ne donne pas sa position.", link:"" }; drawLive(); return; }
+  sos = { ask:false, busy:true, msg:"", link:"" }; drawLive();
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const la = pos.coords.latitude.toFixed(6), lo = pos.coords.longitude.toFixed(6), acc = Math.round(pos.coords.accuracy || 0);
+    const link = "https://www.google.com/maps/search/?api=1&query=" + la + "," + lo;
+    const id = newId(), d = new Date().toISOString();
+    const t = `📍 ${moi} est perdu ! Il est ici${acc ? ` (à ${acc} m près)` : ""}.`;
+    const data = { a:moi, s:cote(), t, d, g:la + "," + lo };
+    try{
+      await sendRow("post:" + id, data);
+      posts.unshift({ id, a:moi, s:data.s, t, v:"", h:false, x:false, d, m:"", g:data.g });
+      sos = { ask:false, busy:false, msg:"Position envoyée sur le Live ✓", link };
+      loadLive();
+    }catch(e){ sos = { ask:false, busy:false, msg:"Pas de réseau pour le Live. Envoie ta position sur WhatsApp :", link }; }
+    drawLive();
+  }, err => {
+    sos = { ask:false, busy:false, msg: err.code === 1 ? "Position refusée. Autorise la localisation : Réglages → Confidentialité → Service de localisation → Safari (ou l'appli)." : "Position introuvable. Réessaie dehors ou avec le réseau.", link:"" };
+    drawLive();
+  }, { enableHighAccuracy:true, timeout:20000, maximumAge:30000 });
+}
 function postHTML(x, compact, m){
   const late = m ? lateMin(x, m) : -1;
   return `<li class="post ${x.s === "france" ? "f" : "v"} ${compact ? "mini" : ""}">
@@ -1393,6 +1423,7 @@ function postHTML(x, compact, m){
     ${x.v ? `<div class="vidwrap" data-story="${esc(x.id)}">${x.h ? `<img class="ph" data-img="${esc(x.id)}" alt="Vidéo de ${esc(x.a || "")}" loading="lazy">` : `<div class="vidph">🎥 Vidéo</div>`}<span class="play">▶</span></div>`
       : x.h ? `<img class="ph" data-img="${esc(x.id)}" data-story="${esc(x.id)}" alt="Photo de ${esc(x.a || "")}" loading="lazy">` : ""}
     ${x.t ? `<p>${esc(x.t)}</p>` : ""}
+    ${/^-?[\d.]+,-?[\d.]+$/.test(x.g || "") ? `<div class="sosact"><a class="btn hot" href="https://www.google.com/maps/search/?api=1&query=${x.g}" target="_blank" rel="noopener">🗺️ Voir où il est</a><a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${x.g}&travelmode=walking" target="_blank" rel="noopener">🚶 Itinéraire</a></div>` : ""}
     <p class="times"><b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France</p>
     ${reactBar(x.id)}
     ${comBlock(x.id)}
