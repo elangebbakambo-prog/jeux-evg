@@ -206,8 +206,15 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .pop.big{ font-size:2.6rem; animation-duration:1.5s; }
 @keyframes popUp{ 0%{ transform:translate(-50%, 0) scale(.4); opacity:0; } 15%{ transform:translate(-50%, -20px) scale(1.3); opacity:1; } 100%{ transform:translate(-50%, -160px) scale(1); opacity:0; } }
 .coms{ display:flex; flex-direction:column; gap:4px; }
-.com{ margin:0; font-size:.85rem; overflow-wrap:anywhere; } .com b.v{ color:var(--amber); } .com b.f{ color:var(--mint); }
-.com span{ color:var(--muted); font-size:.7rem; white-space:nowrap; }
+.com{ font-size:.85rem; overflow-wrap:anywhere; } .com p{ margin:0; } .com b.v{ color:var(--amber); } .com b.f{ color:var(--mint); }
+.com.rep{ margin-left:18px; padding-left:8px; border-left:2px solid var(--line); }
+.com .at{ font-style:normal; color:var(--pink); font-weight:600; }
+.cact{ display:flex; align-items:center; gap:10px; margin-top:1px; }
+.cact span{ color:var(--muted); font-size:.7rem; white-space:nowrap; }
+.cact .link{ font-size:.72rem; padding:0; }
+.like{ all:unset; cursor:pointer; font-size:.8rem; display:inline-flex; align-items:center; gap:2px; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+.like small{ font-size:.7rem; font-weight:800; color:var(--sand); }
+.replying{ margin:2px 0 0; font-size:.75rem; color:var(--muted); } .replying .link{ font-size:.75rem; }
 .cform{ display:flex; gap:6px; }
 .cform input{ flex:1; min-width:0; font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:999px; padding:6px 12px; }
 .cform input:focus-visible{ outline:2px solid var(--mint); }
@@ -858,7 +865,7 @@ const TZ = { vegas:"America/Los_Angeles", france:"Europe/Paris" };
 const EMOJIS = ["🔥", "😂", "😍", "😮", "👏"];
 const MOMENT_SEC = 120, MOMENT_OPEN_MIN = 30;
 let posts = [], moments = [], reacts = [], liveState = "load", liveDraft = { t:"", img:"", m:"", vid:null }, liveCote = "", imgCache = {}, liveBusy = false, liveDel = "";
-let comments = [], openCom = {}, pendingRe = {}, shownCom = {}, lastLiveSig = "", lastFeedSig = "";
+let comments = [], replyTo = {}, openCom = {}, pendingRe = {}, shownCom = {}, lastLiveSig = "", lastFeedSig = "";
 let seenStories = {}, buzzed = {};
 try{ liveCote = localStorage.getItem("vegas-cote") || ""; seenStories = JSON.parse(localStorage.getItem("vegas-vus") || "{}"); }catch(e){}
 const cote = () => liveCote || (VOYAGEURS.some(n => n.toLowerCase() === (moi || "").toLowerCase()) ? "vegas" : "france");
@@ -876,14 +883,14 @@ async function sendRow(nom, data){
 }
 async function loadLive(){
   try{
-    const q = "?or=(nom.like.post%3A*,nom.like.mom%3A*,nom.like.rea%3A*,nom.like.com%3A*)&select=nom,maj,a:coches->>a,s:coches->>s,t:coches->>t,v:coches->>v,h:coches->>h,x:coches->>x,d:coches->>d,m:coches->>m,p:coches->>p,e:coches->>e&order=maj.desc&limit=2000";
+    const q = "?or=(nom.like.post%3A*,nom.like.mom%3A*,nom.like.rea%3A*,nom.like.com%3A*)&select=nom,maj,a:coches->>a,s:coches->>s,t:coches->>t,v:coches->>v,h:coches->>h,x:coches->>x,d:coches->>d,m:coches->>m,p:coches->>p,e:coches->>e,r:coches->>r,o:coches->>o&order=maj.desc&limit=2000";
     const r = await fetch(SB_URL + q, { headers:{ apikey:SB_KEY }, cache:"no-store" });
     if(!r.ok) throw new Error(r.status);
     const rows = await r.json();
     posts = rows.filter(x => x.nom.startsWith("post:")).map(x => ({ id:x.nom.slice(5), a:x.a, s:x.s, t:x.t || "", v:x.v || "", h:x.h === "true", x:x.x === "true", d:x.d || x.maj, m:x.m || "" }));
     moments = rows.filter(x => x.nom.startsWith("mom:")).map(x => ({ id:x.nom.slice(4), a:x.a, s:x.s, x:x.x === "true", d:x.d || x.maj }));
     reacts = rows.filter(x => x.nom.startsWith("rea:") && x.x !== "true" && x.e).map(x => ({ p:x.p, a:x.a, e:x.e }));
-    comments = rows.filter(x => x.nom.startsWith("com:") && x.x !== "true" && x.t).map(x => ({ id:x.nom.slice(4), p:x.p, a:x.a, t:x.t, d:x.d || x.maj, s:x.s }));
+    comments = rows.filter(x => x.nom.startsWith("com:") && x.x !== "true" && x.t).map(x => ({ id:x.nom.slice(4), p:x.p, a:x.a, t:x.t, d:x.d || x.maj, s:x.s, r:x.r || "", o:x.o || "" }));
     const now = Date.now();
     Object.keys(pendingRe).forEach(k => { const pr = pendingRe[k]; if(now > pr.until){ delete pendingRe[k]; return; }
       reacts = reacts.filter(r => !(r.p === pr.p && (r.a || "").toLowerCase() === pr.a.toLowerCase())); if(pr.e) reacts.push({ p:pr.p, a:pr.a, e:pr.e }); });
@@ -990,27 +997,43 @@ async function toggleReact(pid, e, btn){
   if(!off) reacts.push({ p:pid, a:moi, e });
   pendingRe[pid + "|" + moi.toLowerCase()] = { p:pid, a:moi, e:off ? "" : e, until:Date.now() + 20000 };
   refreshReacts(pid);
+  if(pid.startsWith("c:")){ const c = comments.find(k => k.id === pid.slice(2)); if(c) refreshComs(c.p); }
   if(!off && btn) popEmoji(e, btn, !!story);
   try{ await sendRow("rea:" + pid + ":" + moi.toLowerCase().slice(0, 12), { p:pid, a:moi, e:off ? "" : e, x:off }); }catch(err){}
 }
 function bindReacts(root){ root.querySelectorAll("[data-re]").forEach(b => b.onclick = ev => { ev.stopPropagation(); toggleReact(b.dataset.re, b.dataset.e, b); }); }
 function comsOf(pid){ return comments.filter(c => c.p === pid).sort((a, b) => a.d.localeCompare(b.d)); }
+// Réponses : un commentaire peut répondre à un autre (r = commentaire d'origine, o = la personne à qui on répond).
+// Les réponses s'affichent en retrait sous le commentaire d'origine. Un ❤️ par commentaire (ligne « rea:c:… »).
+function comLine(c, reply){
+  const k = "c:" + c.id, n = reacts.filter(r => r.p === k).length, liked = reacts.some(r => r.p === k && isMe(r.a));
+  return `<div class="com ${reply ? "rep" : ""}"><p><b class="${c.s === "france" ? "f" : "v"}">${esc(c.a)}</b> ${c.o ? `<i class="at">@${esc(c.o)}</i> ` : ""}${esc(c.t)}</p>
+    <div class="cact"><span>${hm(c.d, TZ.vegas)} Vegas · ${hm(c.d, TZ.france)} FR</span>
+    <button type="button" class="link" data-reply="${esc(c.id)}">Répondre</button>
+    <button type="button" class="like ${liked ? "on" : ""}" data-like="${esc(c.id)}" aria-label="J'aime">${liked ? "❤️" : "🤍"}${n ? `<small>${n}</small>` : ""}</button></div></div>`;
+}
 function comBlock(pid){
-  const list = comsOf(pid), all = openCom[pid] || list.length <= 2, shown = all ? list : list.slice(-2);
+  const list = comsOf(pid), ids = new Set(list.map(c => c.id));
+  const tops = list.filter(c => !c.r || !ids.has(c.r));
+  const all = openCom[pid] || tops.length <= 2, shown = all ? tops : tops.slice(-2);
+  const rt = replyTo[pid];
   return `<div class="coms" data-cp="${esc(pid)}">
     ${!all ? `<button type="button" class="link" data-comall="${esc(pid)}">Voir les ${list.length} commentaires</button>` : ""}
-    ${shown.map(c => `<p class="com"><b class="${c.s === "france" ? "f" : "v"}">${esc(c.a)}</b> ${esc(c.t)} <span>${hm(c.d, TZ.vegas)} Vegas · ${hm(c.d, TZ.france)} FR</span></p>`).join("")}
-    <form class="cform" data-cform="${esc(pid)}"><input maxlength="200" placeholder="Ajouter un commentaire…" enterkeyhint="send" autocomplete="off" aria-label="Commenter"><button type="submit" aria-label="Envoyer">➤</button></form></div>`;
+    ${shown.map(c => comLine(c) + list.filter(x => x.r === c.id).map(x => comLine(x, true)).join("")).join("")}
+    ${rt ? `<p class="replying">Réponse à <b>${esc(rt.a)}</b> <button type="button" class="link" data-unreply="${esc(pid)}">Annuler</button></p>` : ""}
+    <form class="cform" data-cform="${esc(pid)}"><input maxlength="200" placeholder="${rt ? "Répondre à " + esc(rt.a) + "…" : "Ajouter un commentaire…"}" enterkeyhint="send" autocomplete="off" aria-label="Commenter"><button type="submit" aria-label="Envoyer">➤</button></form></div>`;
 }
 function storyBubbles(pid){
   const list = comsOf(pid).slice(-4);
-  const html = list.map(c => `<p class="bub ${shownCom[c.id] ? "" : "new"}"><b>${esc(c.a)}</b> ${esc(c.t)}</p>`).join("");
+  const html = list.map(c => `<p class="bub ${shownCom[c.id] ? "" : "new"}"><b>${esc(c.a)}</b> ${c.o ? "↪ @" + esc(c.o) + " " : ""}${esc(c.t)}</p>`).join("");
   list.forEach(c => shownCom[c.id] = 1);
   return html;
 }
 function refreshComs(pid){
   document.querySelectorAll(".coms").forEach(el => { if(el.dataset.cp !== pid) return;
-    const tmp = document.createElement("div"); tmp.innerHTML = comBlock(pid); const n = tmp.firstElementChild; el.replaceWith(n); bindComs(n); });
+    const inp = el.querySelector(".cform input"), typed = inp ? inp.value : "", had = inp && document.activeElement === inp;
+    const tmp = document.createElement("div"); tmp.innerHTML = comBlock(pid); const n = tmp.firstElementChild; el.replaceWith(n); bindComs(n);
+    const ni = n.querySelector(".cform input"); if(ni && typed){ ni.value = typed; } if(ni && had) ni.focus(); });
   updateStorySocial();
 }
 function updateStorySocial(){
@@ -1020,14 +1043,23 @@ function updateStorySocial(){
 }
 async function sendComment(pid, t){
   if(!moi) return askName();
-  const id = newId(), d = new Date().toISOString(), c = { id, p:pid, a:moi, t, d, s:cote() };
+  const id = newId(), d = new Date().toISOString(), rt = replyTo[pid];
+  const c = { id, p:pid, a:moi, t, d, s:cote(), r:rt ? rt.r : "", o:rt ? rt.a : "" };
+  delete replyTo[pid]; if(rt) openCom[pid] = 1;
   comments.push(c); refreshComs(pid);
-  try{ await sendRow("com:" + id, { p:pid, a:moi, t, d, s:c.s }); }catch(err){}
+  const row = { p:pid, a:moi, t, d, s:c.s }; if(rt){ row.r = c.r; row.o = c.o; }
+  try{ await sendRow("com:" + id, row); }catch(err){}
 }
 function bindComs(root){
   root.querySelectorAll("[data-cform]").forEach(f => f.onsubmit = e => { e.preventDefault(); e.stopPropagation(); const i = f.querySelector("input"), t = i.value.trim(); if(!t) return;
     i.value = ""; if(f.classList.contains("st")) i.blur(); sendComment(f.dataset.cform, t.slice(0, 200)); });
   root.querySelectorAll("[data-comall]").forEach(b => b.onclick = () => { openCom[b.dataset.comall] = 1; refreshComs(b.dataset.comall); });
+  root.querySelectorAll("[data-reply]").forEach(b => b.onclick = ev => { ev.stopPropagation(); if(!moi) return askName();
+    const c = comments.find(k => k.id === b.dataset.reply); if(!c) return;
+    replyTo[c.p] = { r:c.r || c.id, a:c.a }; refreshComs(c.p);
+    document.querySelectorAll(".coms").forEach(el => { if(el.dataset.cp === c.p){ const i = el.querySelector(".cform input"); if(i) i.focus(); } }); });
+  root.querySelectorAll("[data-unreply]").forEach(b => b.onclick = ev => { ev.stopPropagation(); delete replyTo[b.dataset.unreply]; refreshComs(b.dataset.unreply); });
+  root.querySelectorAll("[data-like]").forEach(b => b.onclick = ev => { ev.stopPropagation(); toggleReact("c:" + b.dataset.like, "❤️", b); });
 }
 // ===== Souvenirs jour par jour + montage vidéo =====
 const dayKey = iso => { try{ return new Date(iso).toLocaleDateString("en-CA", { timeZone:TZ.vegas }); }catch(e){ return iso.slice(0, 10); } };
@@ -1370,7 +1402,7 @@ function postHTML(x, compact, m){
 function drawFeed(){
   const box = document.getElementById("feed"); if(!box) return;
   const ae = document.activeElement; if(ae && box.contains(ae) && ae.tagName === "INPUT") return; // quelqu'un écrit un commentaire
-  const fsig = JSON.stringify([posts.map(x => [x.id, x.x, x.h]), moments.map(m => [m.id, m.x]), reacts, comments.map(c => c.id), openCom, liveDel, moi, liveState]);
+  const fsig = JSON.stringify([posts.map(x => [x.id, x.x, x.h]), moments.map(m => [m.id, m.x]), reacts, comments.map(c => c.id), openCom, replyTo, liveDel, moi, liveState]);
   if(fsig === lastFeedSig && box.firstChild) return;
   lastFeedSig = fsig;
   const live = posts.filter(x => !x.x);
