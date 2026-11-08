@@ -374,6 +374,16 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 #story[hidden]{ display:none !important; }
 #story .st-cap{ margin:0; font-size:1rem; overflow-wrap:anywhere; white-space:pre-wrap; }
 #story .re{ background:rgba(255,255,255,.12); font-size:1.3rem; padding:6px 10px; } #story .re small{ color:#fff; }
+.bilan .maj2{ margin:0; font-size:.8rem; color:var(--muted); } .bilan .maj2 b{ color:var(--sand); }
+.moves li{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+.btn.sm{ font-size:.78rem; padding:5px 10px; }
+.people{ display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px; }
+.pcard{ background:var(--card2); border-radius:12px; padding:9px 11px; display:flex; flex-direction:column; gap:3px; min-width:0; border-left:4px solid var(--line); }
+.pcard.plus{ border-left-color:var(--mint); } .pcard.minus{ border-left-color:var(--pink); }
+.pcard .pn{ font-size:1rem; }
+.pcard .row{ display:flex; justify-content:space-between; gap:6px; font-size:.8rem; color:var(--muted); } .pcard .row b{ color:var(--sand); }
+.pcard .res{ margin-top:3px; font-size:.86rem; font-weight:700; }
+.pcard.plus .res b{ color:var(--mint); } .pcard.minus .res b{ color:var(--pink); }
 .moves{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
 .moves li{ background:var(--card2); border-radius:10px; padding:9px 12px; font-size:.95rem; }
 .amt{ color:var(--amber); font-weight:600; white-space:nowrap; }
@@ -918,15 +928,19 @@ const SEEDS = [
   ["resa-tir-chris", { t:"Tir – part de Chris (lun. 9, 7 h)", m:17910, c:"USD", p:"Elange", pour:["Elange","Jovan","Isma","Ysly"], par:"Elange", d:"2026-11-06T14:57:00Z" }]
 ];
 const seeded = {};
+let rbAsk = "";
 let deps = [], depForm = { pour: PAYEURS.slice() }, delAsk = "";
 const money = (cents, c) => { try{ return (cents / 100).toLocaleString("fr-FR", { style:"currency", currency:c || "USD", currencyDisplay:"narrowSymbol" }); }catch(e){ return (cents / 100).toFixed(2) + " " + c; } };
 function settle(list, cur){
-  const bal = {}; PAYEURS.concat(MARIE).forEach(n => bal[n] = 0);
+  const bal = {}, paid = {}, share = {}, rbOut = {}, rbIn = {};
+  PAYEURS.concat(MARIE).forEach(n => { bal[n] = 0; paid[n] = 0; share[n] = 0; rbOut[n] = 0; rbIn[n] = 0; });
   list.filter(d => d.c === cur).forEach(d => {
     const pour = (d.pour || []).filter(n => n !== MARIE); if(!pour.length) return;
     bal[d.p] = (bal[d.p] || 0) + d.m;
+    if(d.rb){ rbOut[d.p] = (rbOut[d.p] || 0) + d.m; pour.forEach(n => rbIn[n] = (rbIn[n] || 0) + Math.round(d.m / pour.length)); }
+    else paid[d.p] = (paid[d.p] || 0) + d.m;
     const part = Math.floor(d.m / pour.length); let reste = d.m - part * pour.length;
-    pour.forEach(n => { bal[n] = (bal[n] || 0) - part - (reste > 0 ? 1 : 0); reste--; });
+    pour.forEach(n => { const x = part + (reste > 0 ? 1 : 0); reste--; bal[n] = (bal[n] || 0) - x; if(!d.rb) share[n] = (share[n] || 0) + x; });
   });
   const cred = [], debt = [];
   Object.keys(bal).forEach(n => { if(bal[n] > 0) cred.push([n, bal[n]]); else if(bal[n] < 0) debt.push([n, -bal[n]]); });
@@ -938,7 +952,7 @@ function settle(list, cur){
     debt[i][1] -= x; cred[j][1] -= x;
     if(debt[i][1] === 0) i++; if(cred[j][1] === 0) j++;
   }
-  return { bal, moves };
+  return { bal, moves, paid, share, rbOut, rbIn };
 }
 async function saveDep(id, data){
   const row = { nom:"dep:" + id, coches:data, maj:new Date().toISOString() };
@@ -962,12 +976,24 @@ function drawComptes(){
   let html = "";
   if(teamState === "err") html += `<p class="note">Les comptes ne sont pas joignables pour l'instant (pas de réseau). Réessaie dans un moment.</p>`;
   if(teamState === "err-save") html += `<p class="note">La dernière dépense n'a pas pu être enregistrée (pas de réseau). Ajoute-la à nouveau plus tard.</p>`;
-  html += `<section class="panel"><h3>Qui doit quoi à qui</h3>` + (curs.length ? curs.map(c => {
-    const { bal, moves } = settle(live, c), tot = live.filter(d => d.c === c).reduce((a, d) => a + d.m, 0);
-    return `<p class="note">Total dépensé : <b>${money(tot, c)}</b></p>
-      ${moves.length ? `<p class="perso">Ce que <b>chacun</b> doit rembourser, personne par personne (pas le total) :</p><ul class="moves">${moves.map(([a, b, x]) => `<li><b>${esc(a)}</b> doit <b class="amt">${money(x, c)}</b> à <b>${esc(b)}</b></li>`).join("")}</ul>` : `<p class="miss ok">Tout le monde est quitte ✓</p>`}
-      <ul class="bals">${PAYEURS.map(n => `<li><span>${esc(n)}</span><b class="${bal[n] > 0 ? "plus" : bal[n] < 0 ? "minus" : ""}">${bal[n] > 0 ? "+" : ""}${money(bal[n], c)}</b></li>`).join("")}</ul>`;
-  }).join("<hr>") : `<p class="note">Aucune dépense pour l'instant.</p>`) + `<p class="note">${esc(MARIE)} est invité : sa part est répartie entre ceux qui partagent chaque dépense.</p></section>`;
+  const last = live[0];
+  html += `<section class="panel bilan"><h3>💰 Le bilan, tout compris</h3>
+    ${last ? `<p class="maj2">À jour avec les ${live.length} dépense${live.length > 1 ? "s" : ""} · dernière : <b>${esc(last.t)}</b>, ${esc(when(last.d))}</p>` : ""}` + (curs.length ? curs.map(c => {
+    const { bal, moves, paid, share, rbOut, rbIn } = settle(live, c), tot = live.filter(d => d.c === c && !d.rb).reduce((a, d) => a + d.m, 0);
+    const who = PAYEURS.filter(n => paid[n] || share[n] || rbOut[n] || rbIn[n]);
+    return `<p class="note">Total dépensé : <b>${money(tot, c)}</b>${c === "EUR" ? " (en euros)" : ""}</p>
+      ${moves.length ? `<p class="perso"><b>Les remboursements à faire</b> (les avances de chacun sont déjà compensées) :</p>
+        <ul class="moves">${moves.map(([a, b, x], k) => { const key = c + "|" + a + "|" + b; return `<li><span><b>${esc(a)}</b> doit <b class="amt">${money(x, c)}</b> à <b>${esc(b)}</b></span>
+          <button type="button" class="btn sm" data-rb="${esc(key)}" data-rbx="${x}">${rbAsk === key ? "Confirmer ✓" : "✓ Remboursé"}</button></li>`; }).join("")}</ul>`
+        : `<p class="miss ok">Tout le monde est quitte ✓</p>`}
+      <div class="people">${who.map(n => { const b = bal[n];
+        return `<div class="pcard ${b > 0 ? "plus" : b < 0 ? "minus" : ""}"><b class="pn">${esc(n)}</b>
+          <span class="row"><span>A avancé</span><b>${money(paid[n], c)}</b></span>
+          <span class="row"><span>Sa part</span><b>${money(share[n], c)}</b></span>
+          ${rbOut[n] ? `<span class="row"><span>A déjà remboursé</span><b>${money(rbOut[n], c)}</b></span>` : ""}
+          ${rbIn[n] ? `<span class="row"><span>A déjà reçu</span><b>${money(rbIn[n], c)}</b></span>` : ""}
+          <span class="res">${b > 0 ? `Doit recevoir <b>${money(b, c)}</b>` : b < 0 ? `Doit encore <b>${money(-b, c)}</b>` : "Quitte ✓"}</span></div>`; }).join("")}</div>`;
+  }).join("<hr>") : `<p class="note">Aucune dépense pour l'instant.</p>`) + `<p class="note">« Sa part » inclut la part de ${esc(MARIE)}, qui est invité. Quand quelqu'un rembourse, touchez « ✓ Remboursé » : le bilan se met à jour pour tout le monde.</p></section>`;
   const f = depForm;
   html += `<section class="panel"><h3>Ajouter une dépense</h3>
     <form class="dep" id="depForm">
@@ -981,8 +1007,8 @@ function drawComptes(){
       <button class="btn hot" type="submit">Ajouter</button>
     </form></section>`;
   html += `<section class="panel"><h3>Dépenses</h3>` + (live.length ? `<ul class="deps">${live.map(d => `<li id="dep-${esc(d.id)}">
-      <div class="top"><b>${esc(d.t)}</b><span class="amt">${money(d.m, d.c)}</span></div>
-      ${(() => { const pour = (d.pour || []).filter(n => n !== MARIE); if(!pour.length) return "";
+      <div class="top"><b>${d.rb ? "💸 " : ""}${esc(d.t)}</b><span class="amt">${money(d.m, d.c)}</span></div>
+      ${(() => { if(d.rb) return ""; const pour = (d.pour || []).filter(n => n !== MARIE); if(!pour.length) return "";
         const part = money(Math.round(d.m / pour.length), d.c), autres = pour.filter(n => n !== d.p);
         return `<p class="part">Soit <b>${part} par personne</b>${autres.length ? ` : ${esc(autres.join(", "))} ${autres.length > 1 ? "doivent chacun" : "doit"} <b>${part}</b> à ${esc(d.p)}` : ""}.</p>`; })()}
       <p class="maj">Payé par <b>${esc(d.p)}</b> · pour ${esc((d.pour || []).join(", "))}${d.par ? " · noté par " + esc(d.par) : ""} · ${esc(when(d.d))}</p>
@@ -1007,6 +1033,11 @@ function drawComptes(){
   };
   if(goDep){ const el = document.getElementById("dep-" + goDep); if(el){ const id = goDep; hlDep = { id, until:Date.now() + 4000 }; goDep = ""; setTimeout(() => { const e2 = document.getElementById("dep-" + id); if(e2) flashTo(e2); }, 60); } }
   else if(hlDep.id && Date.now() < hlDep.until){ const el = document.getElementById("dep-" + hlDep.id); if(el) el.classList.add("hl"); }
+  box.querySelectorAll("[data-rb]").forEach(b => b.onclick = () => {
+    const key = b.dataset.rb; if(rbAsk !== key){ rbAsk = key; drawComptes(); return; }
+    rbAsk = ""; const [c, a, to] = key.split("|"), x = +b.dataset.rbx;
+    saveDep(newId(), { t:`Remboursement ${a} → ${to}`, m:x, c, p:a, pour:[to], rb:true, par:moi || "", d:new Date().toISOString() });
+  });
   box.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
     const id = b.dataset.del;
     if(delAsk !== id){ delAsk = id; drawComptes(); return; }
