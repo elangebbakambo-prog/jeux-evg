@@ -1,8 +1,37 @@
 // L'appli « Vegas EVG » (carnet + jeux) : toujours la dernière version quand il y a du réseau,
-// la copie gardée sinon (le carnet s'ouvre même dans le désert).
-const CACHE = "vegas-evg-v3";
-const FILES = ["./vegas/", "./vegas/index.html", "./manifest.webmanifest", "./vegas/icon-180.png", "./vegas/icon-192.png", "./vegas/icon-512.png", "./"];
-self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
+// la copie gardée sinon. Les jeux sur un seul téléphone sont gardés d'avance, pour jouer dans l'avion.
+const CACHE = "vegas-evg-v4";
+const FILES = [
+  "./",
+  "./index.html",
+  "./manifest.webmanifest",
+  "./vegas/",
+  "./vegas/index.html",
+  "./vegas/icon-180.png",
+  "./vegas/icon-192.png",
+  "./vegas/icon-512.png",
+  "./mafia-pas-mafia/",
+  "./mafia-pas-mafia/index.html",
+  "./mafia-pas-mafia/style.css?v=20261105a",
+  "./commun/menu.css?v=20261105a",
+  "./mafia-pas-mafia/donnees.js?v=20261105a",
+  "./commun/musique.js?v=20261105a",
+  "./mafia-pas-mafia/script.js?v=20261105a",
+  "./draft-des-anciens/",
+  "./draft-des-anciens/index.html",
+  "./draft-des-anciens/style.css?v=20261105a",
+  "./draft-des-anciens/cartes.js?v=20261105a",
+  "./draft-des-anciens/script.js?v=20261105a",
+  "./qui-a-dit-ca/",
+  "./qui-a-dit-ca/index.html",
+  "./qui-a-dit-ca/style.css?v=20261104b",
+  "./commun/menu.css?v=20261104b",
+  "./qui-a-dit-ca/script.js?v=20261104b"
+];
+self.addEventListener("install", e => {
+  // Chaque fichier séparément : un seul raté ne doit pas empêcher de garder les autres.
+  e.waitUntil(caches.open(CACHE).then(c => Promise.all(FILES.map(f => c.add(new Request(f, { cache: "reload" })).catch(() => {})))).then(() => self.skipWaiting()));
+});
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {
   const req = e.request;
@@ -14,7 +43,15 @@ self.addEventListener("fetch", e => {
     fetch(req).then(res => {
       if (res.ok || res.type === "opaque") { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;
-    }).catch(() => caches.match(req).then(r => r || caches.match(req, { ignoreSearch: true })).then(r => r || caches.match("./vegas/index.html")))
+    }).catch(async () => {
+      const hit = await caches.match(req) || await caches.match(req, { ignoreSearch: true });
+      if (hit) return hit;
+      if (req.mode === "navigate") {
+        const page = url.pathname.endsWith("/") ? url.pathname + "index.html" : url.pathname + "/index.html";
+        return (await caches.match(page, { ignoreSearch: true })) || (await caches.match("./vegas/index.html")) || Response.error();
+      }
+      return Response.error();
+    })
   );
 });
 
