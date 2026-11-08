@@ -248,6 +248,7 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 .rate .btn{ align-self:flex-start; }
 .who-chips{ display:flex; flex-wrap:wrap; gap:6px; }
 .chipb{ all:unset; cursor:pointer; border:1px solid var(--line); border-radius:999px; padding:5px 12px; font-weight:800; font-size:.85rem; }
+.fchips .chipb small{ opacity:.7; font-weight:700; }
 .chipb.on{ background:var(--mint); color:var(--night); border-color:var(--mint); }
 .chipb:focus-visible{ outline:2px solid var(--pink); }
 .pushbar{ margin:0; font-size:.85rem; color:var(--muted); background:var(--card); border-radius:12px; padding:9px 12px; }
@@ -614,8 +615,8 @@ function drawDay(d){
 }
 // ===== Ranking des restos et fast-foods =====
 // « resto:<id> » = un endroit ; « note:<id>:<prénom> » = la note /10 et l'argument d'une personne (une seule par personne et par resto).
-const RTYPES = { ff:"🍔 Fast-food", resto:"🍽️ Resto", autre:"🌮 Autre" };
-let restos = [], notes = [], rankState = "load", rankView = "global", rankOpen = "", rankWho = "", rankDel = "", rankDraft = {}, rankBusy = false;
+const RTYPES = { ff:"🍔 Fast-food", resto:"🍽️ Resto", bar:"🍸 Bar / club", sortie:"🎢 Activité / sortie", autre:"🌮 Autre" };
+let restos = [], notes = [], rankState = "load", rankView = "global", rankOpen = "", rankWho = "", rankDel = "", rankDraft = {}, rankBusy = false, rankFilter = "all";
 async function loadRank(){
   try{
     const r = await fetch(SB_URL + "?or=(nom.like.resto%3A*,nom.like.note%3A*)&select=nom,coches,maj&limit=3000", { headers:{ apikey:SB_KEY }, cache:"no-store" });
@@ -630,8 +631,14 @@ async function loadRank(){
 const notesOf = id => notes.filter(n => n.r === id);
 const myNote = id => notes.find(n => n.r === id && isMe(n.a));
 const fmtNote = v => (Math.round(v * 10) / 10).toLocaleString("fr-FR");
+const inFilter = r => rankFilter === "all" || (RTYPES[r.k] ? r.k : "autre") === rankFilter;
+function filterChips(){
+  const n = k => restos.filter(r => k === "all" || (RTYPES[r.k] ? r.k : "autre") === k).length;
+  return `<div class="who-chips fchips" aria-label="Filtrer">${[["all", "Tout"]].concat(Object.entries(RTYPES)).filter(([k]) => k === "all" || n(k) || rankFilter === k)
+    .map(([k, t]) => `<button type="button" class="chipb ${rankFilter === k ? "on" : ""}" data-rfilter="${k}">${t} <small>${n(k)}</small></button>`).join("")}</div>`;
+}
 function rankedGlobal(){
-  return restos.map(r => { const ns = notesOf(r.id); return Object.assign({}, r, { ns, avg:ns.length ? ns.reduce((a, n) => a + +n.v, 0) / ns.length : null }); })
+  return restos.filter(inFilter).map(r => { const ns = notesOf(r.id); return Object.assign({}, r, { ns, avg:ns.length ? ns.reduce((a, n) => a + +n.v, 0) / ns.length : null }); })
     .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1) || b.ns.length - a.ns.length || a.n.localeCompare(b.n));
 }
 const medal = i => ["🥇", "🥈", "🥉"][i] || `<span class="rk">${i + 1}</span>`;
@@ -670,6 +677,7 @@ function drawRank(){
   if(!moi) html += `<section class="panel"><form class="who" id="rankWhoF"><label for="rankName">Ton prénom pour noter :</label><div class="row"><input id="rankName" maxlength="30" autocomplete="given-name" placeholder="Ex. Jovan" required><button class="btn hot" type="submit">C'est moi</button></div></form></section>`;
   html += `<div class="rtabs" role="tablist">${[["global", "🏆 Général"], ["perso", "👤 Chacun"], ["add", "➕ Ajouter"]].map(([k, t]) => `<button type="button" role="tab" aria-selected="${rankView === k}" data-rview="${k}">${t}</button>`).join("")}</div>`;
   if(rankState === "err") html += `<p class="note">Le ranking n'est pas joignable pour l'instant (pas de réseau). Ça revient tout seul.</p>`;
+  if(rankView !== "add" && restos.length) html += filterChips();
   if(rankView === "add"){
     const d = rankDraft._new || { n:"", k:"ff", l:"" };
     html += `<section class="panel"><h3>Nouveau resto ou fast-food</h3><form class="dep" id="rankAdd">
@@ -684,9 +692,9 @@ function drawRank(){
     if(!people.length) html += `<p class="note">Personne n'a encore noté. Ouvre un resto dans « Général » et mets ta note.</p>`;
     else {
       html += `<div class="who-chips">${people.map(p => `<button type="button" class="chipb ${p === rankWho ? "on" : ""}" data-rwho="${esc(p)}">${esc(p)}</button>`).join("")}</div>`;
-      const mine = notes.filter(n => n.a === rankWho).map(n => { const r = restos.find(x => x.id === n.r); return r ? Object.assign({}, r, { pv:+n.v, pt:n.t }) : null; }).filter(Boolean).sort((a, b) => b.pv - a.pv);
+      const mine = notes.filter(n => n.a === rankWho).map(n => { const r = restos.find(x => x.id === n.r); return r && inFilter(r) ? Object.assign({}, r, { pv:+n.v, pt:n.t }) : null; }).filter(Boolean).sort((a, b) => b.pv - a.pv);
       const g = rankedGlobal();
-      html += `<p class="k2">Le top de ${esc(rankWho)} (${mine.length})</p><ol class="rlist">${mine.map((r, i) => {
+      html += `<p class="k2">Le top de ${esc(rankWho)}${rankFilter !== "all" ? " · " + esc(RTYPES[rankFilter]) : ""} (${mine.length})</p>${mine.length ? "" : `<p class="note">Rien noté dans cette catégorie.</p>`}<ol class="rlist">${mine.map((r, i) => {
         const gi = g.findIndex(x => x.id === r.id), ga = g[gi] && g[gi].avg;
         return restoCard(r, i, "perso").replace("</button>", ga != null ? `<span class="vs">général : ${fmtNote(ga)} (${gi === 0 ? "1er" : gi + 1 + "e"})</span></button>` : "</button>");
       }).join("")}</ol>`;
@@ -694,9 +702,10 @@ function drawRank(){
   } else {
     const g = rankedGlobal();
     html += g.length ? `<ol class="rlist">${g.map((r, i) => restoCard(r, i, "global")).join("")}</ol>`
-      : `<p class="note">Aucun resto pour l'instant. Touche « ➕ Ajouter » après votre premier fast-food !</p>`;
+      : `<p class="note">${restos.length ? "Rien dans cette catégorie pour l'instant." : "Aucun resto pour l'instant. Touche « ➕ Ajouter » après votre premier fast-food !"}</p>`;
   }
   box.innerHTML = html;
+  box.querySelectorAll("[data-rfilter]").forEach(b => b.onclick = () => { rankFilter = b.dataset.rfilter; rankOpen = ""; drawRank(); });
   box.querySelectorAll("[data-rview]").forEach(b => b.onclick = () => { rankView = b.dataset.rview; drawRank(); });
   box.querySelectorAll("[data-rwho]").forEach(b => b.onclick = () => { rankWho = b.dataset.rwho; rankOpen = ""; drawRank(); });
   box.querySelectorAll("[data-ropen]").forEach(b => b.onclick = () => { rankOpen = rankOpen === b.dataset.ropen ? "" : b.dataset.ropen; rankDel = ""; drawRank(); });
