@@ -7,8 +7,8 @@
   "start_url": "./vegas/",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#15102B",
-  "theme_color": "#15102B",
+  "background_color": "#160809",
+  "theme_color": "#160809",
   "icons": [
     { "src": "vegas/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "vegas/icon-512.png", "sizes": "512x512", "type": "image/png" },

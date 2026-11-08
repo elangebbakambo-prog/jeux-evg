@@ -1,6 +1,6 @@
 // L'appli « Vegas EVG » (carnet + jeux) : toujours la dernière version quand il y a du réseau,
 // la copie gardée sinon. Les jeux sur un seul téléphone sont gardés d'avance, pour jouer dans l'avion.
-const CACHE = "vegas-evg-v4";
+const CACHE = "vegas-evg-v5";
 const FILES = [
   "./",
   "./index.html",
