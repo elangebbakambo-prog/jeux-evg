@@ -220,6 +220,36 @@ h1 span{ color:var(--amber); text-shadow:0 0 18px rgba(255,181,71,.55); }
 #story .bub b{ color:var(--amber); }
 #story .bub.new{ animation:bubIn .45s cubic-bezier(.2,1.4,.4,1); }
 @keyframes bubIn{ from{ transform:translateY(14px) scale(.85); opacity:0; } to{ transform:none; opacity:1; } }
+.rtabs{ display:flex; gap:6px; background:var(--card); border-radius:999px; padding:4px; }
+.rtabs button{ all:unset; cursor:pointer; flex:1; text-align:center; font-weight:800; font-size:.85rem; padding:8px 6px; border-radius:999px; color:var(--muted); }
+.rtabs button[aria-selected="true"]{ background:var(--amber); color:var(--night); }
+.rtabs button:focus-visible{ outline:2px solid var(--mint); }
+.rlist{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.rcard{ background:var(--card); border-radius:14px; overflow:hidden; }
+.rcard.open{ outline:1px solid var(--amber); }
+.rhead{ all:unset; cursor:pointer; display:flex; align-items:center; gap:10px; width:100%; box-sizing:border-box; padding:10px 12px; flex-wrap:wrap; }
+.rhead:focus-visible{ outline:2px solid var(--mint); outline-offset:-2px; }
+.rhead .pos{ font-size:1.4rem; width:32px; text-align:center; flex:0 0 auto; }
+.rhead .rk{ font-family:var(--display); color:var(--muted); font-size:1rem; }
+.rhead .nm{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.rhead .nm b{ overflow-wrap:anywhere; } .rhead .nm small{ color:var(--muted); font-size:.78rem; }
+.score{ font-family:var(--display); color:var(--amber); font-size:1.5rem; flex:0 0 auto; }
+.score.sm{ font-size:1rem; }
+.vs{ flex-basis:100%; padding-left:42px; font-size:.75rem; color:var(--muted); }
+.arg{ margin:0; font-size:.86rem; font-style:italic; color:var(--sand); overflow-wrap:anywhere; padding:0 12px 10px 54px; }
+.rbody{ display:flex; flex-direction:column; gap:10px; padding:0 12px 12px; }
+.votes{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.votes li{ background:var(--card2); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; gap:3px; }
+.votes .arg{ padding:0; }
+.rate{ display:flex; flex-direction:column; gap:8px; border-top:1px dashed var(--line); padding-top:10px; }
+.rate .rv{ display:flex; flex-direction:column; gap:6px; font-weight:700; } .rate .rv b{ color:var(--amber); font-size:1.2rem; }
+.rate input[type=range]{ width:100%; accent-color:var(--pink); }
+.rate textarea{ font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; resize:vertical; box-sizing:border-box; width:100%; }
+.rate .btn{ align-self:flex-start; }
+.who-chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.chipb{ all:unset; cursor:pointer; border:1px solid var(--line); border-radius:999px; padding:5px 12px; font-weight:800; font-size:.85rem; }
+.chipb.on{ background:var(--mint); color:var(--night); border-color:var(--mint); }
+.chipb:focus-visible{ outline:2px solid var(--pink); }
 .pushbar{ margin:0; font-size:.85rem; color:var(--muted); background:var(--card); border-radius:12px; padding:9px 12px; }
 .pushbar.on{ color:var(--mint); font-weight:700; }
 .pushbar.ask{ display:flex; flex-direction:column; gap:8px; color:var(--sand); border:1px solid var(--pink); }
@@ -478,10 +508,10 @@ const SB_KEY = "sb_publishable_SMy5j__0GTgrJHhJ4GmYQg_2OQ8fTLh";
 let team = [], teamState = "load", pushTimer = 0;
 async function loadTeam(){
   try{
-    const r = await fetch(SB_URL + "?select=nom,coches,maj&nom=not.like.post%3A*&nom=not.like.rea%3A*&nom=not.like.mom%3A*&nom=not.like.com%3A*&order=nom.asc", { headers:{ apikey:SB_KEY }, cache:"no-store" });
+    const r = await fetch(SB_URL + "?select=nom,coches,maj&nom=not.like.post%3A*&nom=not.like.rea%3A*&nom=not.like.mom%3A*&nom=not.like.com%3A*&nom=not.like.resto%3A*&nom=not.like.note%3A*&order=nom.asc", { headers:{ apikey:SB_KEY }, cache:"no-store" });
     if(!r.ok) throw new Error(r.status);
     const rows = await r.json(); teamState = "ok";
-    team = rows.filter(t => !/^(dep|post|mom|rea|com):/.test(t.nom));
+    team = rows.filter(t => !/^(dep|post|mom|rea|com|resto|note):/.test(t.nom));
     deps = rows.filter(t => t.nom.startsWith("dep:")).map(t => Object.assign({ id:t.nom.slice(4) }, t.coches || {}));
     // Avances déjà faites par Elange (réservations du 6 nov.) : ajoutées une seule fois, si elles n'existent pas encore.
     SEEDS.forEach(([id, data]) => { if(!rows.some(t => t.nom === "dep:" + id) && !seeded[id]){ seeded[id] = true; saveDep(id, data); } });
@@ -545,6 +575,7 @@ function drawTabs(){
   const tabs = document.getElementById("tabs");
   tabs.innerHTML = `<button class="day extra" data-id="infos" aria-pressed="${cur === "infos"}"><small>Équipe</small><b>Check-list</b></button>`
     + `<button class="day extra live" data-id="live" aria-pressed="${cur === "live"}"><small>Vegas ↔ FR</small><b>Live</b></button>`
+    + `<button class="day extra rank" data-id="rank" aria-pressed="${cur === "rank"}"><small>Restos</small><b>Ranking</b></button>`
     + `<button class="day extra" data-id="comptes" aria-pressed="${cur === "comptes"}"><small>Tricount</small><b>Comptes</b></button>`
     + DAYS.map(d => `<button class="day" data-id="${d.id}" aria-pressed="${cur === d.id}"><small>${d.d}</small><b>${d.n}</b></button>`).join("");
   tabs.querySelectorAll("[data-id]").forEach(b => b.onclick = () => { cur = b.dataset.id; save(); draw(); b.scrollIntoView({ block:"nearest", inline:"center" }); });
@@ -581,6 +612,131 @@ function drawDay(d){
     <div class="chips">${d.chips.map(([t, k]) => `<span class="chip ${k}">${esc(t)}</span>`).join("")}</div>
     <ol class="tl">${steps}</ol></div>`;
 }
+// ===== Ranking des restos et fast-foods =====
+// « resto:<id> » = un endroit ; « note:<id>:<prénom> » = la note /10 et l'argument d'une personne (une seule par personne et par resto).
+const RTYPES = { ff:"🍔 Fast-food", resto:"🍽️ Resto", autre:"🌮 Autre" };
+let restos = [], notes = [], rankState = "load", rankView = "global", rankOpen = "", rankWho = "", rankDel = "", rankDraft = {}, rankBusy = false;
+async function loadRank(){
+  try{
+    const r = await fetch(SB_URL + "?or=(nom.like.resto%3A*,nom.like.note%3A*)&select=nom,coches,maj&limit=3000", { headers:{ apikey:SB_KEY }, cache:"no-store" });
+    if(!r.ok) throw new Error(r.status);
+    const rows = await r.json();
+    restos = rows.filter(x => x.nom.startsWith("resto:")).map(x => Object.assign({ id:x.nom.slice(6) }, x.coches || {})).filter(x => !x.x && x.n);
+    notes = rows.filter(x => x.nom.startsWith("note:")).map(x => x.coches || {}).filter(x => !x.x && x.r && isFinite(+x.v));
+    rankState = "ok";
+  }catch(e){ rankState = restos.length ? "stale" : "err"; }
+  drawRank();
+}
+const notesOf = id => notes.filter(n => n.r === id);
+const myNote = id => notes.find(n => n.r === id && isMe(n.a));
+const fmtNote = v => (Math.round(v * 10) / 10).toLocaleString("fr-FR");
+function rankedGlobal(){
+  return restos.map(r => { const ns = notesOf(r.id); return Object.assign({}, r, { ns, avg:ns.length ? ns.reduce((a, n) => a + +n.v, 0) / ns.length : null }); })
+    .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1) || b.ns.length - a.ns.length || a.n.localeCompare(b.n));
+}
+const medal = i => ["🥇", "🥈", "🥉"][i] || `<span class="rk">${i + 1}</span>`;
+function drawRankView(){
+  return `<div style="display:flex;flex-direction:column;gap:12px">
+    <div class="dhead"><p class="eyebrow">Fast-foods et restos</p><h2>Le ranking</h2><p>Chacun note sur 10 avec son argument. Classement général à la moyenne, et le top de chacun pour comparer.</p></div>
+    <div id="rank" aria-live="polite"><p class="note">Chargement…</p></div></div>`;
+}
+function rateForm(r){
+  const mine = myNote(r.id), d = rankDraft[r.id] || { v:mine ? +mine.v : 7, t:mine ? mine.t || "" : "" };
+  rankDraft[r.id] = d;
+  return `<form class="rate" data-rate="${esc(r.id)}">
+    <label class="rv"><span>Ta note : <b data-rvout="${esc(r.id)}">${fmtNote(d.v)}</b> / 10</span>
+      <input type="range" min="0" max="10" step="0.5" value="${d.v}" data-rv="${esc(r.id)}" aria-label="Ta note sur 10"></label>
+    <textarea maxlength="300" rows="2" placeholder="Ton argument (le goût, les frites, le service, le prix…)" data-rt="${esc(r.id)}">${esc(d.t)}</textarea>
+    <button class="btn hot" type="submit" ${rankBusy ? "disabled" : ""}>${mine ? "Modifier ma note" : "Valider ma note"}</button></form>`;
+}
+function restoCard(r, i, mode){
+  const open = rankOpen === r.id, ns = notesOf(r.id).slice().sort((a, b) => +b.v - +a.v);
+  const head = mode === "perso"
+    ? `<span class="pos">${medal(i)}</span><div class="nm"><b>${esc(r.n)}</b><small>${esc(RTYPES[r.k] || RTYPES.autre)}${r.l ? " · " + esc(r.l) : ""}</small></div><span class="score">${fmtNote(+r.pv)}</span>`
+    : `<span class="pos">${r.avg == null ? "–" : medal(i)}</span><div class="nm"><b>${esc(r.n)}</b><small>${esc(RTYPES[r.k] || RTYPES.autre)}${r.l ? " · " + esc(r.l) : ""} · ${ns.length} vote${ns.length > 1 ? "s" : ""}</small></div><span class="score">${r.avg == null ? "?" : fmtNote(r.avg)}</span>`;
+  return `<li class="rcard ${open ? "open" : ""}"><button type="button" class="rhead" data-ropen="${esc(r.id)}" aria-expanded="${open}">${head}</button>
+    ${mode === "perso" && r.pt ? `<p class="arg">« ${esc(r.pt)} »</p>` : ""}
+    ${open ? `<div class="rbody">
+      ${ns.length ? `<ul class="votes">${ns.map(n => `<li><div><b>${esc(n.a)}</b> <span class="score sm">${fmtNote(+n.v)}</span></div>${n.t ? `<p class="arg">« ${esc(n.t)} »</p>` : ""}</li>`).join("")}</ul>` : `<p class="note">Personne n'a encore noté.</p>`}
+      ${moi ? rateForm(r) : `<p class="note">Entre ton prénom en haut pour noter.</p>`}
+      ${isMe(r.by) ? `<button type="button" class="link danger" data-rdel="${esc(r.id)}">${rankDel === r.id ? "Confirmer la suppression ?" : "Supprimer ce resto"}</button>` : ""}
+    </div>` : ""}</li>`;
+}
+function drawRank(){
+  const box = document.getElementById("rank"); if(!box) return;
+  const ae = document.activeElement;
+  if(ae && box.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.type !== "range") return;
+  let html = "";
+  if(!moi) html += `<section class="panel"><form class="who" id="rankWhoF"><label for="rankName">Ton prénom pour noter :</label><div class="row"><input id="rankName" maxlength="30" autocomplete="given-name" placeholder="Ex. Jovan" required><button class="btn hot" type="submit">C'est moi</button></div></form></section>`;
+  html += `<div class="rtabs" role="tablist">${[["global", "🏆 Général"], ["perso", "👤 Chacun"], ["add", "➕ Ajouter"]].map(([k, t]) => `<button type="button" role="tab" aria-selected="${rankView === k}" data-rview="${k}">${t}</button>`).join("")}</div>`;
+  if(rankState === "err") html += `<p class="note">Le ranking n'est pas joignable pour l'instant (pas de réseau). Ça revient tout seul.</p>`;
+  if(rankView === "add"){
+    const d = rankDraft._new || { n:"", k:"ff", l:"" };
+    html += `<section class="panel"><h3>Nouveau resto ou fast-food</h3><form class="dep" id="rankAdd">
+      <label>Nom<input id="raN" maxlength="60" placeholder="Ex. In-N-Out Burger" value="${esc(d.n)}" required></label>
+      <label>Type<select id="raK">${Object.keys(RTYPES).map(k => `<option value="${k}" ${d.k === k ? "selected" : ""}>${RTYPES[k]}</option>`).join("")}</select></label>
+      <label>Où (facultatif)<input id="raL" maxlength="60" placeholder="Ex. le Strip, Fremont…" value="${esc(d.l)}"></label>
+      <p class="err" id="raErr" hidden></p>
+      <button class="btn hot" type="submit">Ajouter et noter</button></form></section>`;
+  } else if(rankView === "perso"){
+    const people = Array.from(new Set(notes.map(n => n.a).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    if(!rankWho || !people.some(p => p.toLowerCase() === rankWho.toLowerCase())) rankWho = people.find(p => isMe(p)) || people[0] || "";
+    if(!people.length) html += `<p class="note">Personne n'a encore noté. Ouvre un resto dans « Général » et mets ta note.</p>`;
+    else {
+      html += `<div class="who-chips">${people.map(p => `<button type="button" class="chipb ${p === rankWho ? "on" : ""}" data-rwho="${esc(p)}">${esc(p)}</button>`).join("")}</div>`;
+      const mine = notes.filter(n => n.a === rankWho).map(n => { const r = restos.find(x => x.id === n.r); return r ? Object.assign({}, r, { pv:+n.v, pt:n.t }) : null; }).filter(Boolean).sort((a, b) => b.pv - a.pv);
+      const g = rankedGlobal();
+      html += `<p class="k2">Le top de ${esc(rankWho)} (${mine.length})</p><ol class="rlist">${mine.map((r, i) => {
+        const gi = g.findIndex(x => x.id === r.id), ga = g[gi] && g[gi].avg;
+        return restoCard(r, i, "perso").replace("</button>", ga != null ? `<span class="vs">général : ${fmtNote(ga)} (${gi === 0 ? "1er" : gi + 1 + "e"})</span></button>` : "</button>");
+      }).join("")}</ol>`;
+    }
+  } else {
+    const g = rankedGlobal();
+    html += g.length ? `<ol class="rlist">${g.map((r, i) => restoCard(r, i, "global")).join("")}</ol>`
+      : `<p class="note">Aucun resto pour l'instant. Touche « ➕ Ajouter » après votre premier fast-food !</p>`;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll("[data-rview]").forEach(b => b.onclick = () => { rankView = b.dataset.rview; drawRank(); });
+  box.querySelectorAll("[data-rwho]").forEach(b => b.onclick = () => { rankWho = b.dataset.rwho; rankOpen = ""; drawRank(); });
+  box.querySelectorAll("[data-ropen]").forEach(b => b.onclick = () => { rankOpen = rankOpen === b.dataset.ropen ? "" : b.dataset.ropen; rankDel = ""; drawRank(); });
+  box.querySelectorAll("[data-rv]").forEach(i => i.oninput = () => { const d = rankDraft[i.dataset.rv]; d.v = +i.value; const o = box.querySelector(`[data-rvout="${i.dataset.rv}"]`); if(o) o.textContent = fmtNote(d.v); });
+  box.querySelectorAll("[data-rt]").forEach(t => t.oninput = () => { rankDraft[t.dataset.rt].t = t.value; });
+  box.querySelectorAll("[data-rate]").forEach(f => f.onsubmit = async e => {
+    e.preventDefault(); if(!moi) return;
+    const id = f.dataset.rate, d = rankDraft[id], data = { r:id, a:moi, v:d.v, t:(d.t || "").trim().slice(0, 300), d:new Date().toISOString() };
+    if(document.activeElement) document.activeElement.blur();
+    notes = notes.filter(n => !(n.r === id && isMe(n.a))); notes.push(data); delete rankDraft[id]; rankBusy = true; drawRank();
+    try{ await sendRow("note:" + id + ":" + moi.toLowerCase().slice(0, 20), data); }catch(err){ rankState = "err"; }
+    rankBusy = false; loadRank();
+  });
+  box.querySelectorAll("[data-rdel]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.rdel; if(rankDel !== id){ rankDel = id; drawRank(); return; }
+    rankDel = ""; const r = restos.find(x => x.id === id); restos = restos.filter(x => x.id !== id); rankOpen = ""; drawRank();
+    try{ await sendRow("resto:" + id, Object.assign({}, r, { x:true, id:undefined })); }catch(err){}
+  });
+  const add = document.getElementById("rankAdd");
+  if(add){
+    const keep = () => { rankDraft._new = { n:document.getElementById("raN").value, k:document.getElementById("raK").value, l:document.getElementById("raL").value }; };
+    add.oninput = keep; add.onchange = keep;
+    add.onsubmit = async e => {
+      e.preventDefault(); keep(); const d = rankDraft._new, n = d.n.trim(), er = document.getElementById("raErr");
+      if(!moi){ er.textContent = "Entre d'abord ton prénom en haut."; er.hidden = false; return; }
+      if(!n){ er.textContent = "Écris le nom du resto."; er.hidden = false; return; }
+      if(restos.some(r => r.n.trim().toLowerCase() === n.toLowerCase())){ er.textContent = "Ce resto est déjà dans la liste : note-le dans « Général »."; er.hidden = false; return; }
+      const id = newId(), data = { n:n.slice(0, 60), k:d.k, l:d.l.trim().slice(0, 60), by:moi, d:new Date().toISOString() };
+      if(document.activeElement) document.activeElement.blur();
+      restos.push(Object.assign({ id }, data)); delete rankDraft._new; rankView = "global"; rankOpen = id; drawRank();
+      try{ await sendRow("resto:" + id, data); }catch(err){ rankState = "err"; drawRank(); }
+      loadRank();
+    };
+  }
+  const w = document.getElementById("rankWhoF");
+  if(w) w.onsubmit = e => { e.preventDefault(); const n = document.getElementById("rankName").value.trim().slice(0, 30);
+    if(!n || /^(dep|post|mom|rea|com|resto|note):/i.test(n)) return; document.getElementById("rankName").blur(); moi = n; save(); drawRank(); };
+}
+setInterval(() => { if(cur === "rank" && !document.hidden) loadRank(); }, 20000);
+document.addEventListener("visibilitychange", () => { if(!document.hidden && cur === "rank") loadRank(); });
 // ===== Comptes (façon Tricount) =====
 // Chaque dépense est une ligne « dep:… » de la même table Supabase : deux personnes peuvent en ajouter en même temps sans s'écraser.
 // Chris est le marié : il ne paie rien, sa part est déjà répartie entre ceux qui partagent la dépense.
@@ -1140,7 +1296,7 @@ function drawLive(){
   box.innerHTML = html;
   tickClocks(); drawFeed();
   const w = document.getElementById("liveWho");
-  if(w) w.onsubmit = e => { e.preventDefault(); const n = document.getElementById("liveName").value.trim().slice(0, 30); if(!n || /^(dep|post|mom|rea|com):/i.test(n)) return;
+  if(w) w.onsubmit = e => { e.preventDefault(); const n = document.getElementById("liveName").value.trim().slice(0, 30); if(!n || /^(dep|post|mom|rea|com|resto|note):/i.test(n)) return;
     document.getElementById("liveName").blur(); moi = n; save(); drawLive(); };
   box.querySelectorAll("[data-side]").forEach(b => b.onclick = () => { liveCote = b.dataset.side; try{ localStorage.setItem("vegas-cote", liveCote); }catch(e){} drawLive(); });
   const ta = document.getElementById("liveText"); if(ta) ta.oninput = () => { liveDraft.t = ta.value; };
@@ -1401,7 +1557,7 @@ function draw(){
   drawTabs();
   const v = document.getElementById("view");
   v.style.animation = "none"; void v.offsetWidth; v.style.animation = "";
-  v.innerHTML = cur === "infos" ? drawInfos() : cur === "comptes" ? drawComptesView() : cur === "live" ? drawLiveView() : drawDay(DAYS.find(d => d.id === cur) || DAYS[0]);
+  v.innerHTML = cur === "infos" ? drawInfos() : cur === "comptes" ? drawComptesView() : cur === "rank" ? drawRankView() : cur === "live" ? drawLiveView() : drawDay(DAYS.find(d => d.id === cur) || DAYS[0]);
   v.querySelectorAll("[data-tel]").forEach(b => b.onclick = () => {
     const ok = () => { b.textContent = "Numéro copié"; setTimeout(() => b.textContent = "Copier le numéro", 1800); };
     try{ navigator.clipboard.writeText(b.dataset.tel).then(ok, () => { getSelection().selectAllChildren(b.parentNode.parentNode.querySelector(".tel")); b.textContent = "Sélectionné"; }); }
@@ -1411,6 +1567,7 @@ function draw(){
   if(cur === "infos"){ drawTeam(); loadTeam(); }
   if(cur === "comptes"){ drawComptes(); loadTeam(); }
   if(cur === "live"){ tickClocks(); drawLive(); loadLive(); }
+  if(cur === "rank"){ drawRank(); loadRank(); }
 }
 document.getElementById("goResa").onclick = () => { cur = "infos"; save(); draw(); document.getElementById("tabs").scrollIntoView({ behavior:"smooth" }); };
 document.getElementById("copyHome").onclick = e => {
