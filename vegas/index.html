@@ -374,6 +374,7 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 #story[hidden]{ display:none !important; }
 #story .st-cap{ margin:0; font-size:1rem; overflow-wrap:anywhere; white-space:pre-wrap; }
 #story .re{ background:rgba(255,255,255,.12); font-size:1.3rem; padding:6px 10px; } #story .re small{ color:#fff; }
+.eq{ color:var(--muted); font-weight:600; font-size:.8em; }
 .bin summary{ cursor:pointer; font-weight:800; color:var(--muted); }
 .bin[open] summary{ margin-bottom:8px; }
 .parts{ list-style:none; margin:2px 0 0; padding:0; display:flex; flex-direction:column; gap:4px; }
@@ -935,7 +936,12 @@ const SEEDS = [
   ["resa-tir-chris", { t:"Tir – part de Chris (lun. 9, 7 h)", m:17910, c:"USD", p:"Elange", pour:["Elange","Jovan","Isma","Ysly"], par:"Elange", d:"2026-11-06T14:57:00Z" }]
 ];
 const seeded = {};
-let rbAsk = "", binOpen = false;
+let rbAsk = "", binOpen = false, eurUsd = 1.16, eurUsdLive = false;
+try{ const r = JSON.parse(localStorage.getItem("vegas-eurusd") || "null"); if(r && r.v > 0.5 && r.v < 2){ eurUsd = r.v; eurUsdLive = Date.now() - r.t < 2 * 86400000; } }catch(e){}
+(async () => { try{
+  const r = await fetch("https://api.frankfurter.app/latest?from=EUR&to=USD"); const j = await r.json(); const v = j && j.rates && j.rates.USD;
+  if(v > 0.5 && v < 2){ eurUsd = v; eurUsdLive = true; try{ localStorage.setItem("vegas-eurusd", JSON.stringify({ v, t:Date.now() })); }catch(e){} if(typeof drawComptes === "function") drawComptes(); }
+}catch(e){} })();
 let deps = [], depForm = { pour: PAYEURS.slice() }, delAsk = "";
 const money = (cents, c) => { try{ return (cents / 100).toLocaleString("fr-FR", { style:"currency", currency:c || "USD", currencyDisplay:"narrowSymbol" }); }catch(e){ return (cents / 100).toFixed(2) + " " + c; } };
 function settle(list, cur){
@@ -986,13 +992,16 @@ function drawComptes(){
   if(teamState === "err") html += `<p class="note">Les comptes ne sont pas joignables pour l'instant (pas de réseau). Réessaie dans un moment.</p>`;
   if(teamState === "err-save") html += `<p class="note">La dernière dépense n'a pas pu être enregistrée (pas de réseau). Ajoute-la à nouveau plus tard.</p>`;
   const last = live[0];
+  const hasEur = live.some(d => d.c === "EUR");
+  const conv = live.map(d => d.c === "EUR" ? Object.assign({}, d, { m:Math.round(d.m * eurUsd), c:"USD" }) : d);
+  const both = x => money(x, "USD") + (hasEur ? ` <small class="eq">≈ ${money(Math.round(x / eurUsd), "EUR")}</small>` : "");
   html += `<section class="panel bilan"><h3>💰 Au total, tout compris</h3><p class="note">Toutes les dépenses additionnées, avances et remboursements compensés : c'est ce qu'il reste vraiment à payer.</p>
-    ${last ? `<p class="maj2">À jour avec les ${live.length} dépense${live.length > 1 ? "s" : ""} · dernière : <b>${esc(last.t)}</b>, ${esc(when(last.d))}</p>` : ""}` + (curs.length ? curs.map(c => {
-    const { bal, moves, paid, share, rbOut, rbIn } = settle(live, c), tot = live.filter(d => d.c === c && !d.rb).reduce((a, d) => a + d.m, 0);
+    ${last ? `<p class="maj2">À jour avec les ${live.length} dépense${live.length > 1 ? "s" : ""} · dernière : <b>${esc(last.t)}</b>, ${esc(when(last.d))}</p>` : ""}` + (live.length ? (() => { const c = "USD";
+    const { bal, moves, paid, share, rbOut, rbIn } = settle(conv, c), tot = conv.filter(d => !d.rb).reduce((a, d) => a + d.m, 0);
     const who = PAYEURS.filter(n => paid[n] || share[n] || rbOut[n] || rbIn[n]);
-    return `<p class="note">Total dépensé : <b>${money(tot, c)}</b>${c === "EUR" ? " (en euros)" : ""}</p>
+    return `<p class="note">Total dépensé : <b>${both(tot)}</b>${hasEur ? `<br>Tout est additionné en dollars : les dépenses en euros sont converties (1 € = ${eurUsd.toLocaleString("fr-FR", { maximumFractionDigits:3 })} $${eurUsdLive ? ", taux du jour" : ""}).` : ""}</p>
       ${moves.length ? `<p class="perso"><b>Les remboursements à faire</b> (les avances de chacun sont déjà compensées) :</p>
-        <ul class="moves">${moves.map(([a, b, x], k) => { const key = c + "|" + a + "|" + b; return `<li><span><b>${esc(a)}</b> doit <b class="amt">${money(x, c)}</b> à <b>${esc(b)}</b></span>
+        <ul class="moves">${moves.map(([a, b, x], k) => { const key = c + "|" + a + "|" + b; return `<li><span><b>${esc(a)}</b> doit <b class="amt">${both(x)}</b> à <b>${esc(b)}</b></span>
           <button type="button" class="btn sm" data-rb="${esc(key)}" data-rbx="${x}">${rbAsk === key ? "Confirmer ✓" : "✓ Tout remboursé"}</button></li>`; }).join("")}</ul>`
         : `<p class="miss ok">Tout le monde est quitte ✓</p>`}
       <div class="people">${who.map(n => { const b = bal[n];
@@ -1001,8 +1010,8 @@ function drawComptes(){
           <span class="row"><span>Sa part</span><b>${money(share[n], c)}</b></span>
           ${rbOut[n] ? `<span class="row"><span>A déjà remboursé</span><b>${money(rbOut[n], c)}</b></span>` : ""}
           ${rbIn[n] ? `<span class="row"><span>A déjà reçu</span><b>${money(rbIn[n], c)}</b></span>` : ""}
-          <span class="res">${b > 0 ? `Doit recevoir <b>${money(b, c)}</b>` : b < 0 ? `Doit encore <b>${money(-b, c)}</b>` : "Quitte ✓"}</span></div>`; }).join("")}</div>`;
-  }).join("<hr>") : `<p class="note">Aucune dépense pour l'instant.</p>`) + `<p class="note">« Sa part » inclut la part de ${esc(MARIE)}, qui est invité. Pour cocher ce qui est remboursé : dépense par dépense en dessous, ou d'un coup avec « ✓ Tout remboursé ». Le total se met à jour pour tout le monde.</p></section>`;
+          <span class="res">${b > 0 ? `Doit recevoir en tout <b>${both(b)}</b>` : b < 0 ? `Doit encore en tout <b>${both(-b)}</b>` : "Quitte ✓"}</span></div>`; }).join("")}</div>`;
+  })() : `<p class="note">Aucune dépense pour l'instant.</p>`) + `<p class="note">« Sa part » inclut la part de ${esc(MARIE)}, qui est invité. Pour cocher ce qui est remboursé : dépense par dépense en dessous, ou d'un coup avec « ✓ Tout remboursé ». Le total se met à jour pour tout le monde.</p></section>`;
   const f = depForm;
   html += `<section class="panel"><h3>Ajouter une dépense</h3>
     <form class="dep" id="depForm">
@@ -1024,9 +1033,9 @@ function drawComptes(){
           ${autres.length ? `<ul class="parts">${autres.map(n => `<li class="${ok[n] ? "ok" : ""}"><label><input type="checkbox" data-ok="${esc(d.id)}" data-okn="${esc(n)}" ${ok[n] ? "checked" : ""}>
             <span><b>${esc(n)}</b> ${ok[n] ? "a remboursé" : "doit"} ${part}</span></label></li>`).join("")}</ul>` : ""}`; })()}
       <p class="maj">Payé par <b>${esc(d.p)}</b> · pour ${esc((d.pour || []).join(", "))}${d.par ? " · noté par " + esc(d.par) : ""} · ${esc(when(d.d))}</p>
-      <button class="link danger" type="button" data-del="${esc(d.id)}">${delAsk === d.id ? "Confirmer la suppression ?" : "Supprimer"}</button></li>`).join("")}</ul>` : `<p class="note">Rien pour l'instant.</p>`) + `</section>`;
+      <button class="link danger" type="button" data-del="${esc(d.id)}">${delAsk === d.id ? (d.rb ? "Confirmer l'annulation ?" : "Confirmer la suppression ?") : (d.rb ? "↩︎ Annuler ce remboursement" : "Supprimer")}</button></li>`).join("")}</ul>` : `<p class="note">Rien pour l'instant.</p>`) + `</section>`;
   const bin = deps.filter(d => d.x).sort((a, b) => (b.d || "").localeCompare(a.d || ""));
-  if(bin.length) html += `<details class="panel bin" ${binOpen ? "open" : ""}><summary>🗑️ Supprimées par erreur ? (${bin.length})</summary>
+  html += `<details class="panel bin" ${binOpen ? "open" : ""}><summary>🗑️ Corbeille : dépenses supprimées (${bin.length})</summary>${bin.length ? "" : `<p class="note">Vide. Une dépense supprimée arrive ici, avec un bouton pour la restaurer.</p>`}
     <ul class="deps">${bin.map(d => `<li><div class="top"><b>${d.rb ? "💸 " : ""}${esc(d.t || "Dépense")}</b><span class="amt">${money(d.m, d.c)}</span></div>
       <p class="maj">Payé par <b>${esc(d.p || "?")}</b> · ${esc(when(d.d))}</p>
       <button class="btn sm" type="button" data-restore="${esc(d.id)}">↩︎ Restaurer</button></li>`).join("")}</ul></details>`;
