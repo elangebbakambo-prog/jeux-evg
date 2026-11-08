@@ -374,6 +374,8 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 #story[hidden]{ display:none !important; }
 #story .st-cap{ margin:0; font-size:1rem; overflow-wrap:anywhere; white-space:pre-wrap; }
 #story .re{ background:rgba(255,255,255,.12); font-size:1.3rem; padding:6px 10px; } #story .re small{ color:#fff; }
+.bin summary{ cursor:pointer; font-weight:800; color:var(--muted); }
+.bin[open] summary{ margin-bottom:8px; }
 .parts{ list-style:none; margin:2px 0 0; padding:0; display:flex; flex-direction:column; gap:4px; }
 .parts label{ display:flex; align-items:center; gap:8px; cursor:pointer; font-size:.88rem; }
 .parts input{ width:20px; height:20px; accent-color:var(--mint, #5EE0B5); flex:0 0 auto; }
@@ -933,7 +935,7 @@ const SEEDS = [
   ["resa-tir-chris", { t:"Tir – part de Chris (lun. 9, 7 h)", m:17910, c:"USD", p:"Elange", pour:["Elange","Jovan","Isma","Ysly"], par:"Elange", d:"2026-11-06T14:57:00Z" }]
 ];
 const seeded = {};
-let rbAsk = "";
+let rbAsk = "", binOpen = false;
 let deps = [], depForm = { pour: PAYEURS.slice() }, delAsk = "";
 const money = (cents, c) => { try{ return (cents / 100).toLocaleString("fr-FR", { style:"currency", currency:c || "USD", currencyDisplay:"narrowSymbol" }); }catch(e){ return (cents / 100).toFixed(2) + " " + c; } };
 function settle(list, cur){
@@ -1023,6 +1025,11 @@ function drawComptes(){
             <span><b>${esc(n)}</b> ${ok[n] ? "a remboursé" : "doit"} ${part}</span></label></li>`).join("")}</ul>` : ""}`; })()}
       <p class="maj">Payé par <b>${esc(d.p)}</b> · pour ${esc((d.pour || []).join(", "))}${d.par ? " · noté par " + esc(d.par) : ""} · ${esc(when(d.d))}</p>
       <button class="link danger" type="button" data-del="${esc(d.id)}">${delAsk === d.id ? "Confirmer la suppression ?" : "Supprimer"}</button></li>`).join("")}</ul>` : `<p class="note">Rien pour l'instant.</p>`) + `</section>`;
+  const bin = deps.filter(d => d.x).sort((a, b) => (b.d || "").localeCompare(a.d || ""));
+  if(bin.length) html += `<details class="panel bin" ${binOpen ? "open" : ""}><summary>🗑️ Supprimées par erreur ? (${bin.length})</summary>
+    <ul class="deps">${bin.map(d => `<li><div class="top"><b>${d.rb ? "💸 " : ""}${esc(d.t || "Dépense")}</b><span class="amt">${money(d.m, d.c)}</span></div>
+      <p class="maj">Payé par <b>${esc(d.p || "?")}</b> · ${esc(when(d.d))}</p>
+      <button class="btn sm" type="button" data-restore="${esc(d.id)}">↩︎ Restaurer</button></li>`).join("")}</ul></details>`;
   box.innerHTML = html;
   const form = document.getElementById("depForm");
   const keep = () => { depForm = { t:document.getElementById("dT").value, m:document.getElementById("dM").value, c:document.getElementById("dC").value, p:document.getElementById("dP").value,
@@ -1043,6 +1050,11 @@ function drawComptes(){
   };
   if(goDep){ const el = document.getElementById("dep-" + goDep); if(el){ const id = goDep; hlDep = { id, until:Date.now() + 4000 }; goDep = ""; setTimeout(() => { const e2 = document.getElementById("dep-" + id); if(e2) flashTo(e2); }, 60); } }
   else if(hlDep.id && Date.now() < hlDep.until){ const el = document.getElementById("dep-" + hlDep.id); if(el) el.classList.add("hl"); }
+  box.querySelectorAll("[data-restore]").forEach(b => b.onclick = () => {
+    const d = deps.find(x => x.id === b.dataset.restore); if(!d) return;
+    const data = Object.assign({}, d); delete data.id; delete data.x; saveDep(d.id, data);
+  });
+  const binEl = box.querySelector(".bin"); if(binEl) binEl.ontoggle = () => { binOpen = binEl.open; };
   box.querySelectorAll("[data-ok]").forEach(cb => cb.onchange = () => {
     const d = deps.find(x => x.id === cb.dataset.ok); if(!d) return;
     const ok = Object.assign({}, d.ok || {}); if(cb.checked) ok[cb.dataset.okn] = true; else delete ok[cb.dataset.okn];
