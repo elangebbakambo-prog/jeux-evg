@@ -374,6 +374,11 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 #story[hidden]{ display:none !important; }
 #story .st-cap{ margin:0; font-size:1rem; overflow-wrap:anywhere; white-space:pre-wrap; }
 #story .re{ background:rgba(255,255,255,.12); font-size:1.3rem; padding:6px 10px; } #story .re small{ color:#fff; }
+.parts{ list-style:none; margin:2px 0 0; padding:0; display:flex; flex-direction:column; gap:4px; }
+.parts label{ display:flex; align-items:center; gap:8px; cursor:pointer; font-size:.88rem; }
+.parts input{ width:20px; height:20px; accent-color:var(--mint, #5EE0B5); flex:0 0 auto; }
+.parts li.ok span{ color:var(--muted); text-decoration:line-through; }
+.solde{ color:var(--mint, #5EE0B5); font-weight:800; }
 .bilan .maj2{ margin:0; font-size:.8rem; color:var(--muted); } .bilan .maj2 b{ color:var(--sand); }
 .moves li{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
 .btn.sm{ font-size:.78rem; padding:5px 10px; }
@@ -940,7 +945,9 @@ function settle(list, cur){
     if(d.rb){ rbOut[d.p] = (rbOut[d.p] || 0) + d.m; pour.forEach(n => rbIn[n] = (rbIn[n] || 0) + Math.round(d.m / pour.length)); }
     else paid[d.p] = (paid[d.p] || 0) + d.m;
     const part = Math.floor(d.m / pour.length); let reste = d.m - part * pour.length;
-    pour.forEach(n => { const x = part + (reste > 0 ? 1 : 0); reste--; bal[n] = (bal[n] || 0) - x; if(!d.rb) share[n] = (share[n] || 0) + x; });
+    pour.forEach(n => { const x = part + (reste > 0 ? 1 : 0); reste--; bal[n] = (bal[n] || 0) - x; if(!d.rb) share[n] = (share[n] || 0) + x;
+      // part cochée « remboursé » sur cette dépense : elle est réglée, on la retire des comptes
+      if(!d.rb && n !== d.p && d.ok && d.ok[n]){ bal[n] += x; bal[d.p] -= x; rbOut[n] = (rbOut[n] || 0) + x; rbIn[d.p] = (rbIn[d.p] || 0) + x; } });
   });
   const cred = [], debt = [];
   Object.keys(bal).forEach(n => { if(bal[n] > 0) cred.push([n, bal[n]]); else if(bal[n] < 0) debt.push([n, -bal[n]]); });
@@ -977,14 +984,14 @@ function drawComptes(){
   if(teamState === "err") html += `<p class="note">Les comptes ne sont pas joignables pour l'instant (pas de réseau). Réessaie dans un moment.</p>`;
   if(teamState === "err-save") html += `<p class="note">La dernière dépense n'a pas pu être enregistrée (pas de réseau). Ajoute-la à nouveau plus tard.</p>`;
   const last = live[0];
-  html += `<section class="panel bilan"><h3>💰 Le bilan, tout compris</h3>
+  html += `<section class="panel bilan"><h3>💰 Au total, tout compris</h3><p class="note">Toutes les dépenses additionnées, avances et remboursements compensés : c'est ce qu'il reste vraiment à payer.</p>
     ${last ? `<p class="maj2">À jour avec les ${live.length} dépense${live.length > 1 ? "s" : ""} · dernière : <b>${esc(last.t)}</b>, ${esc(when(last.d))}</p>` : ""}` + (curs.length ? curs.map(c => {
     const { bal, moves, paid, share, rbOut, rbIn } = settle(live, c), tot = live.filter(d => d.c === c && !d.rb).reduce((a, d) => a + d.m, 0);
     const who = PAYEURS.filter(n => paid[n] || share[n] || rbOut[n] || rbIn[n]);
     return `<p class="note">Total dépensé : <b>${money(tot, c)}</b>${c === "EUR" ? " (en euros)" : ""}</p>
       ${moves.length ? `<p class="perso"><b>Les remboursements à faire</b> (les avances de chacun sont déjà compensées) :</p>
         <ul class="moves">${moves.map(([a, b, x], k) => { const key = c + "|" + a + "|" + b; return `<li><span><b>${esc(a)}</b> doit <b class="amt">${money(x, c)}</b> à <b>${esc(b)}</b></span>
-          <button type="button" class="btn sm" data-rb="${esc(key)}" data-rbx="${x}">${rbAsk === key ? "Confirmer ✓" : "✓ Remboursé"}</button></li>`; }).join("")}</ul>`
+          <button type="button" class="btn sm" data-rb="${esc(key)}" data-rbx="${x}">${rbAsk === key ? "Confirmer ✓" : "✓ Tout remboursé"}</button></li>`; }).join("")}</ul>`
         : `<p class="miss ok">Tout le monde est quitte ✓</p>`}
       <div class="people">${who.map(n => { const b = bal[n];
         return `<div class="pcard ${b > 0 ? "plus" : b < 0 ? "minus" : ""}"><b class="pn">${esc(n)}</b>
@@ -993,7 +1000,7 @@ function drawComptes(){
           ${rbOut[n] ? `<span class="row"><span>A déjà remboursé</span><b>${money(rbOut[n], c)}</b></span>` : ""}
           ${rbIn[n] ? `<span class="row"><span>A déjà reçu</span><b>${money(rbIn[n], c)}</b></span>` : ""}
           <span class="res">${b > 0 ? `Doit recevoir <b>${money(b, c)}</b>` : b < 0 ? `Doit encore <b>${money(-b, c)}</b>` : "Quitte ✓"}</span></div>`; }).join("")}</div>`;
-  }).join("<hr>") : `<p class="note">Aucune dépense pour l'instant.</p>`) + `<p class="note">« Sa part » inclut la part de ${esc(MARIE)}, qui est invité. Quand quelqu'un rembourse, touchez « ✓ Remboursé » : le bilan se met à jour pour tout le monde.</p></section>`;
+  }).join("<hr>") : `<p class="note">Aucune dépense pour l'instant.</p>`) + `<p class="note">« Sa part » inclut la part de ${esc(MARIE)}, qui est invité. Pour cocher ce qui est remboursé : dépense par dépense en dessous, ou d'un coup avec « ✓ Tout remboursé ». Le total se met à jour pour tout le monde.</p></section>`;
   const f = depForm;
   html += `<section class="panel"><h3>Ajouter une dépense</h3>
     <form class="dep" id="depForm">
@@ -1006,11 +1013,14 @@ function drawComptes(){
       <p class="err" id="dErr" hidden></p>
       <button class="btn hot" type="submit">Ajouter</button>
     </form></section>`;
-  html += `<section class="panel"><h3>Dépenses</h3>` + (live.length ? `<ul class="deps">${live.map(d => `<li id="dep-${esc(d.id)}">
+  html += `<section class="panel"><h3>🧾 Dépense par dépense</h3><p class="note">Cochez quand quelqu'un a remboursé sa part : elle sort du total.</p>` + (live.length ? `<ul class="deps">${live.map(d => `<li id="dep-${esc(d.id)}">
       <div class="top"><b>${d.rb ? "💸 " : ""}${esc(d.t)}</b><span class="amt">${money(d.m, d.c)}</span></div>
       ${(() => { if(d.rb) return ""; const pour = (d.pour || []).filter(n => n !== MARIE); if(!pour.length) return "";
-        const part = money(Math.round(d.m / pour.length), d.c), autres = pour.filter(n => n !== d.p);
-        return `<p class="part">Soit <b>${part} par personne</b>${autres.length ? ` : ${esc(autres.join(", "))} ${autres.length > 1 ? "doivent chacun" : "doit"} <b>${part}</b> à ${esc(d.p)}` : ""}.</p>`; })()}
+        const part = money(Math.round(d.m / pour.length), d.c), autres = pour.filter(n => n !== d.p), ok = d.ok || {};
+        const done = autres.length && autres.every(n => ok[n]);
+        return `<p class="part">Soit <b>${part} par personne</b>, à rendre à <b>${esc(d.p)}</b>${done ? ` · <span class="solde">✓ Soldée</span>` : ""}</p>
+          ${autres.length ? `<ul class="parts">${autres.map(n => `<li class="${ok[n] ? "ok" : ""}"><label><input type="checkbox" data-ok="${esc(d.id)}" data-okn="${esc(n)}" ${ok[n] ? "checked" : ""}>
+            <span><b>${esc(n)}</b> ${ok[n] ? "a remboursé" : "doit"} ${part}</span></label></li>`).join("")}</ul>` : ""}`; })()}
       <p class="maj">Payé par <b>${esc(d.p)}</b> · pour ${esc((d.pour || []).join(", "))}${d.par ? " · noté par " + esc(d.par) : ""} · ${esc(when(d.d))}</p>
       <button class="link danger" type="button" data-del="${esc(d.id)}">${delAsk === d.id ? "Confirmer la suppression ?" : "Supprimer"}</button></li>`).join("")}</ul>` : `<p class="note">Rien pour l'instant.</p>`) + `</section>`;
   box.innerHTML = html;
@@ -1033,6 +1043,11 @@ function drawComptes(){
   };
   if(goDep){ const el = document.getElementById("dep-" + goDep); if(el){ const id = goDep; hlDep = { id, until:Date.now() + 4000 }; goDep = ""; setTimeout(() => { const e2 = document.getElementById("dep-" + id); if(e2) flashTo(e2); }, 60); } }
   else if(hlDep.id && Date.now() < hlDep.until){ const el = document.getElementById("dep-" + hlDep.id); if(el) el.classList.add("hl"); }
+  box.querySelectorAll("[data-ok]").forEach(cb => cb.onchange = () => {
+    const d = deps.find(x => x.id === cb.dataset.ok); if(!d) return;
+    const ok = Object.assign({}, d.ok || {}); if(cb.checked) ok[cb.dataset.okn] = true; else delete ok[cb.dataset.okn];
+    const data = Object.assign({}, d, { ok }); delete data.id; cb.blur(); saveDep(d.id, data);
+  });
   box.querySelectorAll("[data-rb]").forEach(b => b.onclick = () => {
     const key = b.dataset.rb; if(rbAsk !== key){ rbAsk = key; drawComptes(); return; }
     rbAsk = ""; const [c, a, to] = key.split("|"), x = +b.dataset.rbx;
