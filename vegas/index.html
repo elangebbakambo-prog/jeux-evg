@@ -341,6 +341,7 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 .flash{ animation:flash 2.4s ease-out; border-radius:14px; }
 @keyframes flash{ 0%, 30%{ box-shadow:0 0 0 3px var(--pink); background-color:rgba(255,59,74,.18); } 100%{ box-shadow:0 0 0 0 transparent; } }
 .hl{ box-shadow:0 0 0 3px var(--pink); border-radius:14px; }
+.taken{ margin:0; font-size:.85rem; color:var(--sand); background:var(--card2); border-radius:12px; padding:8px 10px; }
 .sosact{ display:flex; flex-wrap:wrap; gap:8px; margin:6px 0; }
 .pushbar.on{ color:var(--mint); font-weight:500; }
 .pushbar.ask{ display:flex; flex-direction:column; gap:8px; color:var(--sand); border:1px solid var(--pink); }
@@ -1108,11 +1109,11 @@ async function sendRow(nom, data){
 }
 async function loadLive(){
   try{
-    const q = "?or=(nom.like.post%3A*,nom.like.mom%3A*,nom.like.rea%3A*,nom.like.com%3A*)&select=nom,maj,a:coches->>a,s:coches->>s,t:coches->>t,v:coches->>v,h:coches->>h,x:coches->>x,d:coches->>d,m:coches->>m,p:coches->>p,e:coches->>e,g:coches->>g,r:coches->>r,o:coches->>o&order=maj.desc&limit=2000";
+    const q = "?or=(nom.like.post%3A*,nom.like.mom%3A*,nom.like.rea%3A*,nom.like.com%3A*)&select=nom,maj,a:coches->>a,s:coches->>s,t:coches->>t,v:coches->>v,h:coches->>h,x:coches->>x,d:coches->>d,m:coches->>m,p:coches->>p,e:coches->>e,g:coches->>g,pd:coches->>pd,r:coches->>r,o:coches->>o&order=maj.desc&limit=2000";
     const r = await fetch(SB_URL + q, { headers:{ apikey:SB_KEY }, cache:"no-store" });
     if(!r.ok) throw new Error(r.status);
     const rows = await r.json();
-    posts = rows.filter(x => x.nom.startsWith("post:")).map(x => ({ id:x.nom.slice(5), a:x.a, s:x.s, t:x.t || "", v:x.v || "", h:x.h === "true", x:x.x === "true", d:x.d || x.maj, m:x.m || "", g:x.g || "" }));
+    posts = rows.filter(x => x.nom.startsWith("post:")).map(x => ({ id:x.nom.slice(5), a:x.a, s:x.s, t:x.t || "", v:x.v || "", h:x.h === "true", x:x.x === "true", d:x.d || x.maj, m:x.m || "", g:x.g || "", pd:x.pd || "" }));
     moments = rows.filter(x => x.nom.startsWith("mom:")).map(x => ({ id:x.nom.slice(4), a:x.a, s:x.s, x:x.x === "true", d:x.d || x.maj }));
     reacts = rows.filter(x => x.nom.startsWith("rea:") && x.x !== "true" && x.e).map(x => ({ p:x.p, a:x.a, e:x.e }));
     comments = rows.filter(x => x.nom.startsWith("com:") && x.x !== "true" && x.t).map(x => ({ id:x.nom.slice(4), p:x.p, a:x.a, t:x.t, d:x.d || x.maj, s:x.s, r:x.r || "", o:x.o || "" }));
@@ -1155,6 +1156,57 @@ function tickClocks(){
   if(cd && om){ const left = MOMENT_SEC - Math.floor((Date.now() - Date.parse(om.d)) / 1000);
     cd.textContent = left > 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} pour poster` : "Temps écoulé : tu peux encore poster, en retard 😏"; }
 }
+// --- Date de prise de vue : une photo ou vidéo postée en retard est rangée au jour où elle a été prise ---
+// Photo : EXIF DateTimeOriginal (+ OffsetTimeOriginal). Vidéo iPhone : com.apple.quicktime.creationdate, sinon mvhd.
+const LATE_MIN = 20; // en dessous, on garde l'heure du post
+async function takenAt(file){
+  try{
+    const ok = t => t && t < Date.now() + 5 * 60000 && t > Date.now() - 20 * 86400000 ? t : 0;
+    if(/^image\//.test(file.type) || /\.jpe?g$/i.test(file.name || "")){
+      const v = new DataView(await file.slice(0, 512 * 1024).arrayBuffer());
+      if(v.getUint16(0) !== 0xFFD8) return 0;
+      let o = 2;
+      while(o + 4 < v.byteLength){
+        const mk = v.getUint16(o), len = v.getUint16(o + 2);
+        if(mk === 0xFFE1 && v.getUint32(o + 4) === 0x45786966) return ok(readExif(v, o + 10));
+        if((mk & 0xFF00) !== 0xFF00) return 0;
+        o += 2 + len;
+      }
+      return 0;
+    }
+    if(/^video\//.test(file.type)){
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let txt = ""; const step = 1 << 16;
+      for(let i = 0; i < buf.length; i += step) txt += String.fromCharCode.apply(null, buf.subarray(i, i + step));
+      const k = txt.indexOf("com.apple.quicktime.creationdate");
+      if(k >= 0){
+        const m = /(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:[+-]\d\d:?\d\d|Z))/.exec(txt.slice(k, k + 4000));
+        if(m){ const t = Date.parse(m[1].replace(/([+-]\d\d)(\d\d)$/, "$1:$2")); if(ok(t)) return t; }
+      }
+      const h = txt.indexOf("mvhd");
+      if(h >= 0){
+        const dv = new DataView(buf.buffer, buf.byteOffset + h + 4);
+        const secs = dv.getUint8(0) === 1 ? Number(dv.getBigUint64(4)) : dv.getUint32(4);
+        return ok((secs - 2082844800) * 1000);
+      }
+    }
+  }catch(e){}
+  return 0;
+}
+function readExif(v, t0){
+  const le = v.getUint16(t0) === 0x4949, u16 = o => v.getUint16(o, le), u32 = o => v.getUint32(o, le);
+  const str = (o, n) => { let s = ""; for(let i = 0; i < n; i++){ const c = v.getUint8(o + i); if(!c) break; s += String.fromCharCode(c); } return s; };
+  const tags = ifd => { const out = {}, n = u16(t0 + ifd); for(let i = 0; i < n; i++){ const e = t0 + ifd + 2 + i * 12, tag = u16(e), cnt = u32(e + 4);
+    out[tag] = cnt > 4 ? str(t0 + u32(e + 8), cnt) : (tag === 0x8769 ? u32(e + 8) : str(e + 8, cnt)); } return out; };
+  const ifd0 = tags(u32(t0 + 4)); let ex = {};
+  if(ifd0[0x8769]) ex = tags(ifd0[0x8769]);
+  const raw = ex[0x9003] || ex[0x9004] || ifd0[0x0132]; if(!raw) return 0;
+  const m = /^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/.exec(raw); if(!m) return 0;
+  const off = ex[0x9011] || ex[0x9012] || "";
+  if(/^[+-]\d\d:\d\d$/.test(off)) return Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}${off}`);
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime(); // heure du téléphone
+}
+const lateTaken = () => !!(liveDraft.taken && !liveDraft.m && Date.now() - liveDraft.taken > LATE_MIN * 60000);
 // --- Vidéos courtes : le fichier va dans le stockage Supabase « vegas-videos », le post garde son adresse et une image d'aperçu ---
 const VID_BUCKET = "vegas-videos", MAX_VID_SEC = 30, MAX_VID_MB = 25;
 const SB_BASE = SB_URL.replace(/\/rest\/v1\/.*$/, "");
@@ -1559,7 +1611,7 @@ function drawLive(){
   const ae = document.activeElement;
   if(ae && box.contains(ae) && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) { drawFeed(); return; }
   const om = openMoment(), c = cote();
-  const sig = JSON.stringify([sos, pushState(), pushMsg, pushBusy, moi, c, om && om.id, om && posts.some(p => p.m === om.id && isMe(p.a) && !p.x), !!liveDraft.img, !!liveDraft.vid, liveDraft.m, liveBusy,
+  const sig = JSON.stringify([sos, pushState(), pushMsg, pushBusy, moi, c, om && om.id, om && posts.some(p => p.m === om.id && isMe(p.a) && !p.x), !!liveDraft.img, !!liveDraft.vid, liveDraft.m, lateTaken(), liveBusy,
     storyList().length, storyList().filter(p => !seenStories[p.id]).length, liveState]);
   if(sig === lastLiveSig && document.getElementById("feed")){ drawFeed(); return; }
   lastLiveSig = sig;
@@ -1590,6 +1642,7 @@ function drawLive(){
       <textarea id="liveText" rows="2" maxlength="500" placeholder="${c === "vegas" ? "Ce qui se passe ici…" : "Pendant ce temps, en France…"}">${esc(liveDraft.t)}</textarea>
       ${liveDraft.img && !liveDraft.vid ? `<div class="preview"><img src="${liveDraft.img}" alt="Photo à poster"><button type="button" class="link danger" id="liveNoImg">Retirer la photo</button></div>` : ""}
       ${liveDraft.vid ? `<div class="preview"><video src="${liveDraft.vid.url}" controls playsinline muted></video><button type="button" class="link danger" id="liveNoImg">Retirer la vidéo</button></div>` : ""}
+      ${lateTaken() ? `<p class="taken">📅 Prise ${esc(dayOf(new Date(liveDraft.taken).toISOString(), TZ.vegas))} à ${hm(new Date(liveDraft.taken).toISOString(), TZ.vegas)} (Vegas) : elle sera rangée à ce moment-là. <button type="button" class="link" id="takenNow">Non, la mettre à maintenant</button></p>` : ""}
       <div class="actions"><label class="btn" for="livePhoto">📷 Photo</label><input id="livePhoto" type="file" accept="image/*" hidden>
         <label class="btn" for="liveVideo">🎥 Vidéo</label><input id="liveVideo" type="file" accept="video/*" hidden>
         <button class="btn hot" type="button" id="liveSend" ${liveBusy ? "disabled" : ""}>${liveBusy ? "Envoi…" : "Publier"}</button></div>
@@ -1605,18 +1658,21 @@ function drawLive(){
   box.querySelectorAll("[data-side]").forEach(b => b.onclick = () => { liveCote = b.dataset.side; try{ localStorage.setItem("vegas-cote", liveCote); }catch(e){} drawLive(); });
   const ta = document.getElementById("liveText"); if(ta) ta.oninput = () => { liveDraft.t = ta.value; };
   const pick = async (input, forMoment) => { const f = input.files && input.files[0]; if(!f) return;
+    liveDraft.taken = forMoment ? 0 : await takenAt(f);
     try{ liveDraft.img = await shrink(f); if(forMoment) liveDraft.m = forMoment; }
     catch(e){ const er = document.getElementById("liveErr"); if(er){ er.textContent = "Cette photo n'a pas pu être lue."; er.hidden = false; } return; }
     drawLive(); const t2 = document.getElementById("liveText"); if(t2 && forMoment) t2.scrollIntoView({ block:"center" }); };
   const ph = document.getElementById("livePhoto"); if(ph) ph.onchange = () => pick(ph, "");
   const mp = document.getElementById("momPhoto"); if(mp) mp.onchange = () => pick(mp, om && om.id);
-  const ni = document.getElementById("liveNoImg"); if(ni) ni.onclick = () => { liveDraft.img = ""; liveDraft.m = ""; liveDraft.vid = null; drawLive(); };
+  const ni = document.getElementById("liveNoImg"); if(ni) ni.onclick = () => { liveDraft.img = ""; liveDraft.m = ""; liveDraft.vid = null; liveDraft.taken = 0; drawLive(); };
+  const tn = document.getElementById("takenNow"); if(tn) tn.onclick = () => { liveDraft.taken = 0; drawLive(); };
   const vi = document.getElementById("liveVideo");
   if(vi) vi.onchange = async () => { const f = vi.files && vi.files[0]; if(!f) return; const er = document.getElementById("liveErr");
     const say = t => { if(er){ er.textContent = t; er.hidden = false; } };
     if(f.size > MAX_VID_MB * 1048576) return say(`Vidéo trop lourde (${Math.round(f.size / 1048576)} Mo). Filme plus court, ${MAX_VID_SEC} s maximum.`);
     let meta; try{ meta = await videoMeta(f); }catch(e){ return say("Cette vidéo n'a pas pu être lue."); }
     if(meta.dur > MAX_VID_SEC + 1) return say(`Vidéo trop longue (${Math.round(meta.dur)} s). ${MAX_VID_SEC} s maximum.`);
+    liveDraft.taken = await takenAt(f);
     liveDraft.vid = { file:f, url:meta.url, dur:meta.dur }; liveDraft.img = meta.poster || ""; drawLive(); };
   const sm = document.getElementById("startMoment");
   if(sm) sm.onclick = async () => {
@@ -1633,8 +1689,8 @@ function drawLive(){
   if(sd) sd.onclick = async () => {
     const t = (liveDraft.t || "").trim(), er = document.getElementById("liveErr");
     if(!t && !liveDraft.img && !liveDraft.vid){ er.textContent = "Écris quelque chose ou ajoute une photo ou une vidéo."; er.hidden = false; return; }
-    const id = newId(), d = new Date().toISOString();
-    const data = { a:moi, s:cote(), t, d }; if(liveDraft.img){ data.h = true; data.i = liveDraft.img; } if(liveDraft.m) data.m = liveDraft.m;
+    const id = newId(), now = new Date().toISOString(), late = lateTaken(), d = late ? new Date(liveDraft.taken).toISOString() : now;
+    const data = { a:moi, s:cote(), t, d }; if(late) data.pd = now; if(liveDraft.img){ data.h = true; data.i = liveDraft.img; } if(liveDraft.m) data.m = liveDraft.m;
     liveBusy = true; drawLive();
     try{
       if(liveDraft.vid){
@@ -1645,7 +1701,7 @@ function drawLive(){
       }
       await sendRow("post:" + id, data);
       if(data.i) imgCache[id] = data.i;
-      posts.unshift({ id, a:moi, s:data.s, t, v:data.v || "", h:!!data.h, x:false, d, m:data.m || "" });
+      posts.unshift({ id, a:moi, s:data.s, t, v:data.v || "", h:!!data.h, x:false, d, m:data.m || "", pd:data.pd || "" });
       liveDraft = { t:"", img:"", m:"", vid:null }; liveBusy = false; drawLive(); loadLive();
     }catch(e){ liveBusy = false; drawLive(); const er2 = document.getElementById("liveErr"); if(er2){ er2.textContent = "Pas envoyé (pas de réseau ?). Ton texte est gardé, réessaie."; er2.hidden = false; } }
   };
@@ -1681,7 +1737,7 @@ function postHTML(x, compact, m){
       : x.h ? `<img class="ph" data-img="${esc(x.id)}" data-story="${esc(x.id)}" alt="Photo de ${esc(x.a || "")}" loading="lazy">` : ""}
     ${x.t ? `<p>${esc(x.t)}</p>` : ""}
     ${/^-?[\d.]+,-?[\d.]+$/.test(x.g || "") ? `<div class="sosact"><a class="btn hot" href="https://www.google.com/maps/search/?api=1&query=${x.g}" target="_blank" rel="noopener">🗺️ Voir où il est</a><a class="btn" href="https://www.google.com/maps/dir/?api=1&destination=${x.g}&travelmode=walking" target="_blank" rel="noopener">🚶 Itinéraire</a></div>` : ""}
-    <p class="times"><b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France</p>
+    <p class="times">${x.pd ? "📅 Prise " : ""}<b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France${x.pd ? ` · <span class="late">postée ${esc(dayOf(x.pd, TZ.vegas))} à ${hm(x.pd, TZ.vegas)}</span>` : ""}</p>
     ${reactBar(x.id)}
     ${comBlock(x.id)}
     ${isMe(x.a) ? `<button class="link danger" type="button" data-pdel="${esc(x.id)}">${liveDel === x.id ? "Confirmer la suppression ?" : "Supprimer"}</button>` : ""}
@@ -1770,7 +1826,7 @@ function drawStory(dir){
   ov.innerHTML = `<div class="st-wrap">
     <div class="segs">${story.list.map((y, k) => `<span class="seg ${k < story.i ? "done" : k === story.i ? "cur" : ""}"><i></i></span>`).join("")}</div>
     <div class="st-head"><div><b class="${x.s === "france" ? "f" : "v"}">${esc(x.a || "?")}</b> <span>${x.s === "france" ? "🥐 en France" : "🎰 à Vegas"}</span>${m ? ` <span class="k">⚡ Moment</span>` : ""}
-      <p class="times"><b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France</p></div>
+      <p class="times">${x.pd ? `📅 ${esc(dayOf(x.d, TZ.vegas))} · ` : ""}<b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France</p></div>
       <div class="st-btns">${x.v ? `<button type="button" class="st-close" id="stSound" aria-label="Son">${storyMuted ? "🔇" : "🔊"}</button>` : ""}<button type="button" class="st-close" id="stClose" aria-label="Fermer">✕</button></div></div>
     <div class="st-img" id="stArea">${x.v ? `<video id="stVid" class="${dir > 0 ? "in-r" : dir < 0 ? "in-l" : ""}" src="${esc(x.v)}" playsinline ${storyMuted ? "muted" : ""}></video>`
       : `<img id="stImg" class="${dir > 0 ? "in-r" : dir < 0 ? "in-l" : ""}" alt="Photo de ${esc(x.a || "")}" draggable="false">`}</div>
