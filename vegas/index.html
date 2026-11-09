@@ -310,6 +310,10 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 .rtabs button:focus-visible{ outline:2px solid var(--mint); }
 .rlist{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
 .rcard{ background:var(--card); border-radius:14px; overflow:hidden; }
+.blurx{ filter:blur(6px); user-select:none; -webkit-user-select:none; pointer-events:none; }
+.lockt{ color:var(--pink); font-weight:700; }
+.lockmsg{ margin:0; font-size:.88rem; color:var(--sand); background:var(--card2); border:1px dashed var(--pink); border-radius:12px; padding:8px 10px; }
+.votes.locked li{ opacity:.9; }
 .rcard.open{ outline:1px solid var(--amber); }
 .rhead{ all:unset; cursor:pointer; display:flex; align-items:center; gap:10px; width:100%; box-sizing:border-box; padding:10px 12px; flex-wrap:wrap; }
 .rhead:focus-visible{ outline:2px solid var(--mint); outline-offset:-2px; }
@@ -816,6 +820,10 @@ async function loadRank(){
 const notesOf = id => notes.filter(n => n.r === id);
 const myNote = id => notes.find(n => n.r === id && isMe(n.a));
 const fmtNote = v => (Math.round(v * 10) / 10).toLocaleString("fr-FR");
+// Notes cachées : tant que tu n'as pas noté un resto, tu vois QUI a noté mais pas la note ni l'argument (floutés).
+const locked = id => !myNote(id) && notesOf(id).some(n => !isMe(n.a));
+const hideNote = () => `<span class="blurx" aria-hidden="true">8,5</span>`;
+const hideArg = t => `<p class="arg blurx" aria-hidden="true">« ${"Lorem ipsum dolor sit amet ".repeat(Math.max(1, Math.min(4, Math.ceil((t || "").length / 28)))).trim()} »</p>`;
 const inFilter = r => rankFilter === "all" || (RTYPES[r.k] ? r.k : "autre") === rankFilter;
 function filterChips(){
   const n = k => restos.filter(r => k === "all" || (RTYPES[r.k] ? r.k : "autre") === k).length;
@@ -842,15 +850,16 @@ function rateForm(r){
     <button class="btn hot" type="submit" ${rankBusy ? "disabled" : ""}>${mine ? "Modifier ma note" : "Valider ma note"}</button></form>`;
 }
 function restoCard(r, i, mode){
-  const open = rankOpen === r.id, ns = notesOf(r.id).slice().sort((a, b) => +b.v - +a.v);
+  const open = rankOpen === r.id, ns = notesOf(r.id).slice().sort((a, b) => +b.v - +a.v), lk = locked(r.id);
   const head = mode === "perso"
-    ? `<span class="pos">${medal(i)}</span><div class="nm"><b>${esc(r.n)}</b><small>${esc(RTYPES[r.k] || RTYPES.autre)}${r.l ? " · " + esc(r.l) : ""}</small></div><span class="score">${fmtNote(+r.pv)}</span>`
-    : `<span class="pos">${r.avg == null ? "–" : medal(i)}</span><div class="nm"><b>${esc(r.n)}</b><small>${esc(RTYPES[r.k] || RTYPES.autre)}${r.l ? " · " + esc(r.l) : ""} · ${ns.length} vote${ns.length > 1 ? "s" : ""}</small></div><span class="score">${r.avg == null ? "?" : fmtNote(r.avg)}</span>`;
+    ? `<span class="pos">${medal(i)}</span><div class="nm"><b>${esc(r.n)}</b><small>${esc(RTYPES[r.k] || RTYPES.autre)}${r.l ? " · " + esc(r.l) : ""}${lk && !isMe(rankWho) ? ` · <span class="lockt">🔒 note pour voir</span>` : ""}</small></div><span class="score">${lk && !isMe(rankWho) ? hideNote() : fmtNote(+r.pv)}</span>`
+    : `<span class="pos">${r.avg == null ? "–" : medal(i)}</span><div class="nm"><b>${esc(r.n)}</b><small>${esc(RTYPES[r.k] || RTYPES.autre)}${r.l ? " · " + esc(r.l) : ""} · ${ns.length} vote${ns.length > 1 ? "s" : ""}${lk ? ` · <span class="lockt">🔒 note pour voir</span>` : ""}</small></div><span class="score">${r.avg == null ? "?" : lk ? hideNote() : fmtNote(r.avg)}</span>`;
   return `<li class="rcard ${open ? "open" : ""}"><button type="button" class="rhead" data-ropen="${esc(r.id)}" aria-expanded="${open}">${head}</button>
-    ${mode === "perso" && r.pt ? `<p class="arg">« ${esc(r.pt)} »</p>` : ""}
+    ${mode === "perso" && r.pt ? (lk && !isMe(rankWho) ? hideArg(r.pt) : `<p class="arg">« ${esc(r.pt)} »</p>`) : ""}
     ${open ? `<div class="rbody">
-      ${ns.length ? `<ul class="votes">${ns.map(n => `<li><div><b>${esc(n.a)}</b> <span class="score sm">${fmtNote(+n.v)}</span></div>${n.t ? `<p class="arg">« ${esc(n.t)} »</p>` : ""}</li>`).join("")}</ul>` : `<p class="note">Personne n'a encore noté.</p>`}
-      ${moi ? rateForm(r) : `<p class="note">Entre ton prénom en haut pour noter.</p>`}
+      ${lk ? `<p class="lockmsg">🔒 ${ns.length} avis caché${ns.length > 1 ? "s" : ""}. Mets ta note pour découvrir celles des autres, sans être influencé !</p>${moi ? rateForm(r) : `<p class="note">Entre ton prénom en haut pour noter.</p>`}` : ""}
+      ${ns.length ? `<ul class="votes ${lk ? "locked" : ""}">${(lk ? notesOf(r.id) : ns).map(n => `<li><div><b>${esc(n.a)}</b> <span class="score sm">${lk && !isMe(n.a) ? hideNote() : fmtNote(+n.v)}</span></div>${n.t ? (lk && !isMe(n.a) ? hideArg(n.t) : `<p class="arg">« ${esc(n.t)} »</p>`) : ""}</li>`).join("")}</ul>` : `<p class="note">Personne n'a encore noté.</p>`}
+      ${lk ? "" : moi ? rateForm(r) : `<p class="note">Entre ton prénom en haut pour noter.</p>`}
       ${isMe(r.by) ? `<button type="button" class="link danger" data-rdel="${esc(r.id)}">${rankDel === r.id ? "Confirmer la suppression ?" : "Supprimer ce resto"}</button>` : ""}
     </div>` : ""}</li>`;
 }
@@ -881,7 +890,7 @@ function drawRank(){
       const g = rankedGlobal();
       html += `<p class="k2">Le top de ${esc(rankWho)}${rankFilter !== "all" ? " · " + esc(RTYPES[rankFilter]) : ""} (${mine.length})</p>${mine.length ? "" : `<p class="note">Rien noté dans cette catégorie.</p>`}<ol class="rlist">${mine.map((r, i) => {
         const gi = g.findIndex(x => x.id === r.id), ga = g[gi] && g[gi].avg;
-        return restoCard(r, i, "perso").replace("</button>", ga != null ? `<span class="vs">général : ${fmtNote(ga)} (${gi === 0 ? "1er" : gi + 1 + "e"})</span></button>` : "</button>");
+        return restoCard(r, i, "perso").replace("</button>", ga != null && !locked(r.id) ? `<span class="vs">général : ${fmtNote(ga)} (${gi === 0 ? "1er" : gi + 1 + "e"})</span></button>` : "</button>");
       }).join("")}</ol>`;
     }
   } else {
