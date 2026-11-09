@@ -349,6 +349,10 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 .dedit{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:.85rem; }
 .dmsg{ margin:0; width:100%; font-size:.8rem; color:var(--mint); }
 .dedit input{ font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:5px 8px; }
+.multi{ display:flex; flex-direction:column; gap:8px; }
+.thumbs{ display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+.th{ position:relative; } .th img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; display:block; }
+.th button{ all:unset; cursor:pointer; position:absolute; top:3px; right:3px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,.65); color:#fff; font-size:.75rem; display:grid; place-items:center; }
 .taken{ margin:0; font-size:.85rem; color:var(--sand); background:var(--card2); border-radius:12px; padding:8px 10px; }
 .sosact{ display:flex; flex-wrap:wrap; gap:8px; margin:6px 0; }
 .pushbar.on{ color:var(--mint); font-weight:500; }
@@ -599,12 +603,13 @@ const KEY_ITEMS = ["quad", "tir"];
 
 let cur = "today", checked = {}, moi = "";
 // Lien d'une notification : #live, #p=<post>, #c=<post> (commentaire), #comptes, #dep=<dépense>
-let goPost = "", goDep = "", goOpen = false, hlDep = {};
+let goPost = "", goDep = "", goOpen = false, hlDep = {}, goResto = "";
 function readGoto(h){
   h = (h || "").replace(/^.*#/, "");
   let m;
   if((m = /^(?:p|c)=(.+)$/.exec(h))){ goPost = decodeURIComponent(m[1]); goOpen = h[0] === "c"; return "live"; }
   if((m = /^dep=(.+)$/.exec(h))){ goDep = decodeURIComponent(m[1]); return "comptes"; }
+  if((m = /^r=(.+)$/.exec(h))){ goResto = decodeURIComponent(m[1]); return "rank"; }
   if(h === "comptes") return "comptes";
   if(h === "live") return "live";
   return "";
@@ -854,7 +859,7 @@ function restoCard(r, i, mode){
   const head = mode === "perso"
     ? `<span class="pos">${medal(i)}</span><div class="nm"><b>${esc(r.n)}</b><small>${esc(RTYPES[r.k] || RTYPES.autre)}${r.l ? " · " + esc(r.l) : ""}${lk && !isMe(rankWho) ? ` · <span class="lockt">🔒 note pour voir</span>` : ""}</small></div><span class="score">${lk && !isMe(rankWho) ? hideNote() : fmtNote(+r.pv)}</span>`
     : `<span class="pos">${r.avg == null ? "–" : medal(i)}</span><div class="nm"><b>${esc(r.n)}</b><small>${esc(RTYPES[r.k] || RTYPES.autre)}${r.l ? " · " + esc(r.l) : ""} · ${ns.length} vote${ns.length > 1 ? "s" : ""}${lk ? ` · <span class="lockt">🔒 note pour voir</span>` : ""}</small></div><span class="score">${r.avg == null ? "?" : lk ? hideNote() : fmtNote(r.avg)}</span>`;
-  return `<li class="rcard ${open ? "open" : ""}"><button type="button" class="rhead" data-ropen="${esc(r.id)}" aria-expanded="${open}">${head}</button>
+  return `<li class="rcard ${open ? "open" : ""}" id="resto-${esc(r.id)}"><button type="button" class="rhead" data-ropen="${esc(r.id)}" aria-expanded="${open}">${head}</button>
     ${mode === "perso" && r.pt ? (lk && !isMe(rankWho) ? hideArg(r.pt) : `<p class="arg">« ${esc(r.pt)} »</p>`) : ""}
     ${open ? `<div class="rbody">
       ${lk ? `<p class="lockmsg">🔒 ${ns.length} avis caché${ns.length > 1 ? "s" : ""}. Mets ta note pour découvrir celles des autres, sans être influencé !</p>${moi ? rateForm(r) : `<p class="note">Entre ton prénom en haut pour noter.</p>`}` : ""}
@@ -865,6 +870,8 @@ function restoCard(r, i, mode){
 }
 function drawRank(){
   const box = document.getElementById("rank"); if(!box) return;
+  let flashR = "";
+  if(goResto && restos.some(r => r.id === goResto)){ rankView = "global"; rankFilter = "all"; rankOpen = goResto; flashR = goResto; goResto = ""; }
   const ae = document.activeElement;
   if(ae && box.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.type !== "range") return;
   let html = "";
@@ -899,6 +906,7 @@ function drawRank(){
       : `<p class="note">${restos.length ? "Rien dans cette catégorie pour l'instant." : "Aucun resto pour l'instant. Touche « ➕ Ajouter » après votre premier fast-food !"}</p>`;
   }
   box.innerHTML = html;
+  if(flashR) setTimeout(() => { const e2 = document.getElementById("resto-" + flashR); if(e2) flashTo(e2); }, 60);
   box.querySelectorAll("[data-rfilter]").forEach(b => b.onclick = () => { rankFilter = b.dataset.rfilter; rankOpen = ""; drawRank(); });
   box.querySelectorAll("[data-rview]").forEach(b => b.onclick = () => { rankView = b.dataset.rview; drawRank(); });
   box.querySelectorAll("[data-rwho]").forEach(b => b.onclick = () => { rankWho = b.dataset.rwho; rankOpen = ""; drawRank(); });
@@ -1171,7 +1179,7 @@ function tickClocks(){
 }
 // --- Date de prise de vue : une photo ou vidéo postée en retard est rangée au jour où elle a été prise ---
 // Photo : EXIF DateTimeOriginal (+ OffsetTimeOriginal). Vidéo iPhone : com.apple.quicktime.creationdate, sinon mvhd.
-const LATE_MIN = 20; // en dessous, on garde l'heure du post
+const LATE_MIN = 20, MAX_MULTI = 10; // en dessous, on garde l'heure du post
 async function takenAt(file){
   try{
     const ok = t => t && t < Date.now() + 5 * 60000 && t > Date.now() - 20 * 86400000 ? t : 0;
@@ -1624,7 +1632,7 @@ function drawLive(){
   const ae = document.activeElement;
   if(ae && box.contains(ae) && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) { drawFeed(); return; }
   const om = openMoment(), c = cote();
-  const sig = JSON.stringify([sos, pushState(), pushMsg, pushBusy, moi, c, om && om.id, om && posts.some(p => p.m === om.id && isMe(p.a) && !p.x), !!liveDraft.img, !!liveDraft.vid, liveDraft.m, lateTaken(), liveBusy,
+  const sig = JSON.stringify([sos, pushState(), pushMsg, pushBusy, moi, c, om && om.id, om && posts.some(p => p.m === om.id && isMe(p.a) && !p.x), !!liveDraft.img, !!liveDraft.vid, (liveDraft.extra || []).length, liveDraft.m, lateTaken(), liveBusy,
     storyList().length, storyList().filter(p => !seenStories[p.id]).length, liveState]);
   if(sig === lastLiveSig && document.getElementById("feed")){ drawFeed(); return; }
   lastLiveSig = sig;
@@ -1653,10 +1661,13 @@ function drawLive(){
       <div class="sides"><span>${esc(moi)} est</span><button type="button" class="side ${c === "vegas" ? "on v" : ""}" data-side="vegas">🎰 à Vegas</button><button type="button" class="side ${c === "france" ? "on f" : ""}" data-side="france">🥐 en France</button></div>
       ${liveDraft.m ? `<p class="k">⚡ Pour le Moment de ${esc((moments.find(m => m.id === liveDraft.m) || {}).a || "")}</p>` : ""}
       <textarea id="liveText" rows="2" maxlength="500" placeholder="${c === "vegas" ? "Ce qui se passe ici…" : "Pendant ce temps, en France…"}">${esc(liveDraft.t)}</textarea>
-      ${liveDraft.img && !liveDraft.vid ? `<div class="preview"><img src="${liveDraft.img}" alt="Photo à poster"><button type="button" class="link danger" id="liveNoImg">Retirer la photo</button></div>` : ""}
+      ${liveDraft.img && !liveDraft.vid && !(liveDraft.extra || []).length ? `<div class="preview"><img src="${liveDraft.img}" alt="Photo à poster"><button type="button" class="link danger" id="liveNoImg">Retirer la photo</button></div>` : ""}
+      ${liveDraft.img && !liveDraft.vid && (liveDraft.extra || []).length ? `<div class="multi"><p class="k2">${1 + liveDraft.extra.length} photos → ${1 + liveDraft.extra.length} stories</p><div class="thumbs">${[liveDraft.img].concat(liveDraft.extra.map(x => x.img)).map((src, k) => `<div class="th"><img src="${src}" alt="Photo ${k + 1}"><button type="button" data-xrm="${k}" aria-label="Retirer">✕</button></div>`).join("")}</div>
+        ${liveDraft.extra.some(x => x.taken && Date.now() - x.taken > LATE_MIN * 60000) || lateTaken() ? `<p class="taken">📅 Les photos prises plus tôt seront rangées à leur vraie date.</p>` : ""}
+        <button type="button" class="link danger" id="liveNoImg">Tout retirer</button></div>` : ""}
       ${liveDraft.vid ? `<div class="preview"><video src="${liveDraft.vid.url}" controls playsinline muted></video><button type="button" class="link danger" id="liveNoImg">Retirer la vidéo</button></div>` : ""}
       ${lateTaken() ? `<p class="taken">📅 Prise ${esc(dayOf(new Date(liveDraft.taken).toISOString(), TZ.vegas))} à ${hm(new Date(liveDraft.taken).toISOString(), TZ.vegas)} (Vegas) : elle sera rangée à ce moment-là. <button type="button" class="link" id="takenNow">Non, la mettre à maintenant</button></p>` : ""}
-      <div class="actions"><label class="btn" for="livePhoto">📷 Photo</label><input id="livePhoto" type="file" accept="image/*" hidden>
+      <div class="actions"><label class="btn" for="livePhoto">📷 Photo</label><input id="livePhoto" type="file" accept="image/*" multiple hidden>
         <label class="btn" for="liveVideo">🎥 Vidéo</label><input id="liveVideo" type="file" accept="video/*" hidden>
         <button class="btn hot" type="button" id="liveSend" ${liveBusy ? "disabled" : ""}>${liveBusy ? "Envoi…" : "Publier"}</button></div>
       <p class="err" id="liveErr" hidden></p>
@@ -1670,14 +1681,30 @@ function drawLive(){
     document.getElementById("liveName").blur(); moi = n; save(); drawLive(); };
   box.querySelectorAll("[data-side]").forEach(b => b.onclick = () => { liveCote = b.dataset.side; try{ localStorage.setItem("vegas-cote", liveCote); }catch(e){} drawLive(); });
   const ta = document.getElementById("liveText"); if(ta) ta.oninput = () => { liveDraft.t = ta.value; };
-  const pick = async (input, forMoment) => { const f = input.files && input.files[0]; if(!f) return;
+  const pick = async (input, forMoment) => { const fs = Array.from(input.files || []); if(!fs.length) return;
+    if(!forMoment && (fs.length > 1 || (liveDraft.img && !liveDraft.vid && !liveDraft.m))){
+      // Plusieurs photos : la première garde le texte, chacune devient une story
+      const er = document.getElementById("liveErr");
+      for(const f of fs){
+        const n = (liveDraft.img ? 1 : 0) + (liveDraft.extra || []).length; if(n >= MAX_MULTI) break;
+        let img; try{ img = await shrink(f); }catch(e){ if(er){ er.textContent = "Une photo n'a pas pu être lue."; er.hidden = false; } continue; }
+        const taken = await takenAt(f);
+        if(!liveDraft.img){ liveDraft.img = img; liveDraft.taken = taken; liveDraft.vid = null; }
+        else (liveDraft.extra = liveDraft.extra || []).push({ img, taken });
+      }
+      input.value = ""; drawLive(); return;
+    }
+    const f = fs[0];
     liveDraft.taken = forMoment ? 0 : await takenAt(f);
     try{ liveDraft.img = await shrink(f); if(forMoment) liveDraft.m = forMoment; }
     catch(e){ const er = document.getElementById("liveErr"); if(er){ er.textContent = "Cette photo n'a pas pu être lue."; er.hidden = false; } return; }
     drawLive(); const t2 = document.getElementById("liveText"); if(t2 && forMoment) t2.scrollIntoView({ block:"center" }); };
   const ph = document.getElementById("livePhoto"); if(ph) ph.onchange = () => pick(ph, "");
   const mp = document.getElementById("momPhoto"); if(mp) mp.onchange = () => pick(mp, om && om.id);
-  const ni = document.getElementById("liveNoImg"); if(ni) ni.onclick = () => { liveDraft.img = ""; liveDraft.m = ""; liveDraft.vid = null; liveDraft.taken = 0; drawLive(); };
+  const ni = document.getElementById("liveNoImg"); if(ni) ni.onclick = () => { liveDraft.img = ""; liveDraft.m = ""; liveDraft.vid = null; liveDraft.taken = 0; liveDraft.extra = []; drawLive(); };
+  box.querySelectorAll("[data-xrm]").forEach(b => b.onclick = () => { const k = +b.dataset.xrm, ex = liveDraft.extra || [];
+    if(k === 0){ const nx = ex.shift(); liveDraft.img = nx ? nx.img : ""; liveDraft.taken = nx ? nx.taken : 0; } else ex.splice(k - 1, 1);
+    liveDraft.extra = ex; drawLive(); });
   const tn = document.getElementById("takenNow"); if(tn) tn.onclick = () => { liveDraft.taken = 0; drawLive(); };
   const vi = document.getElementById("liveVideo");
   if(vi) vi.onchange = async () => { const f = vi.files && vi.files[0]; if(!f) return; const er = document.getElementById("liveErr");
@@ -1686,7 +1713,7 @@ function drawLive(){
     let meta; try{ meta = await videoMeta(f); }catch(e){ return say("Cette vidéo n'a pas pu être lue."); }
     if(meta.dur > MAX_VID_SEC + 1) return say(`Vidéo trop longue (${Math.round(meta.dur)} s). ${MAX_VID_SEC} s maximum.`);
     liveDraft.taken = await takenAt(f);
-    liveDraft.vid = { file:f, url:meta.url, dur:meta.dur }; liveDraft.img = meta.poster || ""; drawLive(); };
+    liveDraft.vid = { file:f, url:meta.url, dur:meta.dur }; liveDraft.img = meta.poster || ""; liveDraft.extra = []; drawLive(); };
   const sm = document.getElementById("startMoment");
   if(sm) sm.onclick = async () => {
     const id = newId(), d = new Date().toISOString();
@@ -1704,6 +1731,7 @@ function drawLive(){
     if(!t && !liveDraft.img && !liveDraft.vid){ er.textContent = "Écris quelque chose ou ajoute une photo ou une vidéo."; er.hidden = false; return; }
     const id = newId(), now = new Date().toISOString(), late = lateTaken(), d = late ? new Date(liveDraft.taken).toISOString() : now;
     const data = { a:moi, s:cote(), t, d }; if(late) data.pd = now; if(liveDraft.img){ data.h = true; data.i = liveDraft.img; } if(liveDraft.m) data.m = liveDraft.m;
+    const extra = liveDraft.vid ? [] : (liveDraft.extra || []); if(extra.length) data.n = 1 + extra.length;
     liveBusy = true; drawLive();
     try{
       if(liveDraft.vid){
@@ -1715,8 +1743,19 @@ function drawLive(){
       await sendRow("post:" + id, data);
       if(data.i) imgCache[id] = data.i;
       posts.unshift({ id, a:moi, s:data.s, t, v:data.v || "", h:!!data.h, x:false, d, m:data.m || "", pd:data.pd || "" });
-      liveDraft = { t:"", img:"", m:"", vid:null }; liveBusy = false; drawLive(); loadLive();
-    }catch(e){ liveBusy = false; drawLive(); const er2 = document.getElementById("liveErr"); if(er2){ er2.textContent = "Pas envoyé (pas de réseau ?). Ton texte est gardé, réessaie."; er2.hidden = false; } }
+      // Les autres photos : une story chacune (b = le premier post, pour n'envoyer qu'une notif)
+      for(let k = 0; k < extra.length; k++){
+        const b = document.getElementById("liveSend"); if(b) b.textContent = `Envoi… ${k + 2}/${extra.length + 1}`;
+        const x = extra[k], id2 = newId(), lt = x.taken && Date.now() - x.taken > LATE_MIN * 60000;
+        const d2 = lt ? new Date(x.taken).toISOString() : new Date(Date.parse(now) + k + 1).toISOString();
+        const data2 = { a:moi, s:data.s, t:"", d:d2, h:true, i:x.img, b:id }; if(lt) data2.pd = now;
+        await sendRow("post:" + id2, data2); imgCache[id2] = x.img;
+        posts.unshift({ id:id2, a:moi, s:data.s, t:"", v:"", h:true, x:false, d:d2, m:"", pd:data2.pd || "" });
+        extra[k] = null;
+      }
+      liveDraft = { t:"", img:"", m:"", vid:null, extra:[] }; liveBusy = false; drawLive(); loadLive();
+    }catch(e){ if(posts.some(p => p.id === id)){ liveDraft.t = ""; liveDraft.extra = extra.filter(Boolean); liveDraft.img = ""; const nx = liveDraft.extra.shift(); if(nx){ liveDraft.img = nx.img; liveDraft.taken = nx.taken; } }
+      liveBusy = false; drawLive(); const er2 = document.getElementById("liveErr"); if(er2){ er2.textContent = "Pas tout envoyé (pas de réseau ?). Ce qui reste est gardé, réessaie."; er2.hidden = false; } }
   };
 }
 function sendSos(){

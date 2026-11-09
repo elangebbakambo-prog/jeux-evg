@@ -16,13 +16,16 @@ declare
   base text := 'https://elangebbakambo-prog.github.io/jeux-evg/vegas/';
   lien text := base || '#live';
   titre text; corps text; etiquette text; urg text := 'normal'; cible text := null;
-  cfg record; abonnes jsonb;
+  cfg record; abonnes jsonb; resto text;
 begin
   if new.nom like 'post:%' then
     if coalesce(c->>'x', '') = 'true' then return new; end if;
+    -- Plusieurs photos d'un coup : une seule notif (sur la première), les suivantes ont « b »
+    if coalesce(c->>'b', '') <> '' then return new; end if;
     if coalesce(c->>'g', '') <> '' then titre := '📍 ' || a || ' est perdu ! Touche pour voir où il est'; urg := 'high';
     elsif coalesce(c->>'m', '') <> '' then titre := '⚡ ' || a || ' ' || lieu || ' a posté sa photo du Moment';
     elsif coalesce(c->>'v', '') <> '' then titre := '🎥 ' || a || ' ' || lieu || ' a posté une vidéo';
+    elsif coalesce((c->>'n')::int, 1) > 1 then titre := '📸 ' || a || ' ' || lieu || ' a posté ' || (c->>'n') || ' stories';
     elsif coalesce(c->>'h', '') = 'true' then titre := '📸 ' || a || ' ' || lieu || ' a posté une story';
     else titre := '💬 ' || a || ' ' || lieu || ' a écrit sur le Live';
     end if;
@@ -45,6 +48,14 @@ begin
     corps := left(coalesce(c->>'t', ''), 140);
     etiquette := 'com-' || coalesce(c->>'p', '');
     lien := base || '#c=' || coalesce(c->>'p', '');
+  elsif new.nom like 'note:%' then
+    -- Ranking : on annonce qui a noté, sans dévoiler la note
+    if coalesce(c->>'x', '') = 'true' then return new; end if;
+    select s.coches->>'n' into resto from vegas_suivi s where s.nom = 'resto:' || (c->>'r');
+    titre := '🍔 ' || a || ' a noté ' || coalesce(resto, 'un resto');
+    corps := 'Note-le à ton tour pour découvrir sa note 🔒';
+    etiquette := 'note-' || coalesce(c->>'r', '');
+    lien := base || '#r=' || coalesce(c->>'r', '');
   elsif new.nom like 'dep:%' then
     if coalesce(c->>'x', '') = 'true' then return new; end if;
     titre := '💸 ' || a || ' a ajouté une dépense';
