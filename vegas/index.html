@@ -343,6 +343,7 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 .hl{ box-shadow:0 0 0 3px var(--pink); border-radius:14px; }
 .pown{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
 .dedit{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:.85rem; }
+.dmsg{ margin:0; width:100%; font-size:.8rem; color:var(--mint); }
 .dedit input{ font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:5px 8px; }
 .taken{ margin:0; font-size:.85rem; color:var(--sand); background:var(--card2); border-radius:12px; padding:8px 10px; }
 .sosact{ display:flex; flex-wrap:wrap; gap:8px; margin:6px 0; }
@@ -1757,7 +1758,8 @@ function postHTML(x, compact, m){
     <p class="times">${x.pd ? "📅 Prise " : ""}<b>${hm(x.d, TZ.vegas)}</b> à Vegas · <b>${hm(x.d, TZ.france)}</b> en France${x.pd ? ` · <span class="late">postée ${esc(dayOf(x.pd, TZ.vegas))} à ${hm(x.pd, TZ.vegas)}</span>` : ""}</p>
     ${reactBar(x.id)}
     ${comBlock(x.id)}
-    ${isMe(x.a) ? `<div class="pown">${dateEdit === x.id ? `<form class="dedit" data-dedit="${esc(x.id)}"><label>📅 Prise le <input type="datetime-local" value="${localInput(x.d)}" required></label><button class="btn hot" type="submit">Valider</button><button class="link" type="button" data-dcancel>Annuler</button></form>`
+    ${isMe(x.a) ? `<div class="pown">${dateEdit === x.id ? `<form class="dedit" data-dedit="${esc(x.id)}"><label class="btn" for="dpick-${esc(x.id)}">📷 Retrouver la date dans ma pellicule</label><input id="dpick-${esc(x.id)}" type="file" accept="image/*,video/*" hidden data-dpick>
+        <p class="dmsg" hidden></p><label>📅 Prise le <input type="datetime-local" value="${localInput(x.d)}" required data-dval></label><button class="btn hot" type="submit">Valider</button><button class="link" type="button" data-dcancel>Annuler</button></form>`
       : `<button class="link" type="button" data-pdate="${esc(x.id)}">📅 Changer la date</button>`}
       <button class="link danger" type="button" data-pdel="${esc(x.id)}">${liveDel === x.id ? "Confirmer la suppression ?" : "Supprimer"}</button></div>` : ""}
   </li>`;
@@ -1765,6 +1767,7 @@ function postHTML(x, compact, m){
 function drawFeed(){
   const box = document.getElementById("feed"); if(!box) return;
   const ae = document.activeElement; if(ae && box.contains(ae) && ae.tagName === "INPUT") return; // quelqu'un écrit un commentaire
+  if(dateEdit && box.querySelector(`[data-dedit="${CSS.escape(dateEdit)}"]`)) return; // formulaire de date ouvert : on ne l'efface pas
   if(goPost && goOpen){ openCom[goPost] = 1; goOpen = false; }
   const fsig = JSON.stringify([posts.map(x => [x.id, x.x, x.h, x.d]), dateEdit, moments.map(m => [m.id, m.x]), reacts, comments.map(c => c.id), openCom, replyTo, liveDel, moi, liveState]);
   if(fsig === lastFeedSig && box.firstChild) return;
@@ -1793,11 +1796,21 @@ function drawFeed(){
   bindReacts(box); bindComs(box);
   if(goPost){ const el = document.getElementById("post-" + goPost); if(el){ const id = goPost; goPost = ""; setTimeout(() => { const e2 = document.getElementById("post-" + id); if(e2) flashTo(e2); }, 60); } }
   box.querySelectorAll("[data-pdate]").forEach(b => b.onclick = () => { dateEdit = b.dataset.pdate; drawFeed(); });
+  // Le même fichier pris dans la pellicule : on y lit la date de prise de vue et on remplit le champ.
+  box.querySelectorAll("[data-dpick]").forEach(inp => inp.onchange = async () => {
+    const f = inp.closest("form"), msg = f.querySelector(".dmsg"), file = inp.files && inp.files[0]; if(!file) return;
+    msg.hidden = false; msg.textContent = "Lecture de la date…";
+    const t = await takenAt(file);
+    if(t){ f.querySelector("[data-dval]").value = localInput(new Date(t).toISOString());
+      msg.textContent = `✓ Date trouvée : ${dayOf(new Date(t).toISOString(), TZ.vegas)} à ${hm(new Date(t).toISOString(), TZ.vegas)} (Vegas). Touche Valider.`; }
+    else msg.textContent = "Pas de date dans ce fichier (photo reçue par WhatsApp ou capture d'écran ?). Mets la date à la main.";
+    inp.value = "";
+  });
   box.querySelectorAll("[data-dcancel]").forEach(b => b.onclick = () => { dateEdit = ""; drawFeed(); });
   box.querySelectorAll("[data-dedit]").forEach(f => f.onsubmit = async e => { e.preventDefault();
-    const id = f.dataset.dedit, v = f.querySelector("input").value, t = new Date(v).getTime(); if(!t) return;
+    const id = f.dataset.dedit, v = f.querySelector("[data-dval]").value, t = new Date(v).getTime(); if(!t) return;
     const x = posts.find(y => y.id === id); if(!x) return;
-    f.querySelector("input").blur(); dateEdit = "";
+    f.querySelector("[data-dval]").blur(); dateEdit = "";
     await moveDate(x, new Date(t).toISOString());
   });
   box.querySelectorAll("[data-pdel]").forEach(b => b.onclick = async () => {
