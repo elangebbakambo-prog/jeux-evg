@@ -641,6 +641,10 @@ try{
   }
 }catch(e){}
 if(fromNotif){ cur = fromNotif; try{ history.replaceState(null, "", location.pathname); }catch(e){} }
+// Mode souvenir : une fois le voyage fini (après le 12 nov., heure de Vegas), l'appli s'ouvre sur le récap.
+const tripOver = () => { try{ const p = {}; new Intl.DateTimeFormat("en-CA", { timeZone:"America/Los_Angeles", year:"numeric", month:"2-digit", day:"2-digit" }).formatToParts(new Date()).forEach(x => p[x.type] = x.value);
+  return +p.year > 2026 || (+p.year === 2026 && (+p.month > 11 || (+p.month === 11 && +p.day > 12))); }catch(e){ return false; } };
+if(!fromNotif && tripOver() && cur === "today") cur = "recap";
 const save = () => { try{ localStorage.setItem("vegas-evg", JSON.stringify({ cur, checked, moi })); }catch(e){} };
 
 // Suivi de l'équipe : une ligne par prénom dans la table Supabase « vegas_suivi » (clé publique, faite pour être visible).
@@ -2078,6 +2082,70 @@ function draw(){
   v.querySelectorAll("[data-go]").forEach(b => b.onclick = () => show(b.dataset.go));
   const ch = document.getElementById("copyHome"); if(ch) ch.onclick = copyHome;
 }
+// ===== Souvenirs à garder : toutes les photos et vidéos dans un fichier .zip, rangées par jour =====
+// Zip « sans compression » (les JPEG et MP4 sont déjà compressés) : simple et sans bibliothèque.
+const CRC_T = (() => { const t = new Uint32Array(256); for(let n = 0; n < 256; n++){ let c = n; for(let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u){ let c = 0xFFFFFFFF; for(let i = 0; i < u.length; i++) c = CRC_T[(c ^ u[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files){
+  const parts = [], central = [], enc = new TextEncoder(); let off = 0;
+  const dosT = d => ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF, dosD = d => (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+  files.forEach(f => {
+    const name = enc.encode(f.name), crc = crc32(f.data), n = f.data.length, d = f.date || new Date();
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+    h.setUint16(10, dosT(d), true); h.setUint16(12, dosD(d), true); h.setUint32(14, crc, true); h.setUint32(18, n, true); h.setUint32(22, n, true);
+    h.setUint16(26, name.length, true); h.setUint16(28, 0, true);
+    parts.push(h.buffer, name, f.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+    c.setUint16(12, dosT(d), true); c.setUint16(14, dosD(d), true); c.setUint32(16, crc, true); c.setUint32(20, n, true); c.setUint32(24, n, true);
+    c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+    central.push(c.buffer, name);
+    off += 30 + name.length + n;
+  });
+  const csize = central.reduce((a, p) => a + (p.byteLength || p.length), 0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, csize, true); e.setUint32(16, off, true);
+  return new Blob(parts.concat(central, [e.buffer]), { type:"application/zip" });
+}
+let zipBusy = false;
+async function downloadSouvenirs(btn, onlyMine){
+  if(zipBusy) return; zipBusy = true;
+  const say = t => { if(btn) btn.textContent = t; };
+  try{
+    const list = posts.filter(x => !x.x && (x.h || x.v) && (!onlyMine || isMe(x.a))).sort((a, b) => a.d.localeCompare(b.d));
+    if(!list.length){ say("Aucune photo à télécharger"); zipBusy = false; return; }
+    const files = [], seen = {}, clean = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").slice(0, 20) || "x";
+    for(let k = 0; k < list.length; k++){
+      const x = list[k]; say(`Préparation… ${k + 1}/${list.length}`);
+      try{
+        let data, ext;
+        if(x.v){ const r = await fetch(x.v); if(!r.ok) continue; data = new Uint8Array(await r.arrayBuffer()); ext = (x.v.split(".").pop() || "mp4").slice(0, 4); }
+        else{
+          if(!imgCache[x.id]){ const r = await fetch(SB_URL + "?nom=eq.post%3A" + encodeURIComponent(x.id) + "&select=i:coches->>i", { headers:{ apikey:SB_KEY } }); const j = await r.json(); if(j[0] && j[0].i) imgCache[x.id] = j[0].i; }
+          const src = imgCache[x.id]; if(!src) continue;
+          const bin = atob(src.split(",")[1]); data = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) data[i] = bin.charCodeAt(i); ext = "jpg";
+        }
+        const day = dayKey(x.d), t = hm(x.d, TZ.vegas).replace(":", "h");
+        let name = `Vegas-EVG/${day} ${dayShort(day)}/${t} ${clean(x.a)}`; seen[name] = (seen[name] || 0) + 1; if(seen[name] > 1) name += "-" + seen[name];
+        files.push({ name:name + "." + ext, data, date:new Date(x.d) });
+      }catch(e){}
+    }
+    const R = recapData();
+    const txt = `Récap EVG Vegas · 7 → 12 nov. 2026\n\n${R.stories} stories · ${R.likes} réactions · ${R.coms} commentaires · ${money(R.total, "USD")} dépensés\n\n`
+      + R.titles.map(([e, t, why, w]) => `${e} ${t} (${why}) : ${w.n}`).join("\n")
+      + (R.r3.length ? "\n\nPodium des restos :\n" + R.r3.map((r, i) => `${i + 1}. ${r.n} : ${fmtNote(r.avg)}/10`).join("\n") : "") + "\n";
+    files.push({ name:"Vegas-EVG/Recap.txt", data:new TextEncoder().encode(txt), date:new Date() });
+    say("Création du fichier…");
+    const blob = makeZip(files), fname = onlyMine ? `Vegas-EVG-${clean(moi)}.zip` : "Vegas-EVG-souvenirs.zip";
+    const file = new File([blob], fname, { type:"application/zip" });
+    let shared = false;
+    try{ if(navigator.canShare && navigator.canShare({ files:[file] })){ await navigator.share({ files:[file] }); shared = true; } }catch(e){ shared = e && e.name === "AbortError"; }
+    if(!shared){ const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fname; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000); }
+    say(`✓ ${files.length - 1} souvenirs (${Math.round(blob.size / 1048576)} Mo)`);
+  }catch(e){ say("Échec du téléchargement, réessaie en wifi"); }
+  zipBusy = false;
+}
 // ===== Récap du voyage : les chiffres, la story la plus likée, les titres de chacun, le top resto, le total =====
 function drawRecapView(){
   return `<div style="display:flex;flex-direction:column;gap:12px">
@@ -2133,9 +2201,14 @@ function drawRecap(){
     ${R.r3.length ? `<section class="panel"><h3>Le podium des restos</h3><ol class="rtitles">${R.r3.map((r, i) => `<li><span class="e">${["🥇", "🥈", "🥉"][i]}</span><div><b>${esc(r.n)}</b><small>${esc(RTYPES[r.k] || RTYPES.autre)} · ${pl(r.c, "vote")}</small></div><span class="who"><b>${fmtNote(r.avg)}</b><small>/ 10</small></span></li>`).join("")}</ol></section>` : ""}
     ${days.length ? `<section class="panel"><h3>Stories jour par jour</h3><ul class="rdays">${days.map(d => `<li><span>${esc(dayShort(d))}</span><i style="width:${Math.round(R.byDay[d] / maxD * 100)}%"></i><b>${R.byDay[d]}</b></li>`).join("")}</ul></section>` : ""}
     <button type="button" class="btn hot" id="recapShare">Partager le récap</button>
+    <section class="panel"><h3>📦 Garder les souvenirs</h3>
+      <p class="note">Toutes les photos et vidéos du voyage dans un seul fichier, rangées par jour, avec le récap. À enregistrer dans « Fichiers » ou sur ton ordi : elles restent à toi pour toujours. Mieux en wifi.</p>
+      <div class="actions"><button type="button" class="btn hot" id="zipAll">⬇️ Tout télécharger</button><button type="button" class="btn" id="zipMine">Seulement les miennes</button></div></section>
   </div>`;
   box.querySelectorAll("[data-img]").forEach(im => loadImg(im.dataset.img, im));
   box.querySelectorAll("[data-rstory]").forEach(b => b.onclick = () => openStory(b.dataset.rstory));
+  const za = document.getElementById("zipAll"); if(za) za.onclick = () => downloadSouvenirs(za, false);
+  const zm = document.getElementById("zipMine"); if(zm) zm.onclick = () => { if(!moi) return askName(); downloadSouvenirs(zm, true); };
   const sh = document.getElementById("recapShare");
   if(sh) sh.onclick = async () => {
     const txt = `🏆 Récap EVG Vegas\n📸 ${R.stories} stories · ❤️ ${R.likes} réactions · 💬 ${R.coms} commentaires · 💸 ${money(R.total, "USD")} dépensés\n`
