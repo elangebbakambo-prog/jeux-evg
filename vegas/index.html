@@ -90,6 +90,19 @@ body.menu .drawer{ transform:none; box-shadow:8px 0 30px rgba(0,0,0,.5); } body.
 .next li:first-child{ border-top:0; }
 .next small{ flex:0 0 96px; font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--amber); }
 .next b{ font-weight:500; font-size:.95rem; }
+.rstats{ display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+.rstats div{ background:var(--card); border-radius:14px; padding:12px 8px; display:flex; flex-direction:column; align-items:center; gap:2px; text-align:center; }
+.rstats b{ font-size:1.25rem; } .rstats small{ color:var(--muted); font-size:.75rem; }
+.rbest{ all:unset; cursor:pointer; display:flex; gap:12px; align-items:center; padding:6px 0; box-sizing:border-box; width:100%; }
+.rbest img, .rbest .vidph{ width:64px; height:84px; object-fit:cover; border-radius:10px; flex:none; background:var(--card2); display:grid; place-items:center; }
+.rbest > span{ display:flex; flex-direction:column; gap:1px; } .rbest small, .rbest span span{ color:var(--muted); font-size:.8rem; }
+.rtitles{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+.rtitles li{ display:flex; align-items:center; gap:10px; } .rtitles .e{ font-size:1.4rem; width:30px; text-align:center; }
+.rtitles li > div{ flex:1; display:flex; flex-direction:column; min-width:0; } .rtitles small{ color:var(--muted); font-size:.78rem; }
+.rtitles .who{ display:flex; flex-direction:column; align-items:flex-end; }
+.rdays{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.rdays li{ display:grid; grid-template-columns:52px 1fr 28px; align-items:center; gap:8px; font-size:.85rem; }
+.rdays i{ display:block; height:10px; border-radius:6px; background:var(--red); min-width:4px; } .rdays b{ text-align:right; }
 .row2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .tile{ all:unset; cursor:pointer; box-sizing:border-box; background:var(--card); border-radius:14px; padding:11px 13px; display:flex; flex-direction:column; gap:2px; min-width:0; }
 .tile small{ font-size:.72rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
@@ -644,7 +657,7 @@ async function loadTeam(){
     // Avances déjà faites par Elange (réservations du 6 nov.) : ajoutées une seule fois, si elles n'existent pas encore.
     SEEDS.forEach(([id, data]) => { if(!rows.some(t => t.nom === "dep:" + id) && !seeded[id]){ seeded[id] = true; saveDep(id, data); } });
   }catch(e){ teamState = team.length ? "stale" : "err"; }
-  drawTeam(); drawComptes(); drawTodayBits();
+  drawTeam(); drawComptes(); drawTodayBits(); drawRecap();
 }
 function pushMe(){
   if(!moi) return;
@@ -700,7 +713,7 @@ setInterval(() => { if((cur === "infos" || cur === "comptes") && !document.hidde
 document.addEventListener("visibilitychange", () => { if(!document.hidden && (cur === "infos" || cur === "comptes")) loadTeam(); });
 
 // --- Menu qui glisse : tout ce qui n'est pas « Aujourd'hui » ---
-const VIEWS = { today:["☀️", "Aujourd'hui"], live:["📸", "Live et stories"], comptes:["💸", "Comptes"], rank:["🍔", "Ranking restos"], infos:["✅", "Check-list et équipe"], logement:["🏠", "Logement"] };
+const VIEWS = { today:["☀️", "Aujourd'hui"], live:["📸", "Live et stories"], comptes:["💸", "Comptes"], rank:["🍔", "Ranking restos"], infos:["✅", "Check-list et équipe"], logement:["🏠", "Logement"], recap:["🏆", "Récap du voyage"] };
 const viewTitle = () => VIEWS[cur] ? VIEWS[cur][1] : (d => d ? d.d + " " + d.n + " nov." : "")(DAYS.find(d => d.id === cur));
 function drawTabs(){
   const box = document.getElementById("drawerList"); if(!box) return;
@@ -710,7 +723,7 @@ function drawTabs(){
     <p class="nav-k">Programme</p>
     <div class="days">${DAYS.map(d => `<button class="day ${d.id === td.id ? "today" : ""}" data-go="${d.id}" aria-pressed="${cur === d.id}"><small>${d.d}</small><b>${d.n}</b></button>`).join("")}</div>
     <div class="nav-sep"></div>
-    <ul class="nav">${item("comptes")}${item("rank")}${item("infos")}${item("logement")}
+    <ul class="nav">${item("recap")}${item("comptes")}${item("rank")}${item("infos")}${item("logement")}
       <li><a href="https://elangebbakambo-prog.github.io/jeux-evg/"><i>🎲</i>Mode jeux<small>Mafia, Draft…</small></a></li></ul>`;
   box.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { closeMenu(); show(b.dataset.go); });
   const t = document.getElementById("topTitle"); if(t) t.textContent = viewTitle();
@@ -821,7 +834,7 @@ async function loadRank(){
     notes = rows.filter(x => x.nom.startsWith("note:")).map(x => x.coches || {}).filter(x => !x.x && x.r && isFinite(+x.v));
     rankState = "ok";
   }catch(e){ rankState = restos.length ? "stale" : "err"; }
-  drawRank();
+  drawRank(); drawRecap();
 }
 const notesOf = id => notes.filter(n => n.r === id);
 const myNote = id => notes.find(n => n.r === id && isMe(n.a));
@@ -1146,7 +1159,7 @@ async function loadLive(){
   }catch(e){ liveState = posts.length ? "stale" : "err"; }
   const om = openMoment();
   if(om && !isMe(om.a) && !buzzed[om.id] && Date.now() - Date.parse(om.d) < MOMENT_SEC * 1000){ buzzed[om.id] = true; try{ navigator.vibrate && navigator.vibrate([200, 100, 200]); }catch(e){} }
-  drawLive(); drawTodayBits(); updateStorySocial(); resyncPush();
+  drawLive(); drawTodayBits(); drawRecap(); updateStorySocial(); resyncPush();
 }
 async function loadImg(id, el){
   if(imgCache[id]){ el.src = imgCache[id]; return; }
@@ -2049,7 +2062,7 @@ function draw(){
   const v = document.getElementById("view");
   v.style.animation = "none"; void v.offsetWidth; v.style.animation = "";
   if(cur !== "today" && cur !== "logement" && !VIEWS[cur] && !DAYS.some(d => d.id === cur)) cur = "today";
-  v.innerHTML = cur === "today" ? drawToday() : cur === "logement" ? drawLogement() : cur === "infos" ? drawInfos() : cur === "comptes" ? drawComptesView() : cur === "rank" ? drawRankView() : cur === "live" ? drawLiveView() : drawDay(DAYS.find(d => d.id === cur) || DAYS[0]);
+  v.innerHTML = cur === "today" ? drawToday() : cur === "logement" ? drawLogement() : cur === "infos" ? drawInfos() : cur === "comptes" ? drawComptesView() : cur === "recap" ? drawRecapView() : cur === "rank" ? drawRankView() : cur === "live" ? drawLiveView() : drawDay(DAYS.find(d => d.id === cur) || DAYS[0]);
   v.querySelectorAll("[data-tel]").forEach(b => b.onclick = () => {
     const ok = () => { b.textContent = "Numéro copié"; setTimeout(() => b.textContent = "Copier le numéro", 1800); };
     try{ navigator.clipboard.writeText(b.dataset.tel).then(ok, () => { getSelection().selectAllChildren(b.parentNode.parentNode.querySelector(".tel")); b.textContent = "Sélectionné"; }); }
@@ -2060,9 +2073,77 @@ function draw(){
   if(cur === "comptes"){ drawComptes(); loadTeam(); }
   if(cur === "live"){ tickClocks(); drawLive(); loadLive(); }
   if(cur === "rank"){ drawRank(); loadRank(); }
+  if(cur === "recap"){ drawRecap(); loadLive(); loadRank(); loadTeam(); }
   if(cur === "today"){ drawTodayBits(); loadLive(); loadTeam(); }
   v.querySelectorAll("[data-go]").forEach(b => b.onclick = () => show(b.dataset.go));
   const ch = document.getElementById("copyHome"); if(ch) ch.onclick = copyHome;
+}
+// ===== Récap du voyage : les chiffres, la story la plus likée, les titres de chacun, le top resto, le total =====
+function drawRecapView(){
+  return `<div style="display:flex;flex-direction:column;gap:12px">
+    <div class="dhead"><p class="eyebrow">Vegas · 7 → 12 nov.</p><h2>Le récap du voyage</h2><p>Les stats de l'EVG, mises à jour en direct.</p></div>
+    <div id="recap" aria-live="polite"><p class="note">Chargement…</p></div></div>`;
+}
+let recapSig = "";
+function recapData(){
+  const live = posts.filter(x => !x.x), cnt = (arr, f) => { const o = {}; arr.forEach(x => { const k = f(x); if(k) o[k] = (o[k] || 0) + 1; }); return o; };
+  const top = o => { const e = Object.entries(o).sort((a, b) => b[1] - a[1]); return e[0] ? { n:e[0][0], v:e[0][1] } : null; };
+  const ids = new Set(live.map(x => x.id));
+  const rx = reacts.filter(r => ids.has(r.p)), cx = comments.filter(c => ids.has(c.p));
+  const likesOf = id => rx.filter(r => r.p === id).length, comsOf2 = id => cx.filter(c => c.p === id).length;
+  const media = live.filter(x => x.h || x.v);
+  const best = media.slice().sort((a, b) => likesOf(b.id) - likesOf(a.id) || comsOf2(b.id) - comsOf2(a.id))[0];
+  const talk = media.slice().sort((a, b) => comsOf2(b.id) - comsOf2(a.id) || likesOf(b.id) - likesOf(a.id))[0];
+  const dl = deps.filter(d => !d.x && !d.rb).map(d => d.c === "EUR" ? Object.assign({}, d, { m:Math.round(d.m * eurUsd), c:"USD" }) : d);
+  const paid = {}; dl.forEach(d => paid[d.p] = (paid[d.p] || 0) + d.m);
+  const r3 = restos.map(r => { const ns = notesOf(r.id); return { n:r.n, k:r.k, c:ns.length, avg:ns.length ? ns.reduce((a, n) => a + +n.v, 0) / ns.length : null }; })
+    .filter(r => r.avg != null).sort((a, b) => b.avg - a.avg || b.c - a.c).slice(0, 3);
+  const received = {}; rx.forEach(r => { const x = live.find(y => y.id === r.p); if(x && x.a) received[x.a] = (received[x.a] || 0) + 1; });
+  const pTop = Object.entries(paid).sort((a, b) => b[1] - a[1])[0];
+  return {
+    stories:media.length, coms:cx.length, likes:rx.length, moments:moments.filter(m => !m.x).length, rated:restos.filter(r => notesOf(r.id).length).length,
+    total:dl.reduce((a, d) => a + d.m, 0),
+    best:best && likesOf(best.id) ? { x:best, n:likesOf(best.id) } : null,
+    talk:talk && comsOf2(talk.id) && (!best || talk.id !== best.id) ? { x:talk, n:comsOf2(talk.id) } : null,
+    titles:[
+      ["📸", "Le paparazzi", "le plus de stories", top(cnt(media, x => x.a)), "story"],
+      ["💬", "La pipelette", "le plus de commentaires", top(cnt(cx, c => c.a)), "commentaire"],
+      ["❤️", "Le cœur sur la main", "le plus de réactions données", top(cnt(rx, r => r.a)), "réaction"],
+      ["⭐", "La star", "le plus de réactions reçues", top(received), "réaction"],
+      ["🍔", "Le critique", "le plus de restos notés", top(cnt(notes, n => n.a)), "note"],
+      ["💳", "Le banquier", "a avancé le plus d'argent", pTop ? { n:pTop[0], v:pTop[1], money:true } : null, ""]
+    ].filter(t => t[3]),
+    r3, byDay:cnt(media, x => dayKey(x.d))
+  };
+}
+function drawRecap(){
+  const box = document.getElementById("recap"); if(!box) return;
+  const R = recapData(), sig = JSON.stringify([R.stories, R.coms, R.likes, R.moments, R.rated, R.total, R.best && R.best.x.id, R.best && R.best.n, R.talk && R.talk.x.id, R.titles.map(t => [t[3].n, t[3].v]), R.r3, R.byDay]);
+  if(sig === recapSig && box.querySelector(".rstats")) return; recapSig = sig;
+  const pl = (n, w) => `${n} ${w}${n > 1 && w ? (/[sx]$/.test(w) ? "" : "s") : ""}`.replace("storys", "stories");
+  const card = (k, o, unit) => o ? `<button type="button" class="rbest" data-rstory="${esc(o.x.id)}">${o.x.h ? `<img data-img="${esc(o.x.id)}" alt="">` : `<span class="vidph">🎥</span>`}
+    <span><small>${k}</small><b>${esc(o.x.a || "?")}</b><span>${pl(o.n, unit)} · ${esc(dayShort(dayKey(o.x.d)))}</span></span></button>` : "";
+  const days = Object.keys(R.byDay).sort(), maxD = Math.max(1, ...days.map(d => R.byDay[d]));
+  box.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px">
+    <div class="rstats">${[[R.stories, "stories"], [R.likes, "réactions"], [R.coms, "commentaires"], [R.moments, "Moments"], [R.rated, "restos notés"], [money(R.total, "USD"), "dépensés"]]
+      .map(([v, l]) => `<div><b>${v}</b><small>${l}</small></div>`).join("")}</div>
+    ${R.best || R.talk ? `<section class="panel"><h3>Les stories du voyage</h3>${card("🔥 La plus likée", R.best, "réaction")}${card("💬 La plus commentée", R.talk, "commentaire")}</section>` : ""}
+    ${R.titles.length ? `<section class="panel"><h3>Les titres</h3><ul class="rtitles">${R.titles.map(([e, t, why, w, unit]) =>
+      `<li><span class="e">${e}</span><div><b>${t}</b><small>${why}</small></div><span class="who"><b>${esc(w.n)}</b><small>${w.money ? money(w.v, "USD") : pl(w.v, unit)}</small></span></li>`).join("")}</ul></section>` : ""}
+    ${R.r3.length ? `<section class="panel"><h3>Le podium des restos</h3><ol class="rtitles">${R.r3.map((r, i) => `<li><span class="e">${["🥇", "🥈", "🥉"][i]}</span><div><b>${esc(r.n)}</b><small>${esc(RTYPES[r.k] || RTYPES.autre)} · ${pl(r.c, "vote")}</small></div><span class="who"><b>${fmtNote(r.avg)}</b><small>/ 10</small></span></li>`).join("")}</ol></section>` : ""}
+    ${days.length ? `<section class="panel"><h3>Stories jour par jour</h3><ul class="rdays">${days.map(d => `<li><span>${esc(dayShort(d))}</span><i style="width:${Math.round(R.byDay[d] / maxD * 100)}%"></i><b>${R.byDay[d]}</b></li>`).join("")}</ul></section>` : ""}
+    <button type="button" class="btn hot" id="recapShare">Partager le récap</button>
+  </div>`;
+  box.querySelectorAll("[data-img]").forEach(im => loadImg(im.dataset.img, im));
+  box.querySelectorAll("[data-rstory]").forEach(b => b.onclick = () => openStory(b.dataset.rstory));
+  const sh = document.getElementById("recapShare");
+  if(sh) sh.onclick = async () => {
+    const txt = `🏆 Récap EVG Vegas\n📸 ${R.stories} stories · ❤️ ${R.likes} réactions · 💬 ${R.coms} commentaires · 💸 ${money(R.total, "USD")} dépensés\n`
+      + R.titles.map(([e, t, , w]) => `${e} ${t} : ${w.n}`).join("\n")
+      + (R.r3.length ? `\n🍔 Meilleur resto : ${R.r3[0].n} (${fmtNote(R.r3[0].avg)}/10)` : "") + `\n${location.href.split("#")[0]}`;
+    try{ if(navigator.share){ await navigator.share({ text:txt }); return; } }catch(e){ return; }
+    location.href = "https://wa.me/?text=" + encodeURIComponent(txt);
+  };
 }
 function copyHome(e){
   const b = e.currentTarget;
