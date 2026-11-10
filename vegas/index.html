@@ -1777,7 +1777,7 @@ function drawLive(){
   const ae = document.activeElement;
   if(ae && box.contains(ae) && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) { drawFeed(); return; }
   const om = openMoment(), c = cote();
-  const sig = JSON.stringify([sos, pushState(), pushMsg, pushBusy, moi, c, om && om.id, om && posts.some(p => p.m === om.id && isMe(p.a) && !p.x), !!liveDraft.img, !!liveDraft.vid, (liveDraft.extra || []).length, liveDraft.m, lateTaken(), liveBusy,
+  const sig = JSON.stringify([sos, !!justPosted, pushState(), pushMsg, pushBusy, moi, c, om && om.id, om && posts.some(p => p.m === om.id && isMe(p.a) && !p.x), !!liveDraft.img, !!liveDraft.vid, (liveDraft.extra || []).length, liveDraft.m, lateTaken(), liveBusy,
     storyList().length, storyList().filter(p => !seenStories[p.id]).length, liveState]);
   if(sig === lastLiveSig && document.getElementById("feed")){ drawFeed(); return; }
   lastLiveSig = sig;
@@ -1803,6 +1803,7 @@ function drawLive(){
   if(!moi){
     html += `<section class="panel"><form class="who" id="liveWho"><label for="liveName">Ton prénom pour poster et réagir :</label><div class="row"><input id="liveName" maxlength="30" autocomplete="given-name" placeholder="Ex. Jovan" required><button class="btn hot" type="submit">C'est moi</button></div></form></section>`;
   } else {
+    if(justPosted) html += `<div class="pushbar sosbar">✓ Publié dans l'appli. Le mettre aussi sur Insta ?<div class="actions"><button type="button" class="btn hot" id="jpInsta">↗ Partager sur Insta (${justPosted.length})</button><button type="button" class="link" id="jpNo">Non merci</button></div></div>`;
     html += `<section class="panel compose">
       <div class="sides"><span>${esc(moi)} est</span><button type="button" class="side ${c === "vegas" ? "on v" : ""}" data-side="vegas">🎰 à Vegas</button><button type="button" class="side ${c === "france" ? "on f" : ""}" data-side="france">🥐 en France</button></div>
       ${liveDraft.m ? `<p class="k">⚡ Pour le Moment de ${esc((moments.find(m => m.id === liveDraft.m) || {}).a || "")}</p>` : ""}
@@ -1868,6 +1869,9 @@ function drawLive(){
   };
   const os = document.getElementById("openStories"); if(os) os.onclick = () => openStory();
   const sb = document.getElementById("sosBtn"); if(sb) sb.onclick = sendSos;
+  const jp = document.getElementById("jpInsta"); if(jp) jp.onclick = async () => { const fs = justPosted || [];
+    try{ if(navigator.canShare && navigator.canShare({ files:fs })){ await navigator.share({ files:fs }); justPosted = null; lastLiveSig = ""; drawLive(); } else jp.textContent = "Partage pas possible sur ce navigateur"; }catch(e){} };
+  const jn = document.getElementById("jpNo"); if(jn) jn.onclick = () => { justPosted = null; lastLiveSig = ""; drawLive(); };
   const oi = document.getElementById("openInsta");
   if(oi) oi.onclick = () => { setTimeout(() => { if(!document.hidden) location.href = "https://www.instagram.com/"; }, 1500); };
   const pon = document.getElementById("pushOn"); if(pon) pon.onclick = enablePush;
@@ -1880,6 +1884,7 @@ function drawLive(){
     const id = newId(), now = new Date().toISOString(), late = lateTaken(), d = late ? new Date(liveDraft.taken).toISOString() : now;
     const data = { a:moi, s:cote(), t, d }; if(late) data.pd = now; if(liveDraft.img){ data.h = true; data.i = liveDraft.img; } if(liveDraft.m) data.m = liveDraft.m;
     const extra = liveDraft.vid ? [] : (liveDraft.extra || []); if(extra.length) data.n = 1 + extra.length;
+    const toShare = []; try{ if(liveDraft.vid) toShare.push(liveDraft.vid.file); else if(liveDraft.img){ toShare.push(dataFile(liveDraft.img, "vegas-evg-1.jpg")); extra.forEach((e, k) => toShare.push(dataFile(e.img, `vegas-evg-${k + 2}.jpg`))); } }catch(e){}
     liveBusy = true; drawLive();
     try{
       if(liveDraft.vid){
@@ -1901,11 +1906,15 @@ function drawLive(){
         posts.unshift({ id:id2, a:moi, s:data.s, t:"", v:"", h:true, x:false, d:d2, m:"", pd:data2.pd || "" });
         extra[k] = null;
       }
-      liveDraft = { t:"", img:"", m:"", vid:null, extra:[] }; liveBusy = false; drawLive(); loadLive();
+      justPosted = toShare.length ? toShare : null;
+      liveDraft = { t:"", img:"", m:"", vid:null, extra:[] }; liveBusy = false; lastLiveSig = ""; drawLive(); loadLive();
     }catch(e){ if(posts.some(p => p.id === id)){ liveDraft.t = ""; liveDraft.extra = extra.filter(Boolean); liveDraft.img = ""; const nx = liveDraft.extra.shift(); if(nx){ liveDraft.img = nx.img; liveDraft.taken = nx.taken; } }
       liveBusy = false; drawLive(); const er2 = document.getElementById("liveErr"); if(er2){ er2.textContent = "Pas tout envoyé (pas de réseau ?). Ce qui reste est gardé, réessaie."; er2.hidden = false; } }
   };
 }
+const shareFiles = {};
+let justPosted = null; // ce qu'on vient de publier, prêt à partir aussi sur Insta en un tap
+function dataFile(src, name){ const bin = atob(src.split(",")[1]), u = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new File([u], name, { type:"image/jpeg" }); }
 function sendSos(){
   if(!moi) return askName();
   if(!sos.ask){ sos = { ask:true, busy:false, msg:"", link:"" }; drawLive(); setTimeout(() => { if(sos.ask){ sos.ask = false; drawLive(); } }, 6000); return; }
@@ -1957,7 +1966,7 @@ function postHTML(x, compact, m){
     ${isMe(x.a) ? `<div class="pown">${dateEdit === x.id ? `<form class="dedit" data-dedit="${esc(x.id)}"><label class="btn" for="dpick-${esc(x.id)}">📷 Retrouver la date dans ma pellicule</label><input id="dpick-${esc(x.id)}" type="file" accept="image/*,video/*" hidden data-dpick>
         <p class="dmsg" hidden></p><label>📅 Prise le <input type="datetime-local" value="${localInput(x.d)}" required data-dval></label><button class="btn hot" type="submit">Valider</button><button class="link" type="button" data-dcancel>Annuler</button></form>`
       : `<button class="link" type="button" data-pdate="${esc(x.id)}">📅 Changer la date</button>`}
-      ${x.h && !x.v ? `<button class="link" type="button" data-pinsta="${esc(x.id)}">↗ Partager sur Insta</button>` : ""}
+      ${x.h || x.v ? `<button class="link" type="button" data-pinsta="${esc(x.id)}">↗ Partager sur Insta</button>` : ""}
       <button class="link danger" type="button" data-pdel="${esc(x.id)}">${liveDel === x.id ? "Confirmer la suppression ?" : "Supprimer"}</button></div>` : ""}
   </li>`;
 }
@@ -1993,14 +2002,20 @@ function drawFeed(){
   bindReacts(box); bindComs(box);
   if(goPost){ const el = document.getElementById("post-" + goPost); if(el){ const id = goPost; goPost = ""; setTimeout(() => { const e2 = document.getElementById("post-" + id); if(e2) flashTo(e2); }, 60); } }
   // Partager sa photo vers Instagram (ou WhatsApp…) : le menu Partager du téléphone reçoit le vrai fichier.
+  // Vidéo : le téléphone exige que le partage parte d'un tap ; on prépare donc le fichier au 1er tap, on partage au 2e.
   box.querySelectorAll("[data-pinsta]").forEach(b => b.onclick = async () => {
-    const id = b.dataset.pinsta, src = imgCache[id];
-    if(!src){ b.textContent = "Chargement…"; const im = document.createElement("img"); await loadImg(id, im); b.textContent = imgCache[id] ? "↗ Touche encore pour partager" : "Photo introuvable"; return; }
+    const id = b.dataset.pinsta, x = posts.find(y => y.id === id); if(!x) return;
+    let file = shareFiles[id];
+    if(!file){
+      if(x.v){ b.textContent = "Préparation de la vidéo…";
+        try{ const r = await fetch(x.v); const bl = await r.blob(); file = shareFiles[id] = new File([bl], "vegas-evg." + ((x.v.split(".").pop() || "mp4").slice(0, 4)), { type:bl.type || "video/mp4" }); }catch(e){ b.textContent = "Vidéo introuvable (réseau ?)"; return; }
+        b.textContent = "↗ Prêt : touche pour partager"; return; }
+      if(!imgCache[id]){ b.textContent = "Chargement…"; await loadImg(id, document.createElement("img")); if(!imgCache[id]){ b.textContent = "Photo introuvable"; return; } }
+      file = shareFiles[id] = dataFile(imgCache[id], "vegas-evg.jpg");
+    }
     try{
-      const bin = atob(src.split(",")[1]), u = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-      const file = new File([u], "vegas-evg.jpg", { type:"image/jpeg" });
       if(navigator.canShare && navigator.canShare({ files:[file] })) await navigator.share({ files:[file] });
-      else b.textContent = "Partage pas possible ici : enregistre la photo (appui long) puis poste-la sur Insta";
+      else b.textContent = "Partage pas possible ici : enregistre-la (appui long) puis poste-la sur Insta";
     }catch(e){}
   });
   box.querySelectorAll("[data-pdate]").forEach(b => b.onclick = () => { dateEdit = b.dataset.pdate; drawFeed(); });
