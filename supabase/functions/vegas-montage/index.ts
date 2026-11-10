@@ -1,5 +1,8 @@
-// vegas-montage : l'IA (Claude) transforme une demande en français en « plan de montage » pour l'appli Vegas EVG.
-// La clé API est dans les secrets Supabase (ANTHROPIC_API_KEY), jamais dans l'appli.
+// vegas-montage : une IA transforme une demande en français en « plan de montage » pour l'appli Vegas EVG.
+// Deux possibilités, selon le secret rangé dans Supabase (jamais dans l'appli) :
+//  - GEMINI_API_KEY : Gemini de Google, gratuit (clé sur aistudio.google.com, sans carte, nombre de demandes par jour limité) ;
+//  - ANTHROPIC_API_KEY : Claude, payant à l'usage (environ 1 à 2 centimes par montage).
+// Si les deux sont là, Gemini (gratuit) passe en premier.
 // Entrée : { demande, passages:[{ n, type, auteur, jour, heure, texte, reactions, commentaires, lieu }], sujet }
 // Sortie : { plan:{ titre, sous_titre, fin, infos, son, resume, items:[{ n, duree, debut, fin, vitesse, transition, texte, mouvement }] } }
 
@@ -24,30 +27,55 @@ Règles :
 - Quand l'utilisateur désigne un passage par une personne, un moment ou un texte (« la vidéo du quad », « la photo d'Isma à la piscine »), retrouve-le grâce à auteur, heure, jour et texte.
 - Si la demande parle de rythme (« dynamique », « clip »), raccourcis les durées et utilise coupe/flash/zoom ; si « émouvant » ou « souvenir », durées plus longues et fondus.`;
 
+async function askGemini(key: string, user: string): Promise<string> {
+  // Les noms de modèles changent souvent : on essaie les alias « dernier modèle » puis un nom stable.
+  const models = [Deno.env.get("GEMINI_MODEL"), "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash"].filter(Boolean) as string[];
+  let last = "";
+  for (const m of models) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: CONSIGNES }] },
+        contents: [{ role: "user", parts: [{ text: user }] }],
+        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 4000, temperature: 0.6 },
+      }),
+    });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j) return ((j.candidates?.[0]?.content?.parts) || []).map((p: { text?: string }) => p.text || "").join("");
+    last = `Gemini ${m} : ${r.status}${r.status === 429 ? " (quota gratuit du jour atteint, réessaie plus tard)" : ""}`;
+    if (r.status === 429 || r.status === 401 || r.status === 403) break;
+  }
+  throw new Error(last || "Gemini indisponible");
+}
+async function askClaude(key: string, user: string): Promise<string> {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-5-5", max_tokens: 3000, system: CONSIGNES, messages: [{ role: "user", content: user }] }),
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok || !j) throw new Error("Claude : " + r.status);
+  return (j.content || []).map((c: { text?: string }) => c.text || "").join("");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ ok: true, info: "vegas-montage" });
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) return json({ error: "clé API manquante (secret ANTHROPIC_API_KEY)" }, 500);
+  const gem = Deno.env.get("GEMINI_API_KEY"), cla = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!gem && !cla) return json({ error: "aucune clé d'IA (secret GEMINI_API_KEY ou ANTHROPIC_API_KEY)" }, 500);
   let body: { demande?: string; passages?: unknown[]; sujet?: string };
   try { body = await req.json(); } catch { return json({ error: "requête illisible" }, 400); }
   const demande = String(body.demande || "").slice(0, 1500).trim();
   const passages = Array.isArray(body.passages) ? body.passages.slice(0, 80) : [];
   if (!demande || !passages.length) return json({ error: "demande ou passages manquants" }, 400);
-
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-5-5",
-      max_tokens: 3000,
-      system: CONSIGNES,
-      messages: [{ role: "user", content: `Sujet : ${String(body.sujet || "").slice(0, 80)}\nPassages :\n${JSON.stringify(passages)}\n\nDemande :\n${demande}` }],
-    }),
-  });
-  const j = await r.json().catch(() => null);
-  if (!r.ok || !j) return json({ error: "IA indisponible (" + r.status + ")" }, 502);
-  const txt = (j.content || []).map((c: { text?: string }) => c.text || "").join("");
+  const user = `Sujet : ${String(body.sujet || "").slice(0, 80)}\nPassages :\n${JSON.stringify(passages)}\n\nDemande :\n${demande}`;
+  let txt = "";
+  try { txt = gem ? await askGemini(gem, user) : await askClaude(cla!, user); }
+  catch (e) {
+    if (gem && cla) { try { txt = await askClaude(cla, user); } catch { return json({ error: String((e as Error).message) }, 502); } }
+    else return json({ error: String((e as Error).message) }, 502);
+  }
   const a = txt.indexOf("{"), b = txt.lastIndexOf("}");
   try { return json({ plan: JSON.parse(txt.slice(a, b + 1)) }); }
   catch { return json({ error: "réponse de l'IA illisible" }, 502); }
