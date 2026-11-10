@@ -395,6 +395,22 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 #montage select{ font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:9px 12px; }
 #montage .chk2{ display:flex; gap:8px; align-items:center; font-size:.9rem; } #montage .chk2 input{ width:20px; height:20px; accent-color:var(--pink); }
 #montage .mt-prev canvas, #montage .mt-out{ width:100%; max-height:60vh; object-fit:contain; border-radius:12px; background:#000; display:block; }
+#montage .mt-ai{ display:flex; flex-direction:column; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; }
+#montage textarea, #montage input:not([type=checkbox]){ font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; box-sizing:border-box; width:100%; }
+#montage .mt-more summary{ cursor:pointer; font-weight:600; padding:6px 0; }
+#montage .mt-glob{ display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
+#montage .mt-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+#montage .mt-list li{ background:var(--card); border-radius:12px; padding:8px; display:flex; flex-direction:column; gap:8px; }
+#montage .mt-row1{ display:flex; align-items:center; gap:10px; }
+#montage .mt-row1 img, #montage .mt-row1 .vidph{ width:44px; height:58px; object-fit:cover; border-radius:8px; background:var(--card2); display:grid; place-items:center; flex:none; }
+#montage .mt-who{ flex:1; display:flex; flex-direction:column; min-width:0; } #montage .mt-who small{ color:var(--muted); font-size:.75rem; }
+#montage .mt-mv{ display:flex; gap:4px; } #montage .mt-mv button{ all:unset; cursor:pointer; width:34px; height:34px; border-radius:8px; background:var(--card2); display:grid; place-items:center; }
+#montage .mt-mv button:disabled{ opacity:.3; cursor:default; }
+#montage .mt-row2{ display:grid; grid-template-columns:1fr 1fr; gap:6px; } #montage .mt-row2 label{ display:flex; flex-direction:column; gap:2px; font-size:.75rem; color:var(--muted); }
+#montage .mt-row2 .wide{ grid-column:1 / -1; } #montage .mt-row2 select, #montage .mt-row2 input{ padding:6px 8px; }
+#montage .mt-row2 .chk2{ flex-direction:row; align-items:center; font-size:.8rem; }
+#montage .mt-add{ display:flex; flex-wrap:wrap; gap:6px; } #montage .mt-add button{ all:unset; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; width:60px; font-size:.7rem; color:var(--muted); }
+#montage .mt-add img{ width:52px; height:68px; object-fit:cover; border-radius:8px; opacity:.6; }
 #montage #mtStage{ display:flex; flex-direction:column; gap:10px; }
 #story .st-help{ margin:0; font-size:.72rem; color:rgba(255,255,255,.55); text-align:center; }
 #story .st-close{ position:relative; z-index:2; min-width:44px; min-height:44px; display:flex; align-items:center; justify-content:center; }
@@ -1409,22 +1425,104 @@ function getImg(id){
     fetch(SB_URL + "?nom=eq.post%3A" + encodeURIComponent(id) + "&select=i:coches->>i", { headers:{ apikey:SB_KEY } }).then(r => r.json())
       .then(j => { if(j[0] && j[0].i){ imgCache[id] = j[0].i; im.src = j[0].i; } else ok(null); }).catch(() => ok(null)); });
 }
+// --- Montage : un « plan » (ordre, durées, transitions, textes) éditable à la main ou préparé par l'IA, puis joué dans un canvas et enregistré ---
+const TRANS = { fondu:"Fondu enchaîné", noir:"Fondu au noir", coupe:"Coupe sèche", glisse:"Glissé", zoom:"Zoom", flash:"Flash blanc" };
+const SPEEDS = { "0.5":"Ralenti", "1":"Normal", "2":"Accéléré" };
+let mtPlan = null, mtAiBusy = false;
+const mtItems = scope => scope === "all" ? storyList() : ((memoryDays().find(d => d.k === scope) || {}).list || []);
+function defaultPlan(scope){
+  return { scope, title:"VEGAS · EVG", sub:scope === "all" ? "Tout le séjour" : dayLong(scope), outro:"À SUIVRE…", infos:true, sound:true,
+    items:mtItems(scope).map(x => ({ id:x.id, dur:3, start:0, end:x.v ? 5 : 0, speed:1, tr:"fondu", text:"", move:true })) };
+}
 function openMontagePanel(){
   const days = memoryDays();
   let ov = document.getElementById("montage");
   if(!ov){ ov = document.createElement("div"); ov.id = "montage"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "Montage"); document.body.appendChild(ov); }
   ov.hidden = false; document.documentElement.style.overflow = "hidden";
+  if(!mtPlan || !mtItems(mtPlan.scope).length) mtPlan = defaultPlan(days.length ? days[days.length - 1].k : "all");
   ov.innerHTML = `<div class="mt-box"><div class="mt-head"><h3>🎬 Créer un montage</h3><button type="button" class="st-close" id="mtClose" aria-label="Fermer">✕</button></div>
-    <p class="note">Le téléphone enchaîne les photos et un court extrait de chaque vidéo, avec les noms et l'heure Vegas / France. Il le fabrique en temps réel : garde l'appli ouverte jusqu'au bout.</p>
     <label class="mt-l">Quoi<select id="mtDay"><option value="all">Tout le séjour (${storyList().length})</option>${days.map(d => `<option value="${d.k}">${esc(dayLong(d.k))} (${d.list.length})</option>`).join("")}</select></label>
-    <label class="mt-l">Photos<select id="mtSec"><option value="2">Rapide : 2 s par photo</option><option value="3" selected>Normal : 3 s par photo</option><option value="4">Tranquille : 4 s par photo</option></select></label>
-    <label class="mt-l">Vidéos<select id="mtClip"><option value="3">Extrait de 3 s</option><option value="5" selected>Extrait de 5 s</option><option value="8">Extrait de 8 s</option><option value="0">Vidéo entière</option></select></label>
-    <label class="chk2"><input type="checkbox" id="mtSound" checked> Garder le son des vidéos</label>
+    <section class="mt-ai"><label class="mt-l" for="mtPrompt">✨ Dis ce que tu veux (ou dicte avec le micro du clavier)</label>
+      <textarea id="mtPrompt" rows="3" maxlength="1500" placeholder="Ex. : commence par la vidéo du quad au ralenti, enchaîne vite les photos de la piscine avec des flashs, écris « Vegas baby » sur la photo du Strip, finis sur Chris."></textarea>
+      <button type="button" class="btn hot" id="mtAi">✨ Préparer le montage</button><p class="note" id="mtAiMsg" hidden></p></section>
+    <details class="mt-more" id="mtMore"><summary>✏️ Retoucher le plan à la main</summary><div id="mtPlanBox"></div></details>
     <p class="err" id="mtErr" hidden></p>
-    <button type="button" class="btn hot" id="mtGo">Lancer le montage</button>
+    <button type="button" class="btn hot big" id="mtGo">🎬 Lancer le montage</button>
     <div id="mtStage"></div></div>`;
+  document.getElementById("mtDay").value = mtPlan.scope;
   document.getElementById("mtClose").onclick = closeMontage;
-  document.getElementById("mtGo").onclick = () => runMontage(document.getElementById("mtDay").value, +document.getElementById("mtSec").value, document.getElementById("mtSound").checked, +document.getElementById("mtClip").value);
+  document.getElementById("mtDay").onchange = e => { mtPlan = defaultPlan(e.target.value); drawPlan(); };
+  document.getElementById("mtAi").onclick = aiPlan;
+  document.getElementById("mtGo").onclick = () => runMontage(mtPlan);
+  drawPlan();
+}
+function drawPlan(){
+  const box = document.getElementById("mtPlanBox"); if(!box || !mtPlan) return;
+  const all = mtItems(mtPlan.scope), get = id => all.find(x => x.id === id) || posts.find(x => x.id === id);
+  const opt = (o, v) => Object.entries(o).map(([k, t]) => `<option value="${k}" ${String(v) === k ? "selected" : ""}>${t}</option>`).join("");
+  const unused = all.filter(x => !mtPlan.items.some(i => i.id === x.id));
+  box.innerHTML = `<div class="mt-glob">
+      <label class="mt-l">Titre d'ouverture<input id="mtTitle" maxlength="40" value="${esc(mtPlan.title)}"></label>
+      <label class="mt-l">Sous-titre<input id="mtSub" maxlength="50" value="${esc(mtPlan.sub)}"></label>
+      <label class="mt-l">Texte de fin<input id="mtOutro" maxlength="40" value="${esc(mtPlan.outro)}"></label>
+      <label class="chk2"><input type="checkbox" id="mtInfos" ${mtPlan.infos ? "checked" : ""}> Noms et heures sur les images</label>
+      <label class="chk2"><input type="checkbox" id="mtSound" ${mtPlan.sound ? "checked" : ""}> Garder le son des vidéos</label></div>
+    <p class="k2">${mtPlan.items.length} passage${mtPlan.items.length > 1 ? "s" : ""} · environ ${Math.round(planSeconds(mtPlan))} s</p>
+    <ol class="mt-list">${mtPlan.items.map((it, k) => { const x = get(it.id); if(!x) return ""; return `<li data-k="${k}">
+      <div class="mt-row1">${x.h ? `<img data-img="${esc(x.id)}" alt="">` : `<span class="vidph">🎥</span>`}
+        <div class="mt-who"><b>${k + 1}. ${x.v ? "🎥" : "📷"} ${esc(x.a || "?")}</b><small>${esc(dayShort(dayKey(x.d)))} · ${hm(x.d, TZ.vegas)}</small></div>
+        <div class="mt-mv"><button type="button" data-up="${k}" aria-label="Monter" ${k ? "" : "disabled"}>↑</button><button type="button" data-down="${k}" aria-label="Descendre" ${k < mtPlan.items.length - 1 ? "" : "disabled"}>↓</button><button type="button" data-rm="${k}" aria-label="Retirer">✕</button></div></div>
+      <div class="mt-row2">
+        <label>Entrée<select data-f="tr">${opt(TRANS, it.tr)}</select></label>
+        ${x.v ? `<label>De (s)<input type="number" min="0" max="60" step="0.5" data-f="start" value="${it.start}"></label><label>À (s, 0 = fin)<input type="number" min="0" max="60" step="0.5" data-f="end" value="${it.end}"></label><label>Vitesse<select data-f="speed">${opt(SPEEDS, it.speed)}</select></label>`
+          : `<label>Durée<select data-f="dur">${opt({ "1":"1 s", "1.5":"1,5 s", "2":"2 s", "3":"3 s", "4":"4 s", "5":"5 s", "7":"7 s" }, it.dur)}</select></label><label class="chk2"><input type="checkbox" data-f="move" ${it.move ? "checked" : ""}> Mouvement</label>`}
+        <label class="wide">Texte à l'écran<input maxlength="60" data-f="text" value="${esc(it.text || "")}" placeholder="(aucun)"></label></div></li>`; }).join("")}</ol>
+    ${unused.length ? `<p class="k2">Pas dans le montage</p><div class="mt-add">${unused.map(x => `<button type="button" data-add="${esc(x.id)}">${x.h ? `<img data-img="${esc(x.id)}" alt="">` : "🎥"}<small>+ ${esc(x.a || "?")}</small></button>`).join("")}</div>` : ""}
+    <button type="button" class="link" id="mtReset">Revenir au montage automatique</button>`;
+  box.querySelectorAll("[data-img]").forEach(im => loadImg(im.dataset.img, im));
+  const bind = (id, f) => { const el = document.getElementById(id); if(el) el.onchange = () => { f(el); drawPlan(); }; };
+  bind("mtTitle", el => mtPlan.title = el.value); bind("mtSub", el => mtPlan.sub = el.value); bind("mtOutro", el => mtPlan.outro = el.value);
+  bind("mtInfos", el => mtPlan.infos = el.checked); bind("mtSound", el => mtPlan.sound = el.checked);
+  box.querySelectorAll(".mt-list [data-f]").forEach(el => el.onchange = () => {
+    const it = mtPlan.items[+el.closest("li").dataset.k], f = el.dataset.f;
+    it[f] = el.type === "checkbox" ? el.checked : (f === "text" || f === "tr") ? el.value : Math.max(0, +el.value || 0);
+    if(f !== "text") drawPlan(); });
+  const move = (k, d) => { const a = mtPlan.items; [a[k], a[k + d]] = [a[k + d], a[k]]; drawPlan(); };
+  box.querySelectorAll("[data-up]").forEach(b => b.onclick = () => move(+b.dataset.up, -1));
+  box.querySelectorAll("[data-down]").forEach(b => b.onclick = () => move(+b.dataset.down, 1));
+  box.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { mtPlan.items.splice(+b.dataset.rm, 1); drawPlan(); });
+  box.querySelectorAll("[data-add]").forEach(b => b.onclick = () => { const x = get(b.dataset.add); mtPlan.items.push({ id:x.id, dur:3, start:0, end:x.v ? 5 : 0, speed:1, tr:"fondu", text:"", move:true }); drawPlan(); });
+  const rs = document.getElementById("mtReset"); if(rs) rs.onclick = () => { mtPlan = defaultPlan(mtPlan.scope); drawPlan(); };
+}
+const planSeconds = p => 4 + p.items.reduce((a, it) => { const x = posts.find(y => y.id === it.id); if(!x) return a;
+  return a + (x.v ? ((it.end > it.start ? it.end : MAX_VID_SEC) - it.start) / (it.speed || 1) : it.dur); }, 0);
+// L'IA (Claude, via la fonction Supabase « vegas-montage ») lit la demande et la liste des passages, et renvoie un plan.
+async function aiPlan(){
+  const ta = document.getElementById("mtPrompt"), msg = document.getElementById("mtAiMsg"), b = document.getElementById("mtAi");
+  const ask = (ta.value || "").trim(); if(!ask){ ta.focus(); return; }
+  if(mtAiBusy) return; mtAiBusy = true; b.disabled = true; b.textContent = "✨ L'IA prépare ton montage…"; msg.hidden = true;
+  const all = mtItems(mtPlan.scope);
+  const items = all.slice(0, 80).map((x, i) => ({ n:i + 1, type:x.v ? "video" : "photo", auteur:x.a || "?", jour:dayLong(dayKey(x.d)), heure:hm(x.d, TZ.vegas),
+    texte:(x.t || "").slice(0, 120), reactions:reacts.filter(r => r.p === x.id).length, commentaires:comments.filter(c => c.p === x.id).length, lieu:x.s === "france" ? "France" : "Vegas" }));
+  try{
+    const r = await fetch(SB_BASE + "/functions/v1/vegas-montage", { method:"POST", headers:{ "Content-Type":"application/json", apikey:SB_KEY },
+      body:JSON.stringify({ demande:ask, passages:items, sujet:mtPlan.sub }) });
+    if(r.status === 404) throw new Error("absente");
+    const j = await r.json(); if(!r.ok || !j.plan) throw new Error(j.error || r.status);
+    const p = j.plan, out = defaultPlan(mtPlan.scope);
+    out.items = (p.items || []).map(it => { const x = all[(+it.n || 0) - 1]; if(!x) return null;
+      return { id:x.id, dur:Math.min(10, Math.max(.8, +it.duree || 3)), start:Math.max(0, +it.debut || 0), end:x.v ? Math.max(0, +it.fin || 0) : 0,
+        speed:[0.5, 1, 2].includes(+it.vitesse) ? +it.vitesse : 1, tr:TRANS[it.transition] ? it.transition : "fondu", text:String(it.texte || "").slice(0, 60), move:it.mouvement !== false }; }).filter(Boolean);
+    if(!out.items.length) throw new Error("plan vide");
+    if(p.titre) out.title = String(p.titre).slice(0, 40); if(p.sous_titre) out.sub = String(p.sous_titre).slice(0, 50); if(p.fin) out.outro = String(p.fin).slice(0, 40);
+    if(typeof p.infos === "boolean") out.infos = p.infos; if(typeof p.son === "boolean") out.sound = p.son;
+    mtPlan = out; drawPlan(); document.getElementById("mtMore").open = true;
+    msg.textContent = "✓ " + (p.resume || "Plan prêt.") + " Regarde le plan ci-dessous, retouche si besoin, puis lance le montage."; msg.hidden = false;
+  }catch(e){
+    msg.textContent = /absente/.test(e.message) ? "L'IA n'est pas encore branchée (il manque la fonction « vegas-montage » dans Supabase). Tu peux régler le plan à la main en attendant."
+      : "L'IA n'a pas répondu (" + e.message + "). Réessaie, ou retouche le plan à la main."; msg.hidden = false;
+  }
+  mtAiBusy = false; b.disabled = false; b.textContent = "✨ Préparer le montage";
 }
 function closeMontage(){
   if(montage){ montage.stop = true; }
@@ -1437,25 +1535,26 @@ function pickMime(){
   for(const m of c){ try{ if(MediaRecorder.isTypeSupported(m)) return m; }catch(e){} }
   return "";
 }
-async function runMontage(dayK, sec, withSound, clip){
+async function runMontage(plan){
   // Le son se prépare tout de suite, pendant le tap (sinon le téléphone le bloque) ; sans son qui tourne, l'enregistrement perdait les photos.
   let actx = null, dest = null;
-  if(withSound){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); dest = actx.createMediaStreamDestination(); }catch(e){ actx = null; dest = null; } }
+  if(plan.sound){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); dest = actx.createMediaStreamDestination(); }catch(e){ actx = null; dest = null; } }
   const err = document.getElementById("mtErr"), stage = document.getElementById("mtStage");
   const say = t => { err.textContent = t; err.hidden = false; };
   const mime = pickMime();
   const cv = document.createElement("canvas"); cv.width = 720; cv.height = 1280;
   if(mime === null || !cv.captureStream) return say("Ce téléphone ne sait pas fabriquer de vidéo. Essaie sur un autre (Chrome ou Safari récent).");
-  const items = dayK === "all" ? storyList() : ((memoryDays().find(d => d.k === dayK) || {}).list || []);
-  if(!items.length) return say("Rien à monter pour ce choix.");
+  const items = plan.items.map(it => ({ it, x:posts.find(y => y.id === it.id && !y.x) })).filter(o => o.x);
+  if(!items.length) return say("Rien à monter : ajoute au moins une photo ou une vidéo au plan.");
   err.hidden = true; document.getElementById("mtGo").hidden = true;
   stage.innerHTML = `<p class="note" id="mtProg">Préparation…</p><div class="mt-prev"></div><button type="button" class="btn" id="mtStop">Arrêter</button>`;
   stage.querySelector(".mt-prev").appendChild(cv);
+  stage.scrollIntoView({ block:"start", behavior:"smooth" });
   const ctx = cv.getContext("2d");
+  const snap = document.createElement("canvas"); snap.width = cv.width; snap.height = cv.height; const sctx = snap.getContext("2d");
   montage = { stop:false };
   document.getElementById("mtStop").onclick = () => { montage.stop = true; };
   let wake = null; try{ wake = await navigator.wakeLock.request("screen"); }catch(e){}
-  // Son des vidéos : passé par Web Audio vers l'enregistrement.
   if(actx && actx.state !== "running"){ try{ await actx.resume(); }catch(e){} }
   if(actx){ // le son doit vraiment tourner, sinon l'enregistrement attend le son et perd les images
     const c0 = actx.currentTime; await new Promise(r => setTimeout(r, 350));
@@ -1464,14 +1563,14 @@ async function runMontage(dayK, sec, withSound, clip){
   }
   const stream = cv.captureStream(30);
   if(dest) dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
-  const rec = new MediaRecorder(stream, Object.assign({ videoBitsPerSecond:4000000 }, mime ? { mimeType:mime } : {}));
+  const rec = new MediaRecorder(stream, Object.assign({ videoBitsPerSecond:5000000 }, mime ? { mimeType:mime } : {}));
   const chunks = []; rec.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
   const done = new Promise(r => rec.onstop = r);
-  const title = dayK === "all" ? "Tout le séjour" : dayLong(dayK);
   const prog = t => { const el = document.getElementById("mtProg"); if(el) el.textContent = t; };
   const cover = (src, w, h, z, ox, oy) => { const k = Math.max(cv.width / w, cv.height / h) * z, dw = w * k, dh = h * k;
     ctx.drawImage(src, (cv.width - dw) / 2 + ox, (cv.height - dh) / 2 + oy, dw, dh); };
   const overlay = (x, alpha) => {
+    if(!plan.infos) return;
     const g = ctx.createLinearGradient(0, cv.height - 330, 0, cv.height); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,.75)");
     ctx.fillStyle = g; ctx.fillRect(0, cv.height - 330, cv.width, 330);
     ctx.globalAlpha = alpha; ctx.textBaseline = "alphabetic";
@@ -1482,24 +1581,45 @@ async function runMontage(dayK, sec, withSound, clip){
     if(x.t){ ctx.font = "500 34px system-ui, -apple-system, sans-serif"; let t = x.t; while(ctx.measureText(t).width > cv.width - 80 && t.length > 3) t = t.slice(0, -2); if(t !== x.t) t = t.slice(0, -1) + "…"; ctx.fillText(t, 40, cv.height - 50); }
     ctx.globalAlpha = 1;
   };
+  // Texte demandé pour ce passage : gros, centré, avec un contour, qui apparaît en douceur.
+  const caption = (txt, a) => {
+    if(!txt) return; ctx.save(); ctx.globalAlpha = a; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    let size = 76; ctx.font = `900 ${size}px system-ui, -apple-system, sans-serif`;
+    while(ctx.measureText(txt).width > cv.width - 70 && size > 34){ size -= 4; ctx.font = `900 ${size}px system-ui, -apple-system, sans-serif`; }
+    ctx.lineWidth = size / 7; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.lineJoin = "round"; ctx.strokeText(txt, cv.width / 2, cv.height * .42);
+    ctx.fillStyle = "#fff"; ctx.fillText(txt, cv.width / 2, cv.height * .42); ctx.restore();
+  };
   const card = (big, small, a) => {
     const g = ctx.createLinearGradient(0, 0, 0, cv.height); g.addColorStop(0, "#1B1B1E"); g.addColorStop(1, "#0C0C0D");
     ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height); ctx.globalAlpha = a; ctx.textAlign = "center";
-    ctx.fillStyle = "#FFC15E"; ctx.font = "900 92px system-ui, -apple-system, sans-serif"; ctx.fillText(big, cv.width / 2, cv.height / 2 - 20);
-    ctx.fillStyle = "#FF3B4A"; ctx.font = "800 42px system-ui, -apple-system, sans-serif"; ctx.fillText(small, cv.width / 2, cv.height / 2 + 50);
+    ctx.fillStyle = "#FFC15E"; let s = 92; ctx.font = `900 ${s}px system-ui, -apple-system, sans-serif`; while(ctx.measureText(big).width > cv.width - 60 && s > 40){ s -= 4; ctx.font = `900 ${s}px system-ui, -apple-system, sans-serif`; }
+    ctx.fillText(big, cv.width / 2, cv.height / 2 - 20);
+    ctx.fillStyle = "#FF3B4A"; ctx.font = "800 42px system-ui, -apple-system, sans-serif"; ctx.fillText(small || "", cv.width / 2, cv.height / 2 + 50);
     ctx.globalAlpha = 1; ctx.textAlign = "left";
   };
+  // Transition d'entrée : on mélange l'image du passage précédent (gardée dans « snap ») avec le nouveau, pendant TR ms.
+  const TR = 450;
+  const enter = (tr, el, drawNew) => {
+    const p = Math.min(1, el / TR), e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    if(p >= 1 || tr === "coupe"){ drawNew(1, 0); return; }
+    if(tr === "fondu"){ drawNew(1, 0); ctx.globalAlpha = 1 - e; ctx.drawImage(snap, 0, 0); ctx.globalAlpha = 1; }
+    else if(tr === "noir"){ if(p < .5){ ctx.drawImage(snap, 0, 0); ctx.fillStyle = `rgba(0,0,0,${p * 2})`; } else { drawNew(1, 0); ctx.fillStyle = `rgba(0,0,0,${2 - p * 2})`; } ctx.fillRect(0, 0, cv.width, cv.height); }
+    else if(tr === "glisse"){ ctx.save(); ctx.translate(-e * cv.width, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); ctx.save(); ctx.translate((1 - e) * cv.width, 0); drawNew(1, 0); ctx.restore(); }
+    else if(tr === "zoom"){ drawNew(1.35 - .35 * e, 0); ctx.globalAlpha = 1 - e; ctx.drawImage(snap, 0, 0); ctx.globalAlpha = 1; }
+    else if(tr === "flash"){ drawNew(1, 0); ctx.fillStyle = `rgba(255,255,255,${1 - e})`; ctx.fillRect(0, 0, cv.width, cv.height); }
+    else drawNew(1, 0);
+  };
+  const keep = () => { sctx.drawImage(cv, 0, 0); };
   const frame = () => new Promise(r => requestAnimationFrame(r));
-  const hold = async (ms, draw) => { const t0 = performance.now(); while(!montage.stop){ const t = (performance.now() - t0) / ms; if(t >= 1) break; draw(t); await frame(); } };
+  const hold = async (ms, draw) => { const t0 = performance.now(); while(!montage.stop){ const el = performance.now() - t0, t = el / ms; if(t >= 1) break; draw(t, el); await frame(); } };
   rec.start(1000);
   try{
-    await hold(2200, t => card("VEGAS · EVG", title, Math.min(1, t * 3)));
+    await hold(2200, t => card(plan.title || "VEGAS · EVG", plan.sub, Math.min(1, t * 3)));
+    keep();
     for(let n = 0; n < items.length && !montage.stop; n++){
-      const x = items[n]; prog(`Montage ${n + 1} / ${items.length}…`);
+      const { it, x } = items[n]; prog(`Montage ${n + 1} / ${items.length}…`);
+      const capA = el => Math.min(1, Math.max(0, (el - 200) / 300));
       if(x.v){
-        // Extrait vidéo. Sur iPhone, une vidéo hors de la page ne se charge jamais tant qu'on ne la lance pas :
-        // avant, l'appli attendait qu'elle soit prête, abandonnait au bout de 12 s, et la vidéo sautait. Maintenant on la met
-        // (invisible) dans la page et on la lance directement. Si elle ne veut vraiment pas, on montre son image d'aperçu.
         const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto";
         v.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
         v.muted = !actx; v.src = x.v + (x.v.includes("?") ? "&" : "?") + "mt=1"; // adresse à part : évite la copie gardée par la story (sans CORS)
@@ -1514,32 +1634,39 @@ async function runMontage(dayK, sec, withSound, clip){
         });
         if(started){
           const full = isFinite(v.duration) && v.duration > 0 ? v.duration : MAX_VID_SEC;
-          const len = (clip > 0 ? Math.min(clip, full) : full) * 1000, t0 = performance.now();
+          const a = Math.min(it.start || 0, Math.max(0, full - .5)), b = it.end > a ? Math.min(it.end, full) : full;
+          if(a > 0){ try{ v.currentTime = a; await new Promise(r => { const t = setTimeout(r, 1500); v.onseeked = () => { clearTimeout(t); r(); }; }); }catch(e){} }
+          try{ v.playbackRate = it.speed || 1; }catch(e){}
+          const len = (b - a) / (it.speed || 1) * 1000, t0 = performance.now();
           while(!montage.stop && !v.ended){
-            const el = performance.now() - t0; if(el >= len || el > (MAX_VID_SEC + 2) * 1000) break;
+            const el = performance.now() - t0; if(el >= len || v.currentTime >= b || el > (MAX_VID_SEC + 4) * 1000) break;
             ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
-            cover(v, v.videoWidth, v.videoHeight, 1, 0, 0); overlay(x, Math.min(1, el / 400));
-            const fade = Math.max(el < 250 ? 1 - el / 250 : 0, len - el < 300 ? 1 - (len - el) / 300 : 0); // fondu au début et à la fin
-            if(fade > 0){ ctx.fillStyle = `rgba(0,0,0,${fade})`; ctx.fillRect(0, 0, cv.width, cv.height); }
-            if(gain) gain.gain.value = 1 - fade;
+            enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height); cover(v, v.videoWidth, v.videoHeight, z, 0, 0); });
+            overlay(x, Math.min(1, el / 400)); caption(it.text, capA(el));
+            const fadeOut = !items[n + 1] && len - el < 400 ? 1 - (len - el) / 400 : 0;
+            if(gain) gain.gain.value = Math.min(1, el / 200) * (1 - fadeOut);
             await frame();
           }
+          keep();
         }
         v.pause(); if(src) try{ src.disconnect(); }catch(e){} v.removeAttribute("src"); v.load(); v.remove();
         if(!started){ // vidéo illisible : on garde au moins son image d'aperçu
           const im = x.h ? await getImg(x.id) : null; if(!im) continue;
-          await hold(sec * 1000, t => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
-            cover(im, im.naturalWidth, im.naturalHeight, 1.02 + t * .08, 0, 0); overlay(x, Math.min(1, t * 4)); });
+          await hold((it.dur || 3) * 1000, (t, el) => { enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height); cover(im, im.naturalWidth, im.naturalHeight, z * (1.02 + t * .08), 0, 0); });
+            overlay(x, Math.min(1, t * 4)); caption(it.text, capA(el)); });
+          keep();
         }
       } else {
         const im = await getImg(x.id); if(!im) continue;
         const dir = n % 2 ? 1 : -1;
-        await hold(sec * 1000, t => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
-          cover(im, im.naturalWidth, im.naturalHeight, 1.02 + t * .08, dir * t * 30, 0); overlay(x, Math.min(1, t * 4));
-          if(t < .12){ ctx.fillStyle = `rgba(0,0,0,${1 - t / .12})`; ctx.fillRect(0, 0, cv.width, cv.height); } });
+        await hold((it.dur || 3) * 1000, (t, el) => {
+          enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+            cover(im, im.naturalWidth, im.naturalHeight, z * (it.move ? 1.02 + t * .08 : 1), it.move ? dir * t * 30 : 0, 0); });
+          overlay(x, Math.min(1, t * 4)); caption(it.text, capA(el)); });
+        keep();
       }
     }
-    if(!montage.stop) await hold(1800, t => card("À SUIVRE…", "EVG de Sobek", 1 - Math.max(0, t - .6) * 2.5));
+    if(!montage.stop) await hold(1800, (t, el) => { enter("fondu", el, () => card(plan.outro || "À SUIVRE…", "EVG de Sobek", 1)); if(t > .6){ ctx.fillStyle = `rgba(0,0,0,${(t - .6) * 2.5})`; ctx.fillRect(0, 0, cv.width, cv.height); } });
   }catch(e){ say("Le montage s'est arrêté : " + e.message); }
   const stopped = montage.stop;
   rec.stop(); await done; try{ wake && wake.release(); }catch(e){} try{ actx && actx.close(); }catch(e){}
@@ -1548,11 +1675,11 @@ async function runMontage(dayK, sec, withSound, clip){
   if(stopped){ stage.innerHTML = ""; document.getElementById("mtGo").hidden = false; return; }
   const type = (mime || "video/webm").split(";")[0], ext = /mp4/.test(type) ? "mp4" : "webm";
   const blob = new Blob(chunks, { type }), url = URL.createObjectURL(blob);
-  const name = "evg-vegas-" + (dayK === "all" ? "sejour" : dayK) + "." + ext;
+  const name = "evg-vegas-" + (plan.scope === "all" ? "sejour" : plan.scope) + "." + ext;
   stage.innerHTML = `<p class="miss ok">Montage prêt ✓ (${(blob.size / 1048576).toFixed(1)} Mo)</p>
     <video src="${url}" controls playsinline class="mt-out"></video>
     <div class="actions"><button type="button" class="btn hot" id="mtShare">Partager / enregistrer</button><a class="btn" href="${url}" download="${name}">Télécharger</a></div>
-    <p class="note">Sur iPhone : « Partager » puis « Enregistrer la vidéo ». Tu peux ensuite ajouter une musique dans Insta ou CapCut.</p>`;
+    <p class="note">Sur iPhone : « Partager » puis « Enregistrer la vidéo ». Pas content ? Change ta demande ou le plan, et relance.</p>`;
   const file = new File([blob], name, { type });
   document.getElementById("mtShare").onclick = async () => {
     try{ if(navigator.canShare && navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"EVG Vegas" });
