@@ -1433,11 +1433,11 @@ const SPEEDS = { "0.5":"Ralenti", "1":"Normal", "2":"Accéléré" };
 // Nom de transition renvoyé par l'IA (ou dit par l'utilisateur) -> une des 6 de l'appli
 const trOf = v => { const t = String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if(TRANS[t]) return t;
-  if(/noir|black|dip/.test(t)) return "noir";
+  if(/noir|black|dip|sombre/.test(t)) return "noir";
   if(/coup|cut|sec|cut/.test(t)) return "coupe";
-  if(/gliss|slide|swipe|whip|lateral|balay/.test(t)) return "glisse";
-  if(/zoom|punch|impact/.test(t)) return "zoom";
-  if(/flash|blanc|white|eclair/.test(t)) return "flash";
+  if(/gliss|slide|swipe|whip|lateral|balay|pousse|push/.test(t)) return "glisse";
+  if(/zoom|punch|impact|choc/.test(t)) return "zoom";
+  if(/flash|blanc|white|eclair|stroboscope|strobe/.test(t)) return "flash";
   return "fondu"; };
 let mtPlan = null, mtAiBusy = false;
 const mtItems = scope => scope === "all" ? storyList() : ((memoryDays().find(d => d.k === scope) || {}).list || []);
@@ -1456,21 +1456,29 @@ function openMontagePanel(){
     <section class="mt-ai"><label class="mt-l" for="mtPrompt">✨ Dis ce que tu veux (ou dicte avec le micro du clavier)</label>
       <textarea id="mtPrompt" rows="3" maxlength="1500" placeholder="Ex. : commence par la vidéo du quad au ralenti, enchaîne vite les photos de la piscine avec des flashs, écris « Vegas baby » sur la photo du Strip, finis sur Chris."></textarea>
       <details class="mt-help"><summary>💡 Les mots que l'IA comprend</summary>
-        <p><b>Transitions</b> : <i>fondu</i> (doux) · <i>fondu au noir</i> (pause, fin de séquence) · <i>coupe sèche</i> (nerveux, sur le rythme) · <i>glissé</i> (passage latéral) · <i>zoom</i> (punchy) · <i>flash</i> (effet soirée).</p>
-        <p><b>Rythme</b> : « 1 seconde par photo », « rythmé », « posé », « au ralenti », « accéléré ».</p>
-        <p><b>Vidéos</b> : « garde de la 3e à la 8e seconde », « juste les 4 premières secondes », « coupe le son ».</p>
-        <p><b>Ordre</b> : « commence par… », « finis sur… », « enlève la photo de… », « mets la vidéo d'Isma juste après le resto ».</p>
-        <p><b>Textes</b> : « écris « Vegas baby » sur la photo du Strip », « titre : … », « carton de fin : … », « sans les noms en bas ».</p>
-        <p><b>Astuce</b> : sois précis passage par passage (« la photo de la piscine en flash, puis la vidéo du quad en coupe sèche »). Pour imposer une transition partout : « que des coupes sèches ».</p></details>
-      <button type="button" class="btn hot" id="mtAi">✨ Préparer le montage</button><p class="note" id="mtAiMsg" hidden></p></section>
+        <p><b>Transitions</b> : <i>fondu / fondu enchaîné</i> (doux) · <i>fondu au noir / passage au noir</i> (pause, fin de séquence) · <i>coupe sèche / cut / cut franc</i> (nerveux, sur le rythme) · <i>glissé / slide / balayage / whip</i> (passage latéral) · <i>zoom / zoom avant / punch</i> (impact) · <i>flash / flash blanc / éclair</i> (effet soirée, appareil photo).</p>
+        <p><b>Rythme et durée</b> : « 1 seconde par photo », « 0,8 s », « très rapide / rythmé / nerveux / cut sur le beat », « normal », « posé / lent / contemplatif », « tiens 5 secondes sur la photo de groupe ».</p>
+        <p><b>Vitesse des vidéos</b> : « au ralenti / slow motion / slow-mo », « vitesse normale », « accéléré / x2 / timelapse ».</p>
+        <p><b>Extraits de vidéo</b> : « garde de la 3e à la 8e seconde », « juste les 4 premières secondes », « la fin de la vidéo », « la vidéo en entier ».</p>
+        <p><b>Ordre</b> : « commence par… / ouverture sur… », « finis sur… / termine par… », « mets X juste après Y », « dans l'ordre chronologique », « inverse », « enlève / retire / supprime la photo de… », « garde seulement les vidéos », « que les photos les plus likées ».</p>
+        <p><b>Textes à l'écran</b> : « écris « Vegas baby » sur la photo du Strip », « sous-titre : … », « titre : … », « carton de fin : … », « pas de texte ».</p>
+        <p><b>Image et son</b> : « léger zoom lent sur les photos / effet Ken Burns », « image fixe, sans mouvement », « garde le son des vidéos / coupe le son / muet », « sans les noms et heures en bas / rendu épuré ».</p>
+        <p><b>Ambiance</b> (l'IA adapte tout) : « clip de soirée », « aftermovie », « bande-annonce / trailer », « souvenir émouvant », « drôle / bêtisier », « best-of », « style Insta / TikTok ».</p>
+        <p><b>Désigner un passage</b> : par personne (« la vidéo d'Isma »), par moment (« samedi vers 23 h »), par lieu (« la piscine », « le resto ») ou par le texte de la story.</p>
+        <p><b>Corriger après coup</b> : une fois le plan prêt, écris seulement ce qui ne va pas (« plus rapide au début », « la 3e en flash », « enlève la vidéo floue de Jovan ») et appuie sur « 🔁 Corriger ce plan avec l'IA » : elle garde le reste.</p></details>
+      <button type="button" class="btn hot" id="mtAi">✨ Préparer le montage</button>
+      <button type="button" class="btn" id="mtAiFix" hidden>🔁 Corriger ce plan avec l'IA</button>
+      <p class="note" id="mtAiMsg" hidden></p></section>
     <details class="mt-more" id="mtMore"><summary>✏️ Retoucher le plan à la main</summary><div id="mtPlanBox"></div></details>
     <p class="err" id="mtErr" hidden></p>
     <button type="button" class="btn hot big" id="mtGo">🎬 Lancer le montage</button>
     <div id="mtStage"></div></div>`;
   document.getElementById("mtDay").value = mtPlan.scope;
   document.getElementById("mtClose").onclick = closeMontage;
-  document.getElementById("mtDay").onchange = e => { mtPlan = defaultPlan(e.target.value); drawPlan(); };
-  document.getElementById("mtAi").onclick = aiPlan;
+  document.getElementById("mtDay").onchange = e => { mtPlan = defaultPlan(e.target.value); drawPlan(); aiBtns(); };
+  document.getElementById("mtAi").onclick = () => aiPlan(false);
+  document.getElementById("mtAiFix").onclick = () => aiPlan(true);
+  aiBtns();
   document.getElementById("mtGo").onclick = () => runMontage(mtPlan);
   drawPlan();
 }
@@ -1510,42 +1518,67 @@ function drawPlan(){
   box.querySelectorAll("[data-down]").forEach(b => b.onclick = () => move(+b.dataset.down, 1));
   box.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { mtPlan.items.splice(+b.dataset.rm, 1); drawPlan(); });
   box.querySelectorAll("[data-add]").forEach(b => b.onclick = () => { const x = get(b.dataset.add); mtPlan.items.push({ id:x.id, dur:3, start:0, end:x.v ? 5 : 0, speed:1, tr:"fondu", text:"", move:true }); drawPlan(); });
-  const rs = document.getElementById("mtReset"); if(rs) rs.onclick = () => { mtPlan = defaultPlan(mtPlan.scope); drawPlan(); };
+  const rs = document.getElementById("mtReset"); if(rs) rs.onclick = () => { mtPlan = defaultPlan(mtPlan.scope); drawPlan(); aiBtns(); };
 }
 const planSeconds = p => 4 + p.items.reduce((a, it) => { const x = posts.find(y => y.id === it.id); if(!x) return a;
   return a + (x.v ? ((it.end > it.start ? it.end : MAX_VID_SEC) - it.start) / (it.speed || 1) : it.dur); }, 0);
 // L'IA (Claude, via la fonction Supabase « vegas-montage ») lit la demande et la liste des passages, et renvoie un plan.
-async function aiPlan(){
-  const ta = document.getElementById("mtPrompt"), msg = document.getElementById("mtAiMsg"), b = document.getElementById("mtAi");
-  const ask = (ta.value || "").trim(); if(!ask){ ta.focus(); return; }
-  if(mtAiBusy) return; mtAiBusy = true; b.disabled = true; b.textContent = "✨ L'IA prépare ton montage…"; msg.hidden = true;
-  const all = mtItems(mtPlan.scope);
-  const items = all.slice(0, 80).map((x, i) => ({ n:i + 1, type:x.v ? "video" : "photo", auteur:x.a || "?", jour:dayLong(dayKey(x.d)), heure:hm(x.d, TZ.vegas),
-    texte:(x.t || "").slice(0, 120), reactions:reacts.filter(r => r.p === x.id).length, commentaires:comments.filter(c => c.p === x.id).length, lieu:x.s === "france" ? "France" : "Vegas" }));
+// Boutons IA : « Corriger ce plan » n'apparaît qu'une fois qu'un plan a été préparé par l'IA
+function aiBtns(){
+  const f = document.getElementById("mtAiFix"), b = document.getElementById("mtAi"); if(!f || !b) return;
+  f.hidden = !(mtPlan && mtPlan.ai);
+  b.textContent = mtPlan && mtPlan.ai ? "✨ Repartir de zéro" : "✨ Préparer le montage";
+}
+// L'IA (via la fonction Supabase « Vegas-montage ») lit la demande et la liste des passages, et renvoie un plan.
+// refine = true : on lui envoie aussi le plan actuel (dans chaque passage) pour qu'elle le corrige au lieu de tout refaire.
+async function aiPlan(refine){
+  const ta = document.getElementById("mtPrompt"), msg = document.getElementById("mtAiMsg"), b = document.getElementById(refine ? "mtAiFix" : "mtAi");
+  const ask = (ta.value || "").trim().slice(0, 900); if(!ask){ ta.focus(); return; }
+  if(mtAiBusy) return; mtAiBusy = true; const label = b.textContent; b.disabled = true; b.textContent = refine ? "🔁 L'IA corrige ton plan…" : "✨ L'IA prépare ton montage…"; msg.hidden = true;
+  const all = mtItems(mtPlan.scope), cur = refine ? mtPlan : null;
+  const items = all.slice(0, 80).map((x, i) => {
+    const o = { n:i + 1, type:x.v ? "video" : "photo", auteur:x.a || "?", jour:dayLong(dayKey(x.d)), heure:hm(x.d, TZ.vegas),
+      texte:(x.t || "").slice(0, 120), reactions:reacts.filter(r => r.p === x.id).length, commentaires:comments.filter(c => c.p === x.id).length, lieu:x.s === "france" ? "France" : "Vegas" };
+    if(cur){ const k = cur.items.findIndex(it => it.id === x.id), it = cur.items[k];
+      o.plan_actuel = it ? { position:k + 1, duree:it.dur, debut:it.start, fin:it.end, vitesse:it.speed, transition:it.tr, texte:it.text, mouvement:it.move } : "absent du montage"; }
+    return o; });
+  const rules = "\n\n(Consigne : si une transition, une durée, une vitesse ou un ordre est demandé, respecte-le exactement, passage par passage. Transitions possibles : fondu, noir, coupe, glisse, zoom, flash. Sans précision, varie-les selon l'ambiance au lieu de mettre partout la même.)";
+  // La fonction Supabase coupe la demande à 1500 caractères : la demande de l'utilisateur passe en premier
+  const demande = (cur
+    ? "CORRECTION d'un plan existant. Correction demandée : " + ask
+      + "\nRepars du plan actuel (champ plan_actuel de chaque passage : position et réglages, ou « absent du montage ») et ne change QUE ce qui est demandé ; garde tout le reste à l'identique."
+      + ` Plan actuel : titre « ${cur.title} », sous-titre « ${cur.sub} », fin « ${cur.outro} », noms en bas : ${cur.infos ? "oui" : "non"}, son : ${cur.sound ? "oui" : "non"}.`
+      + ((cur.hist || []).length ? " Demandes précédentes : " + cur.hist.slice(-2).map(h => "« " + h.slice(0, 80) + " »").join(" ; ") + "." : "")
+      + rules
+    : ask + rules).slice(0, 1500);
   try{
     // La fonction a été créée dans Supabase sous le nom « Vegas-montage » (V majuscule) : on essaie les deux
     let r = null;
     for(const nom of ["Vegas-montage", "vegas-montage"]){
       r = await fetch(SB_BASE + "/functions/v1/" + nom, { method:"POST", headers:{ "Content-Type":"application/json", apikey:SB_KEY },
-        body:JSON.stringify({ demande:ask + "\n\n(Consigne : si une transition, une durée, une vitesse ou un ordre est demandé, respecte-le exactement, passage par passage. Transitions possibles : fondu, noir, coupe, glisse, zoom, flash. Sans précision, varie-les selon l'ambiance au lieu de mettre partout la même.)", passages:items, sujet:mtPlan.sub }) });
+        body:JSON.stringify({ demande, passages:items, sujet:mtPlan.sub }) });
       if(r.status !== 404) break;
     }
     if(r.status === 404) throw new Error("absente");
     const j = await r.json(); if(!r.ok || !j.plan) throw new Error(j.error || r.status);
     const p = j.plan, out = defaultPlan(mtPlan.scope);
+    if(cur){ Object.assign(out, { title:cur.title, sub:cur.sub, outro:cur.outro, infos:cur.infos, sound:cur.sound }); }
     out.items = (p.items || []).map(it => { const x = all[(+it.n || 0) - 1]; if(!x) return null;
       return { id:x.id, dur:Math.min(10, Math.max(.8, +it.duree || 3)), start:Math.max(0, +it.debut || 0), end:x.v ? Math.max(0, +it.fin || 0) : 0,
         speed:[0.5, 1, 2].includes(+it.vitesse) ? +it.vitesse : 1, tr:trOf(it.transition), text:String(it.texte || "").slice(0, 60), move:it.mouvement !== false }; }).filter(Boolean);
     if(!out.items.length) throw new Error("plan vide");
     if(p.titre) out.title = String(p.titre).slice(0, 40); if(p.sous_titre) out.sub = String(p.sous_titre).slice(0, 50); if(p.fin) out.outro = String(p.fin).slice(0, 40);
     if(typeof p.infos === "boolean") out.infos = p.infos; if(typeof p.son === "boolean") out.sound = p.son;
+    out.ai = true; out.hist = (cur ? (cur.hist || []) : []).concat(ask).slice(-5);
     mtPlan = out; drawPlan(); document.getElementById("mtMore").open = true;
-    msg.textContent = "✓ " + (p.resume || "Plan prêt.") + " Regarde le plan ci-dessous, retouche si besoin, puis lance le montage."; msg.hidden = false;
+    ta.value = "";
+    ta.placeholder = "Pas satisfait ? Écris seulement ce qu'il faut changer (ex. : plus rapide au début, la 3e photo en flash, enlève la vidéo floue de Jovan), puis « 🔁 Corriger ce plan avec l'IA ».";
+    msg.textContent = "✓ " + (p.resume || (cur ? "Plan corrigé." : "Plan prêt.")) + (cur ? " Le reste du plan est gardé." : "") + " Tu peux encore corriger avec l'IA, retoucher à la main, ou lancer le montage."; msg.hidden = false;
   }catch(e){
     msg.textContent = /absente/.test(e.message) ? "L'IA n'est pas encore branchée (il manque la fonction « vegas-montage » dans Supabase). Tu peux régler le plan à la main en attendant."
       : "L'IA n'a pas répondu (" + e.message + "). Réessaie, ou retouche le plan à la main."; msg.hidden = false;
   }
-  mtAiBusy = false; b.disabled = false; b.textContent = "✨ Préparer le montage";
+  mtAiBusy = false; b.disabled = false; b.textContent = label; aiBtns();
 }
 function closeMontage(){
   if(montage){ montage.stop = true; }
