@@ -398,6 +398,8 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 #montage .mt-ai{ display:flex; flex-direction:column; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; }
 #montage textarea, #montage input:not([type=checkbox]){ font:inherit; font-size:16px; color:var(--sand); background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; box-sizing:border-box; width:100%; }
 #montage .mt-more summary{ cursor:pointer; font-weight:600; padding:6px 0; }
+#montage .mt-help summary{ cursor:pointer; font-size:.9rem; opacity:.85; }
+#montage .mt-help p{ margin:6px 0; font-size:.85rem; line-height:1.4; }
 #montage .mt-glob{ display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
 #montage .mt-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
 #montage .mt-list li{ background:var(--card); border-radius:12px; padding:8px; display:flex; flex-direction:column; gap:8px; }
@@ -1428,6 +1430,15 @@ function getImg(id){
 // --- Montage : un « plan » (ordre, durées, transitions, textes) éditable à la main ou préparé par l'IA, puis joué dans un canvas et enregistré ---
 const TRANS = { fondu:"Fondu enchaîné", noir:"Fondu au noir", coupe:"Coupe sèche", glisse:"Glissé", zoom:"Zoom", flash:"Flash blanc" };
 const SPEEDS = { "0.5":"Ralenti", "1":"Normal", "2":"Accéléré" };
+// Nom de transition renvoyé par l'IA (ou dit par l'utilisateur) -> une des 6 de l'appli
+const trOf = v => { const t = String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if(TRANS[t]) return t;
+  if(/noir|black|dip/.test(t)) return "noir";
+  if(/coup|cut|sec|cut/.test(t)) return "coupe";
+  if(/gliss|slide|swipe|whip|lateral|balay/.test(t)) return "glisse";
+  if(/zoom|punch|impact/.test(t)) return "zoom";
+  if(/flash|blanc|white|eclair/.test(t)) return "flash";
+  return "fondu"; };
 let mtPlan = null, mtAiBusy = false;
 const mtItems = scope => scope === "all" ? storyList() : ((memoryDays().find(d => d.k === scope) || {}).list || []);
 function defaultPlan(scope){
@@ -1444,6 +1455,13 @@ function openMontagePanel(){
     <label class="mt-l">Quoi<select id="mtDay"><option value="all">Tout le séjour (${storyList().length})</option>${days.map(d => `<option value="${d.k}">${esc(dayLong(d.k))} (${d.list.length})</option>`).join("")}</select></label>
     <section class="mt-ai"><label class="mt-l" for="mtPrompt">✨ Dis ce que tu veux (ou dicte avec le micro du clavier)</label>
       <textarea id="mtPrompt" rows="3" maxlength="1500" placeholder="Ex. : commence par la vidéo du quad au ralenti, enchaîne vite les photos de la piscine avec des flashs, écris « Vegas baby » sur la photo du Strip, finis sur Chris."></textarea>
+      <details class="mt-help"><summary>💡 Les mots que l'IA comprend</summary>
+        <p><b>Transitions</b> : <i>fondu</i> (doux) · <i>fondu au noir</i> (pause, fin de séquence) · <i>coupe sèche</i> (nerveux, sur le rythme) · <i>glissé</i> (passage latéral) · <i>zoom</i> (punchy) · <i>flash</i> (effet soirée).</p>
+        <p><b>Rythme</b> : « 1 seconde par photo », « rythmé », « posé », « au ralenti », « accéléré ».</p>
+        <p><b>Vidéos</b> : « garde de la 3e à la 8e seconde », « juste les 4 premières secondes », « coupe le son ».</p>
+        <p><b>Ordre</b> : « commence par… », « finis sur… », « enlève la photo de… », « mets la vidéo d'Isma juste après le resto ».</p>
+        <p><b>Textes</b> : « écris « Vegas baby » sur la photo du Strip », « titre : … », « carton de fin : … », « sans les noms en bas ».</p>
+        <p><b>Astuce</b> : sois précis passage par passage (« la photo de la piscine en flash, puis la vidéo du quad en coupe sèche »). Pour imposer une transition partout : « que des coupes sèches ».</p></details>
       <button type="button" class="btn hot" id="mtAi">✨ Préparer le montage</button><p class="note" id="mtAiMsg" hidden></p></section>
     <details class="mt-more" id="mtMore"><summary>✏️ Retoucher le plan à la main</summary><div id="mtPlanBox"></div></details>
     <p class="err" id="mtErr" hidden></p>
@@ -1509,7 +1527,7 @@ async function aiPlan(){
     let r = null;
     for(const nom of ["Vegas-montage", "vegas-montage"]){
       r = await fetch(SB_BASE + "/functions/v1/" + nom, { method:"POST", headers:{ "Content-Type":"application/json", apikey:SB_KEY },
-        body:JSON.stringify({ demande:ask, passages:items, sujet:mtPlan.sub }) });
+        body:JSON.stringify({ demande:ask + "\n\n(Consigne : si une transition, une durée, une vitesse ou un ordre est demandé, respecte-le exactement, passage par passage. Transitions possibles : fondu, noir, coupe, glisse, zoom, flash. Sans précision, varie-les selon l'ambiance au lieu de mettre partout la même.)", passages:items, sujet:mtPlan.sub }) });
       if(r.status !== 404) break;
     }
     if(r.status === 404) throw new Error("absente");
@@ -1517,7 +1535,7 @@ async function aiPlan(){
     const p = j.plan, out = defaultPlan(mtPlan.scope);
     out.items = (p.items || []).map(it => { const x = all[(+it.n || 0) - 1]; if(!x) return null;
       return { id:x.id, dur:Math.min(10, Math.max(.8, +it.duree || 3)), start:Math.max(0, +it.debut || 0), end:x.v ? Math.max(0, +it.fin || 0) : 0,
-        speed:[0.5, 1, 2].includes(+it.vitesse) ? +it.vitesse : 1, tr:TRANS[it.transition] ? it.transition : "fondu", text:String(it.texte || "").slice(0, 60), move:it.mouvement !== false }; }).filter(Boolean);
+        speed:[0.5, 1, 2].includes(+it.vitesse) ? +it.vitesse : 1, tr:trOf(it.transition), text:String(it.texte || "").slice(0, 60), move:it.mouvement !== false }; }).filter(Boolean);
     if(!out.items.length) throw new Error("plan vide");
     if(p.titre) out.title = String(p.titre).slice(0, 40); if(p.sous_titre) out.sub = String(p.sous_titre).slice(0, 50); if(p.fin) out.outro = String(p.fin).slice(0, 40);
     if(typeof p.infos === "boolean") out.infos = p.infos; if(typeof p.son === "boolean") out.sound = p.son;
@@ -1603,15 +1621,16 @@ async function runMontage(plan){
     ctx.globalAlpha = 1; ctx.textAlign = "left";
   };
   // Transition d'entrée : on mélange l'image du passage précédent (gardée dans « snap ») avec le nouveau, pendant TR ms.
-  const TR = 450;
+  // Durée de chaque transition (ms) : assez longue pour qu'on les distingue bien
+  const TRD = { fondu:900, noir:1100, glisse:550, zoom:500, flash:350, coupe:0 };
   const enter = (tr, el, drawNew) => {
-    const p = Math.min(1, el / TR), e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    const TR = TRD[tr] || 700, p = TR ? Math.min(1, el / TR) : 1, e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
     if(p >= 1 || tr === "coupe"){ drawNew(1, 0); return; }
     if(tr === "fondu"){ drawNew(1, 0); ctx.globalAlpha = 1 - e; ctx.drawImage(snap, 0, 0); ctx.globalAlpha = 1; }
     else if(tr === "noir"){ if(p < .5){ ctx.drawImage(snap, 0, 0); ctx.fillStyle = `rgba(0,0,0,${p * 2})`; } else { drawNew(1, 0); ctx.fillStyle = `rgba(0,0,0,${2 - p * 2})`; } ctx.fillRect(0, 0, cv.width, cv.height); }
     else if(tr === "glisse"){ ctx.save(); ctx.translate(-e * cv.width, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); ctx.save(); ctx.translate((1 - e) * cv.width, 0); drawNew(1, 0); ctx.restore(); }
-    else if(tr === "zoom"){ drawNew(1.35 - .35 * e, 0); ctx.globalAlpha = 1 - e; ctx.drawImage(snap, 0, 0); ctx.globalAlpha = 1; }
-    else if(tr === "flash"){ drawNew(1, 0); ctx.fillStyle = `rgba(255,255,255,${1 - e})`; ctx.fillRect(0, 0, cv.width, cv.height); }
+    else if(tr === "zoom"){ drawNew(1.6 - .6 * e, 0); if(p < .25){ ctx.globalAlpha = 1 - p * 4; ctx.drawImage(snap, 0, 0); ctx.globalAlpha = 1; } }
+    else if(tr === "flash"){ if(p < .3){ ctx.drawImage(snap, 0, 0); ctx.fillStyle = `rgba(255,255,255,${p / .3})`; } else { drawNew(1, 0); ctx.fillStyle = `rgba(255,255,255,${1 - (p - .3) / .7})`; } ctx.fillRect(0, 0, cv.width, cv.height); }
     else drawNew(1, 0);
   };
   const keep = () => { sctx.drawImage(cv, 0, 0); };
