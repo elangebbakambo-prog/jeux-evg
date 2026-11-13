@@ -1505,8 +1505,13 @@ async function aiPlan(){
   const items = all.slice(0, 80).map((x, i) => ({ n:i + 1, type:x.v ? "video" : "photo", auteur:x.a || "?", jour:dayLong(dayKey(x.d)), heure:hm(x.d, TZ.vegas),
     texte:(x.t || "").slice(0, 120), reactions:reacts.filter(r => r.p === x.id).length, commentaires:comments.filter(c => c.p === x.id).length, lieu:x.s === "france" ? "France" : "Vegas" }));
   try{
-    const r = await fetch(SB_BASE + "/functions/v1/vegas-montage", { method:"POST", headers:{ "Content-Type":"application/json", apikey:SB_KEY },
-      body:JSON.stringify({ demande:ask, passages:items, sujet:mtPlan.sub }) });
+    // La fonction a été créée dans Supabase sous le nom « Vegas-montage » (V majuscule) : on essaie les deux
+    let r = null;
+    for(const nom of ["Vegas-montage", "vegas-montage"]){
+      r = await fetch(SB_BASE + "/functions/v1/" + nom, { method:"POST", headers:{ "Content-Type":"application/json", apikey:SB_KEY },
+        body:JSON.stringify({ demande:ask, passages:items, sujet:mtPlan.sub }) });
+      if(r.status !== 404) break;
+    }
     if(r.status === 404) throw new Error("absente");
     const j = await r.json(); if(!r.ok || !j.plan) throw new Error(j.error || r.status);
     const p = j.plan, out = defaultPlan(mtPlan.scope);
