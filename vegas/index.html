@@ -413,6 +413,14 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 #montage .tl-tr{ position:absolute; top:3px; left:3px; font-size:.7rem; background:rgba(0,0,0,.65); color:#fff; border-radius:6px; padding:1px 4px; }
 #montage .tl-lab{ position:absolute; left:3px; right:3px; bottom:3px; font-size:.72rem; font-weight:700; color:#fff; text-shadow:0 1px 2px #000; display:flex; justify-content:space-between; gap:2px; white-space:nowrap; overflow:hidden; }
 #montage .tl-lab small{ font-weight:500; opacity:.9; }
+#montage .tl-zoom{ display:flex; align-items:center; gap:6px; } #montage .tl-zoom small{ font-weight:500; color:var(--muted); font-size:.75rem; min-width:84px; text-align:center; }
+#montage .tl-zoom button{ all:unset; cursor:pointer; width:34px; height:34px; border-radius:10px; background:var(--card2); display:grid; place-items:center; font-size:1.2rem; } #montage .tl-zoom button:disabled{ opacity:.3; cursor:default; }
+#montage .tl-trim{ display:flex; flex-direction:column; gap:8px; }
+#montage .tl-trim video, #montage .tl-pic{ width:100%; max-height:42vh; object-fit:contain; background:#000; border-radius:10px; }
+#montage .tl-trim-bar{ position:relative; height:10px; border-radius:5px; background:var(--card2); }
+#montage .tl-trim-sel{ position:absolute; top:0; bottom:0; background:var(--pink); opacity:.55; border-radius:5px; }
+#montage .tl-trim-head{ position:absolute; top:-4px; bottom:-4px; width:2px; background:#fff; }
+#montage .tl-trim-row{ display:grid; grid-template-columns:110px 1fr; align-items:center; gap:8px; font-size:.85rem; } #montage .tl-trim-row input{ width:100%; accent-color:var(--pink); }
 #montage .tl-insp{ background:var(--card); border:1px solid var(--pink); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:10px; }
 #montage .tl-it{ margin:0; font-size:.9rem; } #montage .tl-it small{ color:var(--muted); }
 #montage .tl-acts{ display:flex; gap:6px; flex-wrap:wrap; } #montage .tl-acts button{ all:unset; cursor:pointer; padding:8px 12px; border-radius:10px; background:var(--card2); font-size:.85rem; }
@@ -1563,36 +1571,57 @@ function drawPlan(){
   const opt = (o, v) => Object.entries(o).map(([k, t]) => `<option value="${k}" ${String(v) === k ? "selected" : ""}>${t}</option>`).join("");
   const unused = all.filter(x => !mtPlan.items.some(i => i.id === x.id));
   mtSel = new Set([...mtSel].filter(k => k < mtPlan.items.length));
-  // Largeur d'un passage : proportionnelle à sa durée, mais bornée pour rester lisible sur téléphone
-  const wOf = sec => Math.round(Math.min(150, Math.max(48, sec * 14)));
   const mmss = t => Math.floor(t / 60) + ":" + String(Math.round(t % 60)).padStart(2, "0");
-  let total = 0, px = 0, lastTick = -999; const ticks = [];
-  mtPlan.items.forEach(it => { const x = get(it.id); if(!x) return; const sec = clipSec(it, x), w = wOf(sec);
-    if(px - lastTick >= 44){ ticks.push([px, total]); lastTick = px; } total += sec; px += w + 3; });
+  const fx = t => (Math.round(t * 10) / 10).toFixed(1).replace(".", ",");
+  // Zoom : 0 = vue d'ensemble (cases bornées pour rester lisibles), puis 20, 40, 80 px par seconde (vraies proportions)
+  const ZOOMS = [0, 20, 40, 80], zoom = Math.min(3, Math.max(0, drawPlan.zoom || 0));
+  const wOf = sec => ZOOMS[zoom] ? Math.max(36, Math.round(sec * ZOOMS[zoom])) : Math.round(Math.min(150, Math.max(48, sec * 14)));
+  const totalSec = () => mtPlan.items.reduce((a, it) => a + clipSec(it, get(it.id) || {}), 0);
   const sel = [...mtSel].sort((a, b) => a - b), oneX = sel.length === 1 ? get(mtPlan.items[sel[0]].id) : null, one = oneX ? mtPlan.items[sel[0]] : null;
   const selPosts = sel.map(k => get(mtPlan.items[k].id)).filter(Boolean);
+  // La bande seule, redessinée sans toucher au reste (pour ne pas recharger l'aperçu vidéo pendant un réglage)
+  const trackHTML = () => {
+    let total = 0, px = 0, lastTick = -999; const ticks = [], clips = [];
+    mtPlan.items.forEach((it, k) => { const x = get(it.id); if(!x) return; const sec = clipSec(it, x), w = wOf(sec);
+      if(!ZOOMS[zoom] && px - lastTick >= 44){ ticks.push([px, total]); lastTick = px; }
+      clips.push(`<button type="button" class="tl-clip ${mtSel.has(k) ? "on" : ""} ${x.v ? "vid" : ""}" data-k="${k}" style="width:${w}px" aria-pressed="${mtSel.has(k)}" aria-label="Passage ${k + 1}, ${x.v ? "vidéo" : "photo"} de ${esc(x.a || "?")}">
+        ${x.h ? `<img data-img="${esc(x.id)}" alt="">` : ""}<span class="tl-tr" title="${TRANS[it.tr] || ""}">${TR_ICON[it.tr] || "◐"}</span>
+        <span class="tl-lab">${k + 1}${x.v ? " 🎥" : ""}${it.speed && it.speed !== 1 ? ` x${it.speed}` : ""}${it.text ? " T" : ""}<small>${fx(sec)} s</small></span></button>`);
+      total += sec; px += w + 3; });
+    if(ZOOMS[zoom]){ const step = zoom === 1 ? 5 : zoom === 2 ? 2 : 1; let acc = 0, x0 = 0;
+      // en vraies proportions, la règle suit les secondes (les petits écarts entre cases sont rattrapés case par case)
+      mtPlan.items.forEach(it => { const x = get(it.id); if(!x) return; const sec = clipSec(it, x), w = wOf(sec);
+        for(let t = Math.ceil(acc / step) * step; t < acc + sec; t += step) ticks.push([x0 + (t - acc) / sec * w, t]);
+        acc += sec; x0 += w + 3; }); }
+    return `<div class="tl" style="width:${Math.max(300, px + 8)}px"><div class="tl-ruler">${ticks.map(([l, t]) => `<span style="left:${Math.round(l)}px">${mmss(t)}</span>`).join("")}</div>
+      <div class="tl-track">${clips.join("")}</div></div>`;
+  };
   box.innerHTML = `<div class="mt-glob">
       <label class="mt-l">Titre d'ouverture<input id="mtTitle" maxlength="40" value="${esc(mtPlan.title)}"></label>
       <label class="mt-l">Sous-titre<input id="mtSub" maxlength="50" value="${esc(mtPlan.sub)}"></label>
       <label class="mt-l">Texte de fin<input id="mtOutro" maxlength="40" value="${esc(mtPlan.outro)}"></label>
       <label class="chk2"><input type="checkbox" id="mtInfos" ${mtPlan.infos ? "checked" : ""}> Noms et heures sur les images</label>
       <label class="chk2"><input type="checkbox" id="mtSound" ${mtPlan.sound ? "checked" : ""}> Garder le son des vidéos</label></div>
-    <div class="tl-head"><span>${mtPlan.items.length} passage${mtPlan.items.length > 1 ? "s" : ""} · ${mmss(total + 4)}</span>
-      <span><button type="button" class="link" id="tlAll">${sel.length === mtPlan.items.length && sel.length ? "Tout désélectionner" : "Tout sélectionner"}</button></span></div>
-    <p class="k2">Touche un passage pour le sélectionner (plusieurs possibles), puis règle-le en dessous ou demande à l'IA.</p>
-    <div class="tl-wrap" id="tlWrap"><div class="tl" style="width:${Math.max(300, px + 8)}px">
-      <div class="tl-ruler">${ticks.map(([l, t]) => `<span style="left:${l}px">${mmss(t)}</span>`).join("")}</div>
-      <div class="tl-track">${mtPlan.items.map((it, k) => { const x = get(it.id); if(!x) return ""; const w = wOf(clipSec(it, x));
-        return `<button type="button" class="tl-clip ${mtSel.has(k) ? "on" : ""} ${x.v ? "vid" : ""}" data-k="${k}" style="width:${w}px" aria-pressed="${mtSel.has(k)}" aria-label="Passage ${k + 1}, ${x.v ? "vidéo" : "photo"} de ${esc(x.a || "?")}">
-          ${x.h ? `<img data-img="${esc(x.id)}" alt="">` : ""}<span class="tl-tr" title="${TRANS[it.tr] || ""}">${TR_ICON[it.tr] || "◐"}</span>
-          <span class="tl-lab">${k + 1}${x.v ? " 🎥" : ""}${it.speed && it.speed !== 1 ? ` x${it.speed}` : ""}${it.text ? " T" : ""}<small>${clipSec(it, x).toFixed(1).replace(".0", "")} s</small></span></button>`; }).join("")}</div></div></div>
+    <div class="tl-head"><span id="tlTotal">${mtPlan.items.length} passage${mtPlan.items.length > 1 ? "s" : ""} · ${mmss(totalSec() + 4)}</span>
+      <span class="tl-zoom"><button type="button" id="tlZo" aria-label="Dézoomer" ${zoom ? "" : "disabled"}>−</button><small>${zoom ? "Zoom " + zoom : "Vue d'ensemble"}</small><button type="button" id="tlZi" aria-label="Zoomer" ${zoom < 3 ? "" : "disabled"}>+</button></span></div>
+    <p class="k2">Touche un passage pour le sélectionner (plusieurs possibles). Zoome pour voir les vraies durées. <button type="button" class="link" id="tlAll">${sel.length === mtPlan.items.length && sel.length ? "Tout désélectionner" : "Tout sélectionner"}</button></p>
+    <div class="tl-wrap" id="tlWrap"></div>
     ${sel.length ? `<div class="tl-insp">
       <p class="tl-it">${one ? `<b>Passage ${sel[0] + 1}</b> · ${oneX.v ? "🎥 vidéo" : "📷 photo"} de ${esc(oneX.a || "?")} · ${esc(dayShort(dayKey(oneX.d)))} ${hm(oneX.d, TZ.vegas)}${oneX.t ? `<br><small>« ${esc(oneX.t.slice(0, 80))} »</small>` : ""}` : `<b>${sel.length} passages sélectionnés</b> (${sel.map(k => k + 1).join(", ")})`}</p>
+      ${one && oneX.v ? `<div class="tl-trim">
+        <video id="tlVid" src="${esc(oneX.v)}" playsinline muted preload="metadata"></video>
+        <div class="tl-trim-bar"><div class="tl-trim-sel" id="tlTrimSel"></div><div class="tl-trim-head" id="tlTrimHead"></div></div>
+        <div class="tl-trim-row"><span>Début <b id="tlStartV">${fx(one.start)} s</b></span><input type="range" id="tlStart" min="0" max="${MAX_VID_SEC}" step="0.1" value="${one.start}"></div>
+        <div class="tl-trim-row"><span>Fin <b id="tlEndV">${one.end ? fx(one.end) + " s" : "fin"}</b></span><input type="range" id="tlEnd" min="0" max="${MAX_VID_SEC}" step="0.1" value="${one.end || MAX_VID_SEC}"></div>
+        <div class="tl-acts"><button type="button" id="tlPlayCut">▶ Lire l'extrait</button><button type="button" id="tlMarkIn">⏮ Début ici</button><button type="button" id="tlMarkOut">Fin ici ⏭</button>
+          <button type="button" id="tlBack" aria-label="Reculer d'un dixième">−0,1 s</button><button type="button" id="tlFwd" aria-label="Avancer d'un dixième">+0,1 s</button></div>
+        <p class="k2" id="tlPos">Position : 0,0 s</p></div>` : ""}
+      ${one && !oneX.v ? `<div class="tl-trim">${oneX.h ? `<img data-img="${esc(oneX.id)}" alt="" class="tl-pic">` : ""}
+        <div class="tl-trim-row"><span>Durée <b id="tlDurV">${fx(one.dur)} s</b></span><input type="range" id="tlDur" min="0.5" max="10" step="0.1" value="${one.dur}"></div></div>` : ""}
       <div class="mt-row2">
         <label>Transition d'entrée<select data-g="tr"><option value="">—</option>${opt(TRANS, one ? one.tr : "")}</select></label>
-        ${selPosts.some(x => !x.v) ? `<label>Durée ${one ? "" : "des photos"}<select data-g="dur"><option value="">—</option>${opt({ "0.8":"0,8 s", "1":"1 s", "1.5":"1,5 s", "2":"2 s", "3":"3 s", "4":"4 s", "5":"5 s", "7":"7 s", "10":"10 s" }, one && !oneX.v ? one.dur : "")}</select></label>` : ""}
+        ${!one && selPosts.some(x => !x.v) ? `<label>Durée des photos<select data-g="dur"><option value="">—</option>${opt({ "0.8":"0,8 s", "1":"1 s", "1.5":"1,5 s", "2":"2 s", "3":"3 s", "4":"4 s", "5":"5 s", "7":"7 s", "10":"10 s" }, "")}</select></label>` : ""}
         ${selPosts.some(x => x.v) ? `<label>Vitesse ${one ? "" : "des vidéos"}<select data-g="speed"><option value="">—</option>${opt(SPEEDS, one && oneX.v ? one.speed : "")}</select></label>` : ""}
-        ${one && oneX.v ? `<label>Extrait : de (s)<input type="number" min="0" max="60" step="0.5" data-g="start" value="${one.start}"></label><label>à (s, 0 = fin)<input type="number" min="0" max="60" step="0.5" data-g="end" value="${one.end}"></label>` : ""}
         ${one && !oneX.v ? `<label class="chk2"><input type="checkbox" data-g="move" ${one.move ? "checked" : ""}> Zoom lent</label>` : ""}
         ${one ? `<label class="wide">Texte à l'écran<input maxlength="60" data-g="text" value="${esc(one.text || "")}" placeholder="(aucun)"></label>` : ""}
       </div>
@@ -1605,21 +1634,56 @@ function drawPlan(){
     </div>` : ""}
     ${unused.length ? `<p class="k2">Pas dans le montage (touche pour ajouter à la fin)</p><div class="mt-add">${unused.map(x => `<button type="button" data-add="${esc(x.id)}">${x.h ? `<img data-img="${esc(x.id)}" alt="">` : "🎥"}<small>+ ${esc(x.a || "?")}</small></button>`).join("")}</div>` : ""}
     <button type="button" class="link" id="mtReset">Revenir au montage automatique</button>`;
-  box.querySelectorAll("[data-img]").forEach(im => loadImg(im.dataset.img, im));
-  const wrap = document.getElementById("tlWrap"); if(wrap && drawPlan.scroll != null) wrap.scrollLeft = drawPlan.scroll;
-  if(wrap) wrap.onscroll = () => { drawPlan.scroll = wrap.scrollLeft; };
+  const wrap = document.getElementById("tlWrap");
+  const paintTrack = () => {
+    wrap.innerHTML = trackHTML();
+    wrap.querySelectorAll("[data-img]").forEach(im => loadImg(im.dataset.img, im));
+    wrap.querySelectorAll(".tl-clip").forEach(b => b.onclick = () => { const k = +b.dataset.k; mtSel.has(k) ? mtSel.delete(k) : mtSel.add(k); drawPlan(); });
+    if(drawPlan.scroll != null) wrap.scrollLeft = drawPlan.scroll;
+    const tt = document.getElementById("tlTotal"); if(tt) tt.textContent = `${mtPlan.items.length} passage${mtPlan.items.length > 1 ? "s" : ""} · ${mmss(totalSec() + 4)}`;
+  };
+  paintTrack(); wrap.onscroll = () => { drawPlan.scroll = wrap.scrollLeft; };
+  box.querySelectorAll(".mt-glob [data-img], .tl-insp [data-img], .mt-add [data-img]").forEach(im => loadImg(im.dataset.img, im));
+  const zo = document.getElementById("tlZo"), zi = document.getElementById("tlZi");
+  if(zo) zo.onclick = () => { drawPlan.zoom = zoom - 1; drawPlan.scroll = 0; drawPlan(); };
+  if(zi) zi.onclick = () => { drawPlan.zoom = zoom + 1; drawPlan.scroll = 0; drawPlan(); };
   const bind = (id, f) => { const el = document.getElementById(id); if(el) el.onchange = () => { f(el); drawPlan(); }; };
   bind("mtTitle", el => mtPlan.title = el.value); bind("mtSub", el => mtPlan.sub = el.value); bind("mtOutro", el => mtPlan.outro = el.value);
   bind("mtInfos", el => mtPlan.infos = el.checked); bind("mtSound", el => mtPlan.sound = el.checked);
-  box.querySelectorAll(".tl-clip").forEach(b => b.onclick = () => { const k = +b.dataset.k; mtSel.has(k) ? mtSel.delete(k) : mtSel.add(k); drawPlan(); });
   const ta = document.getElementById("tlAll"); if(ta) ta.onclick = () => { mtSel = sel.length === mtPlan.items.length ? new Set() : new Set(mtPlan.items.map((_, k) => k)); drawPlan(); };
+  // Photo : durée au dixième de seconde
+  const dur = document.getElementById("tlDur");
+  if(dur) dur.oninput = () => { one.dur = +dur.value; document.getElementById("tlDurV").textContent = fx(one.dur) + " s"; paintTrack(); };
+  // Vidéo : découpe précise avec aperçu
+  const v = document.getElementById("tlVid");
+  if(v){
+    const sIn = document.getElementById("tlStart"), sOut = document.getElementById("tlEnd"), pos = document.getElementById("tlPos");
+    const selBar = document.getElementById("tlTrimSel"), head = document.getElementById("tlTrimHead");
+    let D = MAX_VID_SEC, stopAt = null;
+    const endOf = () => one.end > one.start ? one.end : D;
+    const paintBar = () => { selBar.style.left = (one.start / D * 100) + "%"; selBar.style.width = Math.max(0, (endOf() - one.start) / D * 100) + "%";
+      head.style.left = (v.currentTime / D * 100) + "%"; pos.textContent = "Position : " + fx(v.currentTime) + " s · extrait " + fx(endOf() - one.start) + " s"; };
+    const setStart = t => { one.start = Math.max(0, Math.min(t, endOf() - .2)); sIn.value = one.start; document.getElementById("tlStartV").textContent = fx(one.start) + " s"; paintBar(); paintTrack(); };
+    const setEnd = t => { t = Math.min(D, Math.max(t, one.start + .2)); one.end = t >= D - .05 ? 0 : t; sOut.value = t; document.getElementById("tlEndV").textContent = one.end ? fx(one.end) + " s" : "fin"; paintBar(); paintTrack(); };
+    v.onloadedmetadata = () => { if(isFinite(v.duration) && v.duration > 0){ D = Math.round(v.duration * 10) / 10; sIn.max = D; sOut.max = D; if(!one.end || one.end > D) sOut.value = D; }
+      v.currentTime = one.start; paintBar(); };
+    v.ontimeupdate = () => { if(stopAt != null && v.currentTime >= stopAt){ v.pause(); stopAt = null; } paintBar(); };
+    sIn.oninput = () => { setStart(+sIn.value); v.currentTime = one.start; };
+    sOut.oninput = () => { setEnd(+sOut.value); v.currentTime = Math.max(0, endOf() - .05); };
+    document.getElementById("tlPlayCut").onclick = () => { v.currentTime = one.start; stopAt = endOf(); v.play().catch(() => {}); };
+    document.getElementById("tlMarkIn").onclick = () => setStart(v.currentTime);
+    document.getElementById("tlMarkOut").onclick = () => setEnd(v.currentTime);
+    document.getElementById("tlBack").onclick = () => { v.pause(); v.currentTime = Math.max(0, v.currentTime - .1); };
+    document.getElementById("tlFwd").onclick = () => { v.pause(); v.currentTime = Math.min(D, v.currentTime + .1); };
+    v.onclick = () => { if(v.paused){ stopAt = null; v.play().catch(() => {}); } else v.pause(); };
+  }
   // Réglages appliqués à toute la sélection
   box.querySelectorAll(".tl-insp [data-g]").forEach(el => el.onchange = () => {
     const f = el.dataset.g; if(el.tagName === "SELECT" && el.value === "") return;
     sel.forEach(k => { const it = mtPlan.items[k], x = get(it.id); if(!x) return;
       if(f === "dur" && x.v) return; if(f === "speed" && !x.v) return;
       it[f] = el.type === "checkbox" ? el.checked : (f === "text" || f === "tr") ? el.value : Math.max(0, +el.value || 0); });
-    if(f !== "text") drawPlan(); });
+    if(f === "text") paintTrack(); else drawPlan(); });
   box.querySelectorAll("[data-mv]").forEach(b => b.onclick = () => { const k = sel[0], d = +b.dataset.mv, a = mtPlan.items; [a[k], a[k + d]] = [a[k + d], a[k]]; mtSel = new Set([k + d]); drawPlan(); });
   const del = document.getElementById("tlDel"); if(del) del.onclick = () => { mtPlan.items = mtPlan.items.filter((_, k) => !mtSel.has(k)); mtSel = new Set(); drawPlan(); };
   const tai = document.getElementById("tlAi"); if(tai) tai.onclick = () => aiPlan("sel");
