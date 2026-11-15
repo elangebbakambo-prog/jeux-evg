@@ -1588,9 +1588,9 @@ async function aiPlan(refine){
   const ask = (ta.value || "").trim().slice(0, 900); if(!ask){ ta.focus(); return; }
   if(mtAiBusy) return; mtAiBusy = true; const label = b.textContent; b.disabled = true; b.textContent = refine ? "🔁 L'IA corrige ton plan…" : "✨ L'IA prépare ton montage…"; msg.hidden = true;
   const all = mtItems(mtPlan.scope), cur = refine ? mtPlan : null;
-  const items = all.slice(0, 80).map((x, i) => {
+  const items = all.slice(0, 60).map((x, i) => {
     const o = { n:i + 1, type:x.v ? "video" : "photo", auteur:x.a || "?", jour:dayLong(dayKey(x.d)), heure:hm(x.d, TZ.vegas),
-      texte:(x.t || "").slice(0, 120), reactions:reacts.filter(r => r.p === x.id).length, commentaires:comments.filter(c => c.p === x.id).length, lieu:x.s === "france" ? "France" : "Vegas" };
+      texte:(x.t || "").slice(0, 80), reactions:reacts.filter(r => r.p === x.id).length, commentaires:comments.filter(c => c.p === x.id).length, lieu:x.s === "france" ? "France" : "Vegas" };
     if(cur){ const k = cur.items.findIndex(it => it.id === x.id), it = cur.items[k];
       o.plan_actuel = it ? { position:k + 1, duree:it.dur, debut:it.start, fin:it.end, vitesse:it.speed, transition:it.tr, texte:it.text, mouvement:it.move } : "absent du montage"; }
     return o; });
@@ -1612,6 +1612,7 @@ async function aiPlan(refine){
       if(r.status !== 404) break;
     }
     if(r.status === 404) throw new Error("absente");
+    if(r.status === 546) throw new Error("546 : l'IA a manqué de temps. Réessaie, ou choisis un seul jour au lieu de tout le séjour");
     const j = await r.json(); if(!r.ok || !j.plan) throw new Error(j.error || r.status);
     const p = j.plan, out = defaultPlan(mtPlan.scope);
     if(cur){ Object.assign(out, { title:cur.title, sub:cur.sub, outro:cur.outro, infos:cur.infos, sound:cur.sound }); }
