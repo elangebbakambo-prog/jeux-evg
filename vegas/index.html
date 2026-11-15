@@ -421,6 +421,17 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 #montage .tl-trim-sel{ position:absolute; top:0; bottom:0; background:var(--pink); opacity:.55; border-radius:5px; }
 #montage .tl-trim-head{ position:absolute; top:-4px; bottom:-4px; width:2px; background:#fff; }
 #montage .tl-trim-row{ display:grid; grid-template-columns:110px 1fr; align-items:center; gap:8px; font-size:.85rem; } #montage .tl-trim-row input{ width:100%; accent-color:var(--pink); }
+#montage .tl-ph{ position:absolute; top:0; bottom:0; width:2px; margin-left:-1px; background:#ff3b3b; box-shadow:0 0 0 1px rgba(0,0,0,.5); pointer-events:none; }
+#montage .tl-ph::before{ content:""; position:absolute; top:-2px; left:-5px; border:6px solid transparent; border-top-color:#ff3b3b; }
+#montage .tl-cur{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:8px; }
+#montage .tl-cur-top{ display:flex; gap:10px; align-items:center; }
+#montage .tl-cur-prev{ width:72px; height:96px; flex:none; border-radius:8px; overflow:hidden; background:#000; }
+#montage .tl-cur-prev img, #montage .tl-cur-prev video{ width:100%; height:100%; object-fit:cover; }
+#montage .tl-cur-info{ display:flex; flex-direction:column; gap:4px; } #montage .tl-cur-info b{ font-size:1.3rem; font-variant-numeric:tabular-nums; } #montage .tl-cur-info small{ color:var(--muted); font-size:.8rem; }
+#montage #tlCur{ width:100%; accent-color:#ff3b3b; }
+#montage .tl-fx{ display:flex; flex-wrap:wrap; gap:6px; } #montage .tl-fx button{ all:unset; cursor:pointer; padding:7px 10px; border-radius:10px; background:var(--card2); font-size:.82rem; }
+#montage .tl-voice{ display:flex; gap:6px; } #montage .tl-voice textarea{ flex:1; }
+#montage .tl-voice button{ all:unset; cursor:pointer; width:48px; border-radius:12px; background:var(--card2); display:grid; place-items:center; font-size:1.3rem; } #montage .tl-voice button.on{ background:var(--pink); }
 #montage .tl-insp{ background:var(--card); border:1px solid var(--pink); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:10px; }
 #montage .tl-it{ margin:0; font-size:.9rem; } #montage .tl-it small{ color:var(--muted); }
 #montage .tl-acts{ display:flex; gap:6px; flex-wrap:wrap; } #montage .tl-acts button{ all:unset; cursor:pointer; padding:8px 12px; border-radius:10px; background:var(--card2); font-size:.85rem; }
@@ -1561,7 +1572,15 @@ function openMontagePanel(){
   drawPlan();
 }
 // Durée d'un passage dans le montage (s)
-const clipSec = (it, x) => x && x.v ? Math.max(.5, ((it.end > it.start ? it.end : MAX_VID_SEC) - it.start) / (it.speed || 1)) : (it.dur || 3);
+// Vraie durée des vidéos, lue une fois (sinon on compte le maximum autorisé)
+const vidDur = {};
+function probeDur(x, done){
+  if(!x || !x.v || vidDur[x.id] || probeDur.busy[x.id]) return; probeDur.busy[x.id] = 1;
+  const v = document.createElement("video"); v.preload = "metadata"; v.muted = true; v.src = x.v;
+  v.onloadedmetadata = () => { if(isFinite(v.duration) && v.duration > 0){ vidDur[x.id] = Math.round(v.duration * 10) / 10; if(done) done(); } v.removeAttribute("src"); v.load(); };
+}
+probeDur.busy = {};
+const clipSec = (it, x) => x && x.v ? Math.max(.3, ((it.end > it.start ? it.end : (vidDur[x.id] || MAX_VID_SEC)) - it.start) / (it.speed || 1)) : (it.dur || 3);
 const TR_ICON = { fondu:"◐", noir:"■", coupe:"✂", glisse:"⇢", zoom:"⊕", flash:"⚡" };
 // Timeline façon logiciel de montage : une bande de passages, on en sélectionne un ou plusieurs,
 // puis on les règle à la main ou on dit à l'IA ce qu'on veut sur la sélection seulement.
@@ -1580,9 +1599,11 @@ function drawPlan(){
   const sel = [...mtSel].sort((a, b) => a - b), oneX = sel.length === 1 ? get(mtPlan.items[sel[0]].id) : null, one = oneX ? mtPlan.items[sel[0]] : null;
   const selPosts = sel.map(k => get(mtPlan.items[k].id)).filter(Boolean);
   // La bande seule, redessinée sans toucher au reste (pour ne pas recharger l'aperçu vidéo pendant un réglage)
+  let lay = [];
   const trackHTML = () => {
-    let total = 0, px = 0, lastTick = -999; const ticks = [], clips = [];
+    let total = 0, px = 0, lastTick = -999; const ticks = [], clips = []; lay = [];
     mtPlan.items.forEach((it, k) => { const x = get(it.id); if(!x) return; const sec = clipSec(it, x), w = wOf(sec);
+      lay.push({ k, t0:total, sec, x0:px, w });
       if(!ZOOMS[zoom] && px - lastTick >= 44){ ticks.push([px, total]); lastTick = px; }
       clips.push(`<button type="button" class="tl-clip ${mtSel.has(k) ? "on" : ""} ${x.v ? "vid" : ""}" data-k="${k}" style="width:${w}px" aria-pressed="${mtSel.has(k)}" aria-label="Passage ${k + 1}, ${x.v ? "vidéo" : "photo"} de ${esc(x.a || "?")}">
         ${x.h ? `<img data-img="${esc(x.id)}" alt="">` : ""}<span class="tl-tr" title="${TRANS[it.tr] || ""}">${TR_ICON[it.tr] || "◐"}</span>
@@ -1594,7 +1615,7 @@ function drawPlan(){
         for(let t = Math.ceil(acc / step) * step; t < acc + sec; t += step) ticks.push([x0 + (t - acc) / sec * w, t]);
         acc += sec; x0 += w + 3; }); }
     return `<div class="tl" style="width:${Math.max(300, px + 8)}px"><div class="tl-ruler">${ticks.map(([l, t]) => `<span style="left:${Math.round(l)}px">${mmss(t)}</span>`).join("")}</div>
-      <div class="tl-track">${clips.join("")}</div></div>`;
+      <div class="tl-track">${clips.join("")}</div><div class="tl-ph" id="tlPh"></div></div>`;
   };
   box.innerHTML = `<div class="mt-glob">
       <label class="mt-l">Titre d'ouverture<input id="mtTitle" maxlength="40" value="${esc(mtPlan.title)}"></label>
@@ -1606,6 +1627,16 @@ function drawPlan(){
       <span class="tl-zoom"><button type="button" id="tlZo" aria-label="Dézoomer" ${zoom ? "" : "disabled"}>−</button><small>${zoom ? "Zoom " + zoom : "Vue d'ensemble"}</small><button type="button" id="tlZi" aria-label="Zoomer" ${zoom < 3 ? "" : "disabled"}>+</button></span></div>
     <p class="k2">Touche un passage pour le sélectionner (plusieurs possibles). Zoome pour voir les vraies durées. <button type="button" class="link" id="tlAll">${sel.length === mtPlan.items.length && sel.length ? "Tout désélectionner" : "Tout sélectionner"}</button></p>
     <div class="tl-wrap" id="tlWrap"></div>
+    ${mtPlan.items.length ? `<div class="tl-cur">
+      <div class="tl-cur-top"><div class="tl-cur-prev" id="tlCurPrev"></div>
+        <div class="tl-cur-info"><b id="tlCurT">0:00,0</b><small id="tlCurW"></small></div></div>
+      <input type="range" id="tlCur" min="0" max="1" step="0.1" value="0" aria-label="Curseur de lecture">
+      <div class="tl-acts"><button type="button" id="tlCurB">◀ 0,1 s</button><button type="button" id="tlCurF">0,1 s ▶</button><button type="button" id="tlCut">✂ Couper ici</button></div>
+      <div class="tl-fx">${Object.entries({ flash:"⚡ Flash", coupe:"✂ Cut", fondu:"◐ Fondu", noir:"■ Noir", zoom:"⊕ Zoom", glisse:"⇢ Glissé" }).map(([k, l]) => `<button type="button" data-fx="${k}">${l} ici</button>`).join("")}</div>
+      <div class="tl-ai"><label class="mt-l" for="tlVoice">🎙️ Dis ce que tu veux à cet endroit (« mets un flash ici », « coupe là », « ralenti », « écris Jackpot »…)</label>
+        <div class="tl-voice"><textarea id="tlVoice" rows="2" maxlength="400" placeholder="Ex. : à ce moment-là mets un flash"></textarea><button type="button" id="tlMic" aria-label="Dicter">🎙️</button></div>
+        <button type="button" class="btn hot" id="tlVoiceGo">Appliquer ici</button><p class="note" id="tlVoiceMsg" hidden></p></div>
+    </div>` : ""}
     ${sel.length ? `<div class="tl-insp">
       <p class="tl-it">${one ? `<b>Passage ${sel[0] + 1}</b> · ${oneX.v ? "🎥 vidéo" : "📷 photo"} de ${esc(oneX.a || "?")} · ${esc(dayShort(dayKey(oneX.d)))} ${hm(oneX.d, TZ.vegas)}${oneX.t ? `<br><small>« ${esc(oneX.t.slice(0, 80))} »</small>` : ""}` : `<b>${sel.length} passages sélectionnés</b> (${sel.map(k => k + 1).join(", ")})`}</p>
       ${one && oneX.v ? `<div class="tl-trim">
@@ -1643,6 +1674,86 @@ function drawPlan(){
     const tt = document.getElementById("tlTotal"); if(tt) tt.textContent = `${mtPlan.items.length} passage${mtPlan.items.length > 1 ? "s" : ""} · ${mmss(totalSec() + 4)}`;
   };
   paintTrack(); wrap.onscroll = () => { drawPlan.scroll = wrap.scrollLeft; };
+  // Vidéos dont on ne connaît pas encore la vraie durée : on la lit, puis on redessine la bande
+  mtPlan.items.forEach(it => { const x = get(it.id); if(x && x.v && !vidDur[x.id]) probeDur(x, () => { if(document.getElementById("tlWrap") === wrap){ paintTrack(); curUI(); } }); });
+  // ---- Curseur de lecture : position globale dans le montage (s) ----
+  const T = () => lay.reduce((a, l) => a + l.sec, 0);
+  const at = t => { for(const l of lay) if(t < l.t0 + l.sec - 1e-6) return { ...l, off:Math.max(0, t - l.t0) }; const l = lay.at(-1); return l ? { ...l, off:l.sec } : null; };
+  const fx1 = t => { const m = Math.floor(t / 60), r = t - m * 60; return m + ":" + (r < 10 ? "0" : "") + r.toFixed(1).replace(".", ","); };
+  mtPlan.ph = Math.min(mtPlan.ph || 0, Math.max(0, T() - .05));
+  let prevKey = "";
+  const curUI = (scroll) => {
+    const r = document.getElementById("tlCur"); if(!r) return;
+    const tot = T(), t = Math.min(mtPlan.ph || 0, tot), a = at(t); r.max = Math.max(.1, tot).toFixed(1); r.value = t;
+    document.getElementById("tlCurT").textContent = fx1(t) + " / " + fx1(tot);
+    const ph = document.getElementById("tlPh");
+    if(a && ph){ const px = a.x0 + (a.sec ? a.off / a.sec * a.w : 0); ph.style.left = Math.round(px) + "px";
+      if(scroll && (px < wrap.scrollLeft + 20 || px > wrap.scrollLeft + wrap.clientWidth - 20)) wrap.scrollLeft = Math.max(0, px - wrap.clientWidth / 2); }
+    if(!a) return;
+    const it = mtPlan.items[a.k], x = get(it.id);
+    document.getElementById("tlCurW").textContent = `Passage ${a.k + 1} (${x && x.v ? "vidéo" : "photo"} de ${x ? x.a || "?" : "?"}), à ${a.off.toFixed(1).replace(".", ",")} s sur ${a.sec.toFixed(1).replace(".", ",")} s`;
+    // Aperçu de l'image exacte sous le curseur
+    const pv = document.getElementById("tlCurPrev"), key = it.id + (x && x.v ? "v" : "p");
+    if(key !== prevKey){ prevKey = key; pv.innerHTML = x && x.v ? `<video src="${esc(x.v)}" muted playsinline preload="auto"></video>` : x && x.h ? `<img data-img="${esc(x.id)}" alt="">` : "";
+      const im = pv.querySelector("[data-img]"); if(im) loadImg(im.dataset.img, im); }
+    const vv = pv.querySelector("video"); if(vv){ const goto = () => { try{ vv.currentTime = (it.start || 0) + a.off * (it.speed || 1); }catch(e){} };
+      if(vv.readyState >= 1) goto(); else vv.onloadedmetadata = goto; }
+  };
+  // Coupe le passage sous le curseur en deux ; renvoie l'index du passage qui commence au curseur
+  const splitAt = () => { const a = at(mtPlan.ph || 0); if(!a) return -1;
+    if(a.off < .15) return a.k; if(a.sec - a.off < .15) return a.k + 1;
+    const it = mtPlan.items[a.k], x = get(it.id), b = { ...it, text:"" };
+    if(x && x.v){ const cut = Math.round(((it.start || 0) + a.off * (it.speed || 1)) * 10) / 10; it.end = cut; b.start = cut; }
+    else { it.dur = Math.round(a.off * 10) / 10; b.dur = Math.round((a.sec - a.off) * 10) / 10; }
+    mtPlan.items.splice(a.k + 1, 0, b); return a.k + 1; };
+  const fxHere = (tr, say) => { const k = splitAt(); if(k < 0 || k >= mtPlan.items.length) return say && say("Le curseur est à la toute fin : rien à faire ici.");
+    mtPlan.items[k].tr = tr; mtSel = new Set([k]); drawPlan(); const m = document.getElementById("tlVoiceMsg");
+    if(m){ m.textContent = `✓ ${TRANS[tr]} à ${fx1(mtPlan.ph || 0)} (début du passage ${k + 1}).`; m.hidden = false; } };
+  const cr = document.getElementById("tlCur");
+  if(cr){
+    cr.oninput = () => { mtPlan.ph = +cr.value; curUI(true); };
+    document.getElementById("tlCurB").onclick = () => { mtPlan.ph = Math.max(0, (mtPlan.ph || 0) - .1); curUI(true); };
+    document.getElementById("tlCurF").onclick = () => { mtPlan.ph = Math.min(T(), (mtPlan.ph || 0) + .1); curUI(true); };
+    document.getElementById("tlCut").onclick = () => fxHere("coupe");
+    box.querySelectorAll("[data-fx]").forEach(b => b.onclick = () => fxHere(b.dataset.fx));
+    // Toucher la bande déplace aussi le curseur à cet endroit (en plus de sélectionner le passage)
+    wrap.addEventListener("pointerdown", e => { const tl = wrap.querySelector(".tl"); if(!tl) return; const px = e.clientX - tl.getBoundingClientRect().left;
+      const l = lay.find(l => px >= l.x0 && px <= l.x0 + l.w); if(l){ mtPlan.ph = Math.round((l.t0 + (px - l.x0) / l.w * l.sec) * 10) / 10; curUI(); } }, { passive:true });
+    // Commande (tapée ou dictée) à l'endroit du curseur : les ordres simples s'appliquent tout de suite, le reste part à l'IA
+    const vt = document.getElementById("tlVoice"), vm = document.getElementById("tlVoiceMsg");
+    const say = t => { vm.textContent = t; vm.hidden = false; };
+    const runVoice = () => {
+      const raw = (vt.value || "").trim(); if(!raw) return vt.focus();
+      const t = raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const a = at(mtPlan.ph || 0); if(!a) return;
+      const it = mtPlan.items[a.k], x = get(it.id);
+      const write = raw.match(/(?:ecri[st]?|écri[st]?|texte|marque)\s*:?\s*[«"“]?\s*(.+?)\s*[»"”]?\s*$/i);
+      if(write){ it.text = write[1].slice(0, 60); vt.value = ""; mtSel = new Set([a.k]); drawPlan(); return say2(`✓ Texte « ${it.text} » sur le passage ${a.k + 1}.`); }
+      if(/ralenti|slow/.test(t) && x && x.v){ it.speed = .5; vt.value = ""; drawPlan(); return say2(`✓ Passage ${a.k + 1} au ralenti.`); }
+      if(/accelere|rapide x2|x2|timelapse/.test(t) && x && x.v){ it.speed = 2; vt.value = ""; drawPlan(); return say2(`✓ Passage ${a.k + 1} accéléré.`); }
+      if(/(supprime|enleve|retire)/.test(t) && /(passage|photo|video|ca|ce)/.test(t)){ mtPlan.items.splice(a.k, 1); vt.value = ""; mtSel = new Set(); drawPlan(); return say2(`✓ Passage retiré.`); }
+      const tr = /fondu au noir|au noir|noir/.test(t) ? "noir" : /flash|eclair|blanc/.test(t) ? "flash" : /\bcut\b|coupe|couper|cute/.test(t) ? "coupe"
+        : /gliss|slide|balaye|whip/.test(t) ? "glisse" : /zoom|punch/.test(t) ? "zoom" : /fondu|fade/.test(t) ? "fondu" : null;
+      if(tr && t.split(/\s+/).length <= 12){ vt.value = ""; return fxHere(tr); }
+      // Demande plus riche : l'IA travaille sur le passage sous le curseur et le suivant
+      mtSel = new Set([a.k, a.k + 1].filter(k => k < mtPlan.items.length));
+      aiPlan("sel", raw + ` (Le curseur est à ${a.off.toFixed(1)} s dans le passage ${a.k + 1}, qui dure ${a.sec.toFixed(1)} s : « ici » ou « à ce moment-là » veut dire cet instant.)`);
+    };
+    const say2 = t => { const m = document.getElementById("tlVoiceMsg"); if(m){ m.textContent = t; m.hidden = false; } };
+    document.getElementById("tlVoiceGo").onclick = runVoice;
+    // Dictée : reconnaissance vocale du navigateur si elle existe, sinon le micro du clavier
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition, mic = document.getElementById("tlMic");
+    mic.onclick = () => {
+      if(!SR){ vt.focus(); return say("Ton navigateur ne propose pas la dictée ici : touche le micro du clavier pour dicter, puis « Appliquer ici »."); }
+      const rec = new SR(); rec.lang = "fr-FR"; rec.interimResults = true; rec.maxAlternatives = 1;
+      mic.classList.add("on"); say("🎙️ Je t'écoute…");
+      rec.onresult = e => { vt.value = [...e.results].map(r => r[0].transcript).join(" "); if(e.results[e.results.length - 1].isFinal){ rec.stop(); runVoice(); } };
+      rec.onerror = () => { say("Micro indisponible : touche le micro du clavier pour dicter."); };
+      rec.onend = () => mic.classList.remove("on");
+      try{ rec.start(); }catch(e){ mic.classList.remove("on"); }
+    };
+    curUI();
+  }
   box.querySelectorAll(".mt-glob [data-img], .tl-insp [data-img], .mt-add [data-img]").forEach(im => loadImg(im.dataset.img, im));
   const zo = document.getElementById("tlZo"), zi = document.getElementById("tlZi");
   if(zo) zo.onclick = () => { drawPlan.zoom = zoom - 1; drawPlan.scroll = 0; drawPlan(); };
@@ -1715,10 +1826,10 @@ async function callMontage(demande, passages, sujet){
 const MT_RULES = "\n\n(Consigne : si une transition, une durée, une vitesse ou un ordre est demandé, respecte-le exactement, passage par passage. Transitions possibles : fondu, noir, coupe, glisse, zoom, flash. Sans précision, varie-les selon l'ambiance au lieu de mettre partout la même.)";
 const MT_CHUNK = 45; // au-delà, on découpe par jour pour ne pas dépasser les limites de la fonction
 // Passages envoyés à l'IA (n = numéro dans ce lot), avec le réglage actuel quand on corrige
-function mtPassages(list, cur){
+function mtPassages(list, cur, curItems, curPos){
   return list.map((x, i) => { const o = { n:i + 1, type:x.v ? "video" : "photo", auteur:x.a || "?", jour:dayLong(dayKey(x.d)), heure:hm(x.d, TZ.vegas),
       texte:(x.t || "").slice(0, 80), reactions:reacts.filter(r => r.p === x.id).length, commentaires:comments.filter(c => c.p === x.id).length, lieu:x.s === "france" ? "France" : "Vegas" };
-    if(cur){ const k = cur.items.findIndex(it => it.id === x.id), it = cur.items[k];
+    if(cur){ const k = curItems ? curPos[i] : cur.items.findIndex(it => it.id === x.id), it = curItems ? curItems[i] : cur.items[k];
       o.plan_actuel = it ? { position:k + 1, duree:it.dur, debut:it.start, fin:it.end, vitesse:it.speed, transition:it.tr, texte:it.text, mouvement:it.move } : "absent du montage"; }
     return o; });
 }
@@ -1733,14 +1844,15 @@ function mtChunks(list){
   return out;
 }
 // mode : "new" (repartir de zéro), "fix" (corriger tout le plan), "sel" (corriger seulement la sélection de la timeline)
-async function aiPlan(mode){
+async function aiPlan(mode, direct){
   const sel = mode === "sel";
   const ta = document.getElementById(sel ? "tlPrompt" : "mtPrompt"), msg = document.getElementById(sel ? "tlAiMsg" : "mtAiMsg");
   const b = document.getElementById(sel ? "tlAi" : mode === "fix" ? "mtAiFix" : "mtAi");
-  const ask = (ta.value || "").trim().slice(0, 700); if(!ask){ ta.focus(); return; }
-  if(mtAiBusy) return; mtAiBusy = true; const label = b.textContent; b.disabled = true; msg.hidden = true;
+  const ask = (direct || (ta && ta.value) || "").trim().slice(0, 700); if(!ask){ if(ta) ta.focus(); return; }
+  const btn = direct ? document.getElementById("tlVoiceGo") : b, out0 = direct ? document.getElementById("tlVoiceMsg") : msg;
+  if(mtAiBusy || !btn) return; mtAiBusy = true; const label = btn.textContent; btn.disabled = true; if(out0) out0.hidden = true;
   const all = mtItems(mtPlan.scope), cur = mode === "new" ? null : mtPlan, get = id => all.find(x => x.id === id) || posts.find(x => x.id === id);
-  const say = t => { b.textContent = t; };
+  const say = t => { btn.textContent = t; };
   try{
     if(sel){
       const ks = [...mtSel].sort((a, c) => a - c), list = ks.map(k => get(mtPlan.items[k].id)).filter(Boolean);
@@ -1748,14 +1860,14 @@ async function aiPlan(mode){
       say("🎯 L'IA modifie ta sélection…");
       const p = await callMontage("MODIFICATION D'UNE SÉLECTION de la timeline : " + ask
         + "\nCes passages sont une partie du montage (champ plan_actuel = leur réglage actuel). Applique la demande à ces passages ; garde l'ordre et les réglages non concernés. Tu peux en retirer si on te le demande, jamais en ajouter d'autres." + MT_RULES,
-        mtPassages(list, mtPlan), mtPlan.sub);
+        mtPassages(list, mtPlan, ks.map(k => mtPlan.items[k]), ks), mtPlan.sub);
       const got = mtFromAi(p, list); if(!got.length && !/retir|enl[eè]v|supprim/i.test(ask)) throw new Error("plan vide");
       const contiguous = ks.every((k, i) => !i || k === ks[i - 1] + 1);
       if(contiguous){ mtPlan.items.splice(ks[0], ks.length, ...got); mtSel = new Set(got.map((_, i) => ks[0] + i)); }
       else { ks.forEach(k => { const it = mtPlan.items[k], n = got.find(g => g.id === it.id); mtPlan.items[k] = n || null; });
         mtPlan.items = mtPlan.items.filter(Boolean); mtSel = new Set(); }
       mtPlan.hist = (mtPlan.hist || []).concat("[sélection] " + ask).slice(-5); mtPlan.ai = true;
-      drawPlan(); const m2 = document.getElementById("tlAiMsg");
+      drawPlan(); const m2 = document.getElementById(direct ? "tlVoiceMsg" : "tlAiMsg");
       if(m2){ m2.textContent = "✓ " + (p.resume || "Sélection modifiée.") + " Le reste du montage n'a pas bougé."; m2.hidden = false; }
     } else {
       const universe = cur ? cur.items.map(it => get(it.id)).filter(Boolean).concat(all.filter(x => !cur.items.some(it => it.id === x.id))) : all;
@@ -1781,12 +1893,13 @@ async function aiPlan(mode){
       ta.placeholder = "Pas satisfait ? Écris ce qu'il faut changer, puis « 🔁 Corriger ce plan avec l'IA ». Ou sélectionne des passages sur la timeline pour ne modifier qu'eux.";
       msg.textContent = "✓ " + (first.resume || (cur ? "Plan corrigé." : "Plan prêt.")) + (chunks.length > 1 ? ` (monté en ${chunks.length} parties.)` : "") + " Règle-le sur la timeline ci-dessous, ou lance le montage."; msg.hidden = false;
     }
-    ta.value = "";
+    if(ta && !direct) ta.value = "";
   }catch(e){
-    msg.textContent = /absente/.test(e.message) ? "L'IA n'est pas encore branchée (il manque la fonction « vegas-montage » dans Supabase). Tu peux régler le plan à la main en attendant."
-      : "L'IA n'a pas répondu (" + e.message + "). Réessaie, ou règle à la main sur la timeline."; msg.hidden = false;
+    const mm = direct ? document.getElementById("tlVoiceMsg") || msg : msg;
+    mm.textContent = /absente/.test(e.message) ? "L'IA n'est pas encore branchée (il manque la fonction « vegas-montage » dans Supabase). Tu peux régler le plan à la main en attendant."
+      : "L'IA n'a pas répondu (" + e.message + "). Réessaie, ou règle à la main sur la timeline."; mm.hidden = false;
   }
-  mtAiBusy = false; b.disabled = false; b.textContent = label; aiBtns();
+  mtAiBusy = false; const bb = direct ? document.getElementById("tlVoiceGo") : b; if(bb){ bb.disabled = false; bb.textContent = label; } aiBtns();
 }
 function closeMontage(){
   if(montage){ montage.stop = true; }
@@ -2525,7 +2638,7 @@ async function downloadSouvenirs(btn, onlyMine){
   try{
     const list = posts.filter(x => !x.x && (x.h || x.v) && (!onlyMine || isMe(x.a))).sort((a, b) => a.d.localeCompare(b.d));
     if(!list.length){ say("Aucune photo à télécharger"); zipBusy = false; return; }
-    const files = [], seen = {}, clean = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").slice(0, 20) || "x";
+    const files = [], seen = {}, clean = s => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").slice(0, 20) || "x";
     for(let k = 0; k < list.length; k++){
       const x = list[k]; say(`Préparation… ${k + 1}/${list.length}`);
       try{
