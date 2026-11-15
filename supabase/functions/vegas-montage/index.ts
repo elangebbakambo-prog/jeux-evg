@@ -27,24 +27,33 @@ Règles :
 - Quand l'utilisateur désigne un passage par une personne, un moment ou un texte (« la vidéo du quad », « la photo d'Isma à la piscine »), retrouve-le grâce à auteur, heure, jour et texte.
 - Si la demande parle de rythme (« dynamique », « clip »), raccourcis les durées et utilise coupe/flash/zoom ; si « émouvant » ou « souvenir », durées plus longues et fondus.`;
 
+// Appel Gemini léger : un seul modèle rapide, sans « réflexion », coupé au bout de 45 s.
+// (Une erreur 546 de Supabase = la fonction a dépassé ses ressources : on évite d'enchaîner les modèles.)
 async function askGemini(key: string, user: string): Promise<string> {
-  // Les noms de modèles changent souvent : on essaie les alias « dernier modèle » puis un nom stable.
-  const models = [Deno.env.get("GEMINI_MODEL"), "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash"].filter(Boolean) as string[];
+  const models = [Deno.env.get("GEMINI_MODEL") || "gemini-flash-lite-latest", "gemini-2.5-flash-lite"];
   let last = "";
   for (const m of models) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: CONSIGNES }] },
-        contents: [{ role: "user", parts: [{ text: user }] }],
-        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 4000, temperature: 0.6 },
-      }),
-    });
-    const j = await r.json().catch(() => null);
-    if (r.ok && j) return ((j.candidates?.[0]?.content?.parts) || []).map((p: { text?: string }) => p.text || "").join("");
-    last = `Gemini ${m} : ${r.status}${r.status === 429 ? " (quota gratuit du jour atteint, réessaie plus tard)" : ""}`;
-    if (r.status === 429 || r.status === 401 || r.status === 403) break;
+    for (const think of [true, false]) {
+      const cfg: Record<string, unknown> = { responseMimeType: "application/json", maxOutputTokens: 3000, temperature: 0.6 };
+      if (think) cfg.thinkingConfig = { thinkingBudget: 0 };
+      const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 45000);
+      let r: Response;
+      try {
+        r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
+          method: "POST", signal: ctl.signal,
+          headers: { "content-type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify({ systemInstruction: { parts: [{ text: CONSIGNES }] }, contents: [{ role: "user", parts: [{ text: user }] }], generationConfig: cfg }),
+        });
+      } catch { clearTimeout(timer); throw new Error("Gemini trop lent, réessaie"); }
+      clearTimeout(timer);
+      if (r.ok) {
+        const j = await r.json().catch(() => null);
+        if (j) return ((j.candidates?.[0]?.content?.parts) || []).map((p: { text?: string }) => p.text || "").join("");
+      }
+      last = `Gemini ${m} : ${r.status}${r.status === 429 ? " (quota gratuit du jour atteint, réessaie plus tard)" : ""}`;
+      if (r.status === 429 || r.status === 401 || r.status === 403) throw new Error(last);
+      if (r.status !== 400) break; // 400 avec la réflexion coupée : on réessaie sans ce réglage ; sinon modèle suivant
+    }
   }
   throw new Error(last || "Gemini indisponible");
 }
@@ -67,7 +76,7 @@ Deno.serve(async (req) => {
   let body: { demande?: string; passages?: unknown[]; sujet?: string };
   try { body = await req.json(); } catch { return json({ error: "requête illisible" }, 400); }
   const demande = String(body.demande || "").slice(0, 1500).trim();
-  const passages = Array.isArray(body.passages) ? body.passages.slice(0, 80) : [];
+  const passages = Array.isArray(body.passages) ? body.passages.slice(0, 60) : [];
   if (!demande || !passages.length) return json({ error: "demande ou passages manquants" }, 400);
   const user = `Sujet : ${String(body.sujet || "").slice(0, 80)}\nPassages :\n${JSON.stringify(passages)}\n\nDemande :\n${demande}`;
   let txt = "";
