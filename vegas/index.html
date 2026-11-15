@@ -400,6 +400,24 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 #montage .mt-more summary{ cursor:pointer; font-weight:600; padding:6px 0; }
 #montage .mt-help summary{ cursor:pointer; font-size:.9rem; opacity:.85; }
 #montage .mt-help p{ margin:6px 0; font-size:.85rem; line-height:1.4; }
+#montage .tl-head{ display:flex; justify-content:space-between; align-items:center; font-weight:600; }
+#montage .tl-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:6px 8px 10px; }
+#montage .tl{ position:relative; }
+#montage .tl-ruler{ position:relative; height:18px; font-size:.65rem; color:var(--muted); }
+#montage .tl-ruler span{ position:absolute; top:0; transform:translateX(-2px); border-left:1px solid var(--line); padding-left:3px; height:14px; }
+#montage .tl-track{ display:flex; gap:3px; }
+#montage .tl-clip{ all:unset; cursor:pointer; position:relative; flex:none; height:76px; border-radius:8px; overflow:hidden; background:var(--card2); border:2px solid transparent; box-sizing:border-box; }
+#montage .tl-clip.vid{ background:linear-gradient(135deg, var(--card2), #3a2440); }
+#montage .tl-clip img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.85; }
+#montage .tl-clip.on{ border-color:var(--pink); box-shadow:0 0 0 2px var(--pink); }
+#montage .tl-tr{ position:absolute; top:3px; left:3px; font-size:.7rem; background:rgba(0,0,0,.65); color:#fff; border-radius:6px; padding:1px 4px; }
+#montage .tl-lab{ position:absolute; left:3px; right:3px; bottom:3px; font-size:.72rem; font-weight:700; color:#fff; text-shadow:0 1px 2px #000; display:flex; justify-content:space-between; gap:2px; white-space:nowrap; overflow:hidden; }
+#montage .tl-lab small{ font-weight:500; opacity:.9; }
+#montage .tl-insp{ background:var(--card); border:1px solid var(--pink); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:10px; }
+#montage .tl-it{ margin:0; font-size:.9rem; } #montage .tl-it small{ color:var(--muted); }
+#montage .tl-acts{ display:flex; gap:6px; flex-wrap:wrap; } #montage .tl-acts button{ all:unset; cursor:pointer; padding:8px 12px; border-radius:10px; background:var(--card2); font-size:.85rem; }
+#montage .tl-acts button:disabled{ opacity:.35; cursor:default; } #montage .tl-acts .danger{ color:#ff8a8a; }
+#montage .tl-ai{ display:flex; flex-direction:column; gap:6px; }
 #montage .mt-glob{ display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
 #montage .mt-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
 #montage .mt-list li{ background:var(--card); border-radius:12px; padding:8px; display:flex; flex-direction:column; gap:8px; }
@@ -1491,7 +1509,7 @@ const trOf = v => { const t = String(v || "").toLowerCase().normalize("NFD").rep
   if(/zoom|punch|impact|choc/.test(t)) return "zoom";
   if(/flash|blanc|white|eclair|stroboscope|strobe/.test(t)) return "flash";
   return "fondu"; };
-let mtPlan = null, mtAiBusy = false;
+let mtPlan = null, mtAiBusy = false, mtSel = new Set();
 const mtItems = scope => scope === "all" ? storyList() : ((memoryDays().find(d => d.k === scope) || {}).list || []);
 function defaultPlan(scope){
   return { scope, title:"VEGAS · EVG", sub:scope === "all" ? "Tout le séjour" : dayLong(scope), outro:"À SUIVRE…", infos:true, sound:true,
@@ -1521,56 +1539,92 @@ function openMontagePanel(){
       <button type="button" class="btn hot" id="mtAi">✨ Préparer le montage</button>
       <button type="button" class="btn" id="mtAiFix" hidden>🔁 Corriger ce plan avec l'IA</button>
       <p class="note" id="mtAiMsg" hidden></p></section>
-    <details class="mt-more" id="mtMore"><summary>✏️ Retoucher le plan à la main</summary><div id="mtPlanBox"></div></details>
+    <details class="mt-more" id="mtMore"><summary>🎞️ Timeline : régler le montage</summary><div id="mtPlanBox"></div></details>
     <p class="err" id="mtErr" hidden></p>
     <button type="button" class="btn hot big" id="mtGo">🎬 Lancer le montage</button>
     <div id="mtStage"></div></div>`;
   document.getElementById("mtDay").value = mtPlan.scope;
   document.getElementById("mtClose").onclick = closeMontage;
-  document.getElementById("mtDay").onchange = e => { mtPlan = defaultPlan(e.target.value); drawPlan(); aiBtns(); };
-  document.getElementById("mtAi").onclick = () => aiPlan(false);
-  document.getElementById("mtAiFix").onclick = () => aiPlan(true);
+  document.getElementById("mtDay").onchange = e => { mtPlan = defaultPlan(e.target.value); mtSel = new Set(); drawPlan(); aiBtns(); };
+  document.getElementById("mtAi").onclick = () => aiPlan("new");
+  document.getElementById("mtAiFix").onclick = () => aiPlan("fix");
   aiBtns();
   document.getElementById("mtGo").onclick = () => runMontage(mtPlan);
   drawPlan();
 }
+// Durée d'un passage dans le montage (s)
+const clipSec = (it, x) => x && x.v ? Math.max(.5, ((it.end > it.start ? it.end : MAX_VID_SEC) - it.start) / (it.speed || 1)) : (it.dur || 3);
+const TR_ICON = { fondu:"◐", noir:"■", coupe:"✂", glisse:"⇢", zoom:"⊕", flash:"⚡" };
+// Timeline façon logiciel de montage : une bande de passages, on en sélectionne un ou plusieurs,
+// puis on les règle à la main ou on dit à l'IA ce qu'on veut sur la sélection seulement.
 function drawPlan(){
   const box = document.getElementById("mtPlanBox"); if(!box || !mtPlan) return;
   const all = mtItems(mtPlan.scope), get = id => all.find(x => x.id === id) || posts.find(x => x.id === id);
   const opt = (o, v) => Object.entries(o).map(([k, t]) => `<option value="${k}" ${String(v) === k ? "selected" : ""}>${t}</option>`).join("");
   const unused = all.filter(x => !mtPlan.items.some(i => i.id === x.id));
+  mtSel = new Set([...mtSel].filter(k => k < mtPlan.items.length));
+  // Largeur d'un passage : proportionnelle à sa durée, mais bornée pour rester lisible sur téléphone
+  const wOf = sec => Math.round(Math.min(150, Math.max(48, sec * 14)));
+  const mmss = t => Math.floor(t / 60) + ":" + String(Math.round(t % 60)).padStart(2, "0");
+  let total = 0, px = 0, lastTick = -999; const ticks = [];
+  mtPlan.items.forEach(it => { const x = get(it.id); if(!x) return; const sec = clipSec(it, x), w = wOf(sec);
+    if(px - lastTick >= 44){ ticks.push([px, total]); lastTick = px; } total += sec; px += w + 3; });
+  const sel = [...mtSel].sort((a, b) => a - b), oneX = sel.length === 1 ? get(mtPlan.items[sel[0]].id) : null, one = oneX ? mtPlan.items[sel[0]] : null;
+  const selPosts = sel.map(k => get(mtPlan.items[k].id)).filter(Boolean);
   box.innerHTML = `<div class="mt-glob">
       <label class="mt-l">Titre d'ouverture<input id="mtTitle" maxlength="40" value="${esc(mtPlan.title)}"></label>
       <label class="mt-l">Sous-titre<input id="mtSub" maxlength="50" value="${esc(mtPlan.sub)}"></label>
       <label class="mt-l">Texte de fin<input id="mtOutro" maxlength="40" value="${esc(mtPlan.outro)}"></label>
       <label class="chk2"><input type="checkbox" id="mtInfos" ${mtPlan.infos ? "checked" : ""}> Noms et heures sur les images</label>
       <label class="chk2"><input type="checkbox" id="mtSound" ${mtPlan.sound ? "checked" : ""}> Garder le son des vidéos</label></div>
-    <p class="k2">${mtPlan.items.length} passage${mtPlan.items.length > 1 ? "s" : ""} · environ ${Math.round(planSeconds(mtPlan))} s</p>
-    <ol class="mt-list">${mtPlan.items.map((it, k) => { const x = get(it.id); if(!x) return ""; return `<li data-k="${k}">
-      <div class="mt-row1">${x.h ? `<img data-img="${esc(x.id)}" alt="">` : `<span class="vidph">🎥</span>`}
-        <div class="mt-who"><b>${k + 1}. ${x.v ? "🎥" : "📷"} ${esc(x.a || "?")}</b><small>${esc(dayShort(dayKey(x.d)))} · ${hm(x.d, TZ.vegas)}</small></div>
-        <div class="mt-mv"><button type="button" data-up="${k}" aria-label="Monter" ${k ? "" : "disabled"}>↑</button><button type="button" data-down="${k}" aria-label="Descendre" ${k < mtPlan.items.length - 1 ? "" : "disabled"}>↓</button><button type="button" data-rm="${k}" aria-label="Retirer">✕</button></div></div>
+    <div class="tl-head"><span>${mtPlan.items.length} passage${mtPlan.items.length > 1 ? "s" : ""} · ${mmss(total + 4)}</span>
+      <span><button type="button" class="link" id="tlAll">${sel.length === mtPlan.items.length && sel.length ? "Tout désélectionner" : "Tout sélectionner"}</button></span></div>
+    <p class="k2">Touche un passage pour le sélectionner (plusieurs possibles), puis règle-le en dessous ou demande à l'IA.</p>
+    <div class="tl-wrap" id="tlWrap"><div class="tl" style="width:${Math.max(300, px + 8)}px">
+      <div class="tl-ruler">${ticks.map(([l, t]) => `<span style="left:${l}px">${mmss(t)}</span>`).join("")}</div>
+      <div class="tl-track">${mtPlan.items.map((it, k) => { const x = get(it.id); if(!x) return ""; const w = wOf(clipSec(it, x));
+        return `<button type="button" class="tl-clip ${mtSel.has(k) ? "on" : ""} ${x.v ? "vid" : ""}" data-k="${k}" style="width:${w}px" aria-pressed="${mtSel.has(k)}" aria-label="Passage ${k + 1}, ${x.v ? "vidéo" : "photo"} de ${esc(x.a || "?")}">
+          ${x.h ? `<img data-img="${esc(x.id)}" alt="">` : ""}<span class="tl-tr" title="${TRANS[it.tr] || ""}">${TR_ICON[it.tr] || "◐"}</span>
+          <span class="tl-lab">${k + 1}${x.v ? " 🎥" : ""}${it.speed && it.speed !== 1 ? ` x${it.speed}` : ""}${it.text ? " T" : ""}<small>${clipSec(it, x).toFixed(1).replace(".0", "")} s</small></span></button>`; }).join("")}</div></div></div>
+    ${sel.length ? `<div class="tl-insp">
+      <p class="tl-it">${one ? `<b>Passage ${sel[0] + 1}</b> · ${oneX.v ? "🎥 vidéo" : "📷 photo"} de ${esc(oneX.a || "?")} · ${esc(dayShort(dayKey(oneX.d)))} ${hm(oneX.d, TZ.vegas)}${oneX.t ? `<br><small>« ${esc(oneX.t.slice(0, 80))} »</small>` : ""}` : `<b>${sel.length} passages sélectionnés</b> (${sel.map(k => k + 1).join(", ")})`}</p>
       <div class="mt-row2">
-        <label>Entrée<select data-f="tr">${opt(TRANS, it.tr)}</select></label>
-        ${x.v ? `<label>De (s)<input type="number" min="0" max="60" step="0.5" data-f="start" value="${it.start}"></label><label>À (s, 0 = fin)<input type="number" min="0" max="60" step="0.5" data-f="end" value="${it.end}"></label><label>Vitesse<select data-f="speed">${opt(SPEEDS, it.speed)}</select></label>`
-          : `<label>Durée<select data-f="dur">${opt({ "1":"1 s", "1.5":"1,5 s", "2":"2 s", "3":"3 s", "4":"4 s", "5":"5 s", "7":"7 s" }, it.dur)}</select></label><label class="chk2"><input type="checkbox" data-f="move" ${it.move ? "checked" : ""}> Mouvement</label>`}
-        <label class="wide">Texte à l'écran<input maxlength="60" data-f="text" value="${esc(it.text || "")}" placeholder="(aucun)"></label></div></li>`; }).join("")}</ol>
-    ${unused.length ? `<p class="k2">Pas dans le montage</p><div class="mt-add">${unused.map(x => `<button type="button" data-add="${esc(x.id)}">${x.h ? `<img data-img="${esc(x.id)}" alt="">` : "🎥"}<small>+ ${esc(x.a || "?")}</small></button>`).join("")}</div>` : ""}
+        <label>Transition d'entrée<select data-g="tr"><option value="">—</option>${opt(TRANS, one ? one.tr : "")}</select></label>
+        ${selPosts.some(x => !x.v) ? `<label>Durée ${one ? "" : "des photos"}<select data-g="dur"><option value="">—</option>${opt({ "0.8":"0,8 s", "1":"1 s", "1.5":"1,5 s", "2":"2 s", "3":"3 s", "4":"4 s", "5":"5 s", "7":"7 s", "10":"10 s" }, one && !oneX.v ? one.dur : "")}</select></label>` : ""}
+        ${selPosts.some(x => x.v) ? `<label>Vitesse ${one ? "" : "des vidéos"}<select data-g="speed"><option value="">—</option>${opt(SPEEDS, one && oneX.v ? one.speed : "")}</select></label>` : ""}
+        ${one && oneX.v ? `<label>Extrait : de (s)<input type="number" min="0" max="60" step="0.5" data-g="start" value="${one.start}"></label><label>à (s, 0 = fin)<input type="number" min="0" max="60" step="0.5" data-g="end" value="${one.end}"></label>` : ""}
+        ${one && !oneX.v ? `<label class="chk2"><input type="checkbox" data-g="move" ${one.move ? "checked" : ""}> Zoom lent</label>` : ""}
+        ${one ? `<label class="wide">Texte à l'écran<input maxlength="60" data-g="text" value="${esc(one.text || "")}" placeholder="(aucun)"></label>` : ""}
+      </div>
+      <div class="tl-acts">
+        ${one ? `<button type="button" data-mv="-1" ${sel[0] ? "" : "disabled"}>← Avant</button><button type="button" data-mv="1" ${sel[0] < mtPlan.items.length - 1 ? "" : "disabled"}>Après →</button>` : ""}
+        <button type="button" class="danger" id="tlDel">🗑 Retirer</button></div>
+      <div class="tl-ai"><label class="mt-l" for="tlPrompt">🎯 Dis à l'IA ce que tu veux sur ${one ? "ce passage" : "ces " + sel.length + " passages"} (le reste ne bouge pas)</label>
+        <textarea id="tlPrompt" rows="2" maxlength="600" placeholder="Ex. : au ralenti avec un flash, garde juste les 3 dernières secondes, écris « Jackpot »"></textarea>
+        <button type="button" class="btn hot" id="tlAi">🎯 Appliquer à la sélection</button><p class="note" id="tlAiMsg" hidden></p></div>
+    </div>` : ""}
+    ${unused.length ? `<p class="k2">Pas dans le montage (touche pour ajouter à la fin)</p><div class="mt-add">${unused.map(x => `<button type="button" data-add="${esc(x.id)}">${x.h ? `<img data-img="${esc(x.id)}" alt="">` : "🎥"}<small>+ ${esc(x.a || "?")}</small></button>`).join("")}</div>` : ""}
     <button type="button" class="link" id="mtReset">Revenir au montage automatique</button>`;
   box.querySelectorAll("[data-img]").forEach(im => loadImg(im.dataset.img, im));
+  const wrap = document.getElementById("tlWrap"); if(wrap && drawPlan.scroll != null) wrap.scrollLeft = drawPlan.scroll;
+  if(wrap) wrap.onscroll = () => { drawPlan.scroll = wrap.scrollLeft; };
   const bind = (id, f) => { const el = document.getElementById(id); if(el) el.onchange = () => { f(el); drawPlan(); }; };
   bind("mtTitle", el => mtPlan.title = el.value); bind("mtSub", el => mtPlan.sub = el.value); bind("mtOutro", el => mtPlan.outro = el.value);
   bind("mtInfos", el => mtPlan.infos = el.checked); bind("mtSound", el => mtPlan.sound = el.checked);
-  box.querySelectorAll(".mt-list [data-f]").forEach(el => el.onchange = () => {
-    const it = mtPlan.items[+el.closest("li").dataset.k], f = el.dataset.f;
-    it[f] = el.type === "checkbox" ? el.checked : (f === "text" || f === "tr") ? el.value : Math.max(0, +el.value || 0);
+  box.querySelectorAll(".tl-clip").forEach(b => b.onclick = () => { const k = +b.dataset.k; mtSel.has(k) ? mtSel.delete(k) : mtSel.add(k); drawPlan(); });
+  const ta = document.getElementById("tlAll"); if(ta) ta.onclick = () => { mtSel = sel.length === mtPlan.items.length ? new Set() : new Set(mtPlan.items.map((_, k) => k)); drawPlan(); };
+  // Réglages appliqués à toute la sélection
+  box.querySelectorAll(".tl-insp [data-g]").forEach(el => el.onchange = () => {
+    const f = el.dataset.g; if(el.tagName === "SELECT" && el.value === "") return;
+    sel.forEach(k => { const it = mtPlan.items[k], x = get(it.id); if(!x) return;
+      if(f === "dur" && x.v) return; if(f === "speed" && !x.v) return;
+      it[f] = el.type === "checkbox" ? el.checked : (f === "text" || f === "tr") ? el.value : Math.max(0, +el.value || 0); });
     if(f !== "text") drawPlan(); });
-  const move = (k, d) => { const a = mtPlan.items; [a[k], a[k + d]] = [a[k + d], a[k]]; drawPlan(); };
-  box.querySelectorAll("[data-up]").forEach(b => b.onclick = () => move(+b.dataset.up, -1));
-  box.querySelectorAll("[data-down]").forEach(b => b.onclick = () => move(+b.dataset.down, 1));
-  box.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { mtPlan.items.splice(+b.dataset.rm, 1); drawPlan(); });
-  box.querySelectorAll("[data-add]").forEach(b => b.onclick = () => { const x = get(b.dataset.add); mtPlan.items.push({ id:x.id, dur:3, start:0, end:x.v ? 5 : 0, speed:1, tr:"fondu", text:"", move:true }); drawPlan(); });
-  const rs = document.getElementById("mtReset"); if(rs) rs.onclick = () => { mtPlan = defaultPlan(mtPlan.scope); drawPlan(); aiBtns(); };
+  box.querySelectorAll("[data-mv]").forEach(b => b.onclick = () => { const k = sel[0], d = +b.dataset.mv, a = mtPlan.items; [a[k], a[k + d]] = [a[k + d], a[k]]; mtSel = new Set([k + d]); drawPlan(); });
+  const del = document.getElementById("tlDel"); if(del) del.onclick = () => { mtPlan.items = mtPlan.items.filter((_, k) => !mtSel.has(k)); mtSel = new Set(); drawPlan(); };
+  const tai = document.getElementById("tlAi"); if(tai) tai.onclick = () => aiPlan("sel");
+  box.querySelectorAll("[data-add]").forEach(b => b.onclick = () => { const x = get(b.dataset.add); mtPlan.items.push({ id:x.id, dur:3, start:0, end:x.v ? 5 : 0, speed:1, tr:"fondu", text:"", move:true }); mtSel = new Set([mtPlan.items.length - 1]); drawPlan(); });
+  const rs = document.getElementById("mtReset"); if(rs) rs.onclick = () => { mtPlan = defaultPlan(mtPlan.scope); mtSel = new Set(); drawPlan(); aiBtns(); };
 }
 const planSeconds = p => 4 + p.items.reduce((a, it) => { const x = posts.find(y => y.id === it.id); if(!x) return a;
   return a + (x.v ? ((it.end > it.start ? it.end : MAX_VID_SEC) - it.start) / (it.speed || 1) : it.dur); }, 0);
@@ -1581,55 +1635,92 @@ function aiBtns(){
   f.hidden = !(mtPlan && mtPlan.ai);
   b.textContent = mtPlan && mtPlan.ai ? "✨ Repartir de zéro" : "✨ Préparer le montage";
 }
-// L'IA (via la fonction Supabase « Vegas-montage ») lit la demande et la liste des passages, et renvoie un plan.
-// refine = true : on lui envoie aussi le plan actuel (dans chaque passage) pour qu'elle le corrige au lieu de tout refaire.
-async function aiPlan(refine){
-  const ta = document.getElementById("mtPrompt"), msg = document.getElementById("mtAiMsg"), b = document.getElementById(refine ? "mtAiFix" : "mtAi");
-  const ask = (ta.value || "").trim().slice(0, 900); if(!ask){ ta.focus(); return; }
-  if(mtAiBusy) return; mtAiBusy = true; const label = b.textContent; b.disabled = true; b.textContent = refine ? "🔁 L'IA corrige ton plan…" : "✨ L'IA prépare ton montage…"; msg.hidden = true;
-  const all = mtItems(mtPlan.scope), cur = refine ? mtPlan : null;
-  const items = all.slice(0, 60).map((x, i) => {
-    const o = { n:i + 1, type:x.v ? "video" : "photo", auteur:x.a || "?", jour:dayLong(dayKey(x.d)), heure:hm(x.d, TZ.vegas),
+// Appel de la fonction Supabase « Vegas-montage » (créée avec un V majuscule : on essaie les deux noms)
+async function callMontage(demande, passages, sujet){
+  let r = null;
+  for(const nom of ["Vegas-montage", "vegas-montage"]){
+    r = await fetch(SB_BASE + "/functions/v1/" + nom, { method:"POST", headers:{ "Content-Type":"application/json", apikey:SB_KEY },
+      body:JSON.stringify({ demande:demande.slice(0, 1500), passages, sujet }) });
+    if(r.status !== 404) break;
+  }
+  if(r.status === 404) throw new Error("absente");
+  if(r.status === 546) throw new Error("546 : l'IA a manqué de temps. Réessaie, ou sélectionne moins de passages");
+  const j = await r.json().catch(() => ({})); if(!r.ok || !j.plan) throw new Error(j.error || r.status);
+  return j.plan;
+}
+const MT_RULES = "\n\n(Consigne : si une transition, une durée, une vitesse ou un ordre est demandé, respecte-le exactement, passage par passage. Transitions possibles : fondu, noir, coupe, glisse, zoom, flash. Sans précision, varie-les selon l'ambiance au lieu de mettre partout la même.)";
+const MT_CHUNK = 45; // au-delà, on découpe par jour pour ne pas dépasser les limites de la fonction
+// Passages envoyés à l'IA (n = numéro dans ce lot), avec le réglage actuel quand on corrige
+function mtPassages(list, cur){
+  return list.map((x, i) => { const o = { n:i + 1, type:x.v ? "video" : "photo", auteur:x.a || "?", jour:dayLong(dayKey(x.d)), heure:hm(x.d, TZ.vegas),
       texte:(x.t || "").slice(0, 80), reactions:reacts.filter(r => r.p === x.id).length, commentaires:comments.filter(c => c.p === x.id).length, lieu:x.s === "france" ? "France" : "Vegas" };
     if(cur){ const k = cur.items.findIndex(it => it.id === x.id), it = cur.items[k];
       o.plan_actuel = it ? { position:k + 1, duree:it.dur, debut:it.start, fin:it.end, vitesse:it.speed, transition:it.tr, texte:it.text, mouvement:it.move } : "absent du montage"; }
     return o; });
-  const rules = "\n\n(Consigne : si une transition, une durée, une vitesse ou un ordre est demandé, respecte-le exactement, passage par passage. Transitions possibles : fondu, noir, coupe, glisse, zoom, flash. Sans précision, varie-les selon l'ambiance au lieu de mettre partout la même.)";
-  // La fonction Supabase coupe la demande à 1500 caractères : la demande de l'utilisateur passe en premier
-  const demande = (cur
-    ? "CORRECTION d'un plan existant. Correction demandée : " + ask
-      + "\nRepars du plan actuel (champ plan_actuel de chaque passage : position et réglages, ou « absent du montage ») et ne change QUE ce qui est demandé ; garde tout le reste à l'identique."
-      + ` Plan actuel : titre « ${cur.title} », sous-titre « ${cur.sub} », fin « ${cur.outro} », noms en bas : ${cur.infos ? "oui" : "non"}, son : ${cur.sound ? "oui" : "non"}.`
-      + ((cur.hist || []).length ? " Demandes précédentes : " + cur.hist.slice(-2).map(h => "« " + h.slice(0, 80) + " »").join(" ; ") + "." : "")
-      + rules
-    : ask + rules).slice(0, 1500);
+}
+const mtFromAi = (p, list) => (p.items || []).map(it => { const x = list[(+it.n || 0) - 1]; if(!x) return null;
+  return { id:x.id, dur:Math.min(10, Math.max(.8, +it.duree || 3)), start:Math.max(0, +it.debut || 0), end:x.v ? Math.max(0, +it.fin || 0) : 0,
+    speed:[0.5, 1, 2].includes(+it.vitesse) ? +it.vitesse : 1, tr:trOf(it.transition), text:String(it.texte || "").slice(0, 60), move:it.mouvement !== false }; }).filter(Boolean);
+// Lots : tout d'un coup si c'est petit, sinon un lot par jour (dans l'ordre)
+function mtChunks(list){
+  if(list.length <= MT_CHUNK) return [list];
+  const out = []; let curDay = null;
+  list.forEach(x => { const d = dayKey(x.d); if(d !== curDay || out.at(-1).length >= MT_CHUNK){ out.push([]); curDay = d; } out.at(-1).push(x); });
+  return out;
+}
+// mode : "new" (repartir de zéro), "fix" (corriger tout le plan), "sel" (corriger seulement la sélection de la timeline)
+async function aiPlan(mode){
+  const sel = mode === "sel";
+  const ta = document.getElementById(sel ? "tlPrompt" : "mtPrompt"), msg = document.getElementById(sel ? "tlAiMsg" : "mtAiMsg");
+  const b = document.getElementById(sel ? "tlAi" : mode === "fix" ? "mtAiFix" : "mtAi");
+  const ask = (ta.value || "").trim().slice(0, 700); if(!ask){ ta.focus(); return; }
+  if(mtAiBusy) return; mtAiBusy = true; const label = b.textContent; b.disabled = true; msg.hidden = true;
+  const all = mtItems(mtPlan.scope), cur = mode === "new" ? null : mtPlan, get = id => all.find(x => x.id === id) || posts.find(x => x.id === id);
+  const say = t => { b.textContent = t; };
   try{
-    // La fonction a été créée dans Supabase sous le nom « Vegas-montage » (V majuscule) : on essaie les deux
-    let r = null;
-    for(const nom of ["Vegas-montage", "vegas-montage"]){
-      r = await fetch(SB_BASE + "/functions/v1/" + nom, { method:"POST", headers:{ "Content-Type":"application/json", apikey:SB_KEY },
-        body:JSON.stringify({ demande, passages:items, sujet:mtPlan.sub }) });
-      if(r.status !== 404) break;
+    if(sel){
+      const ks = [...mtSel].sort((a, c) => a - c), list = ks.map(k => get(mtPlan.items[k].id)).filter(Boolean);
+      if(!list.length) throw new Error("rien de sélectionné");
+      say("🎯 L'IA modifie ta sélection…");
+      const p = await callMontage("MODIFICATION D'UNE SÉLECTION de la timeline : " + ask
+        + "\nCes passages sont une partie du montage (champ plan_actuel = leur réglage actuel). Applique la demande à ces passages ; garde l'ordre et les réglages non concernés. Tu peux en retirer si on te le demande, jamais en ajouter d'autres." + MT_RULES,
+        mtPassages(list, mtPlan), mtPlan.sub);
+      const got = mtFromAi(p, list); if(!got.length && !/retir|enl[eè]v|supprim/i.test(ask)) throw new Error("plan vide");
+      const contiguous = ks.every((k, i) => !i || k === ks[i - 1] + 1);
+      if(contiguous){ mtPlan.items.splice(ks[0], ks.length, ...got); mtSel = new Set(got.map((_, i) => ks[0] + i)); }
+      else { ks.forEach(k => { const it = mtPlan.items[k], n = got.find(g => g.id === it.id); mtPlan.items[k] = n || null; });
+        mtPlan.items = mtPlan.items.filter(Boolean); mtSel = new Set(); }
+      mtPlan.hist = (mtPlan.hist || []).concat("[sélection] " + ask).slice(-5); mtPlan.ai = true;
+      drawPlan(); const m2 = document.getElementById("tlAiMsg");
+      if(m2){ m2.textContent = "✓ " + (p.resume || "Sélection modifiée.") + " Le reste du montage n'a pas bougé."; m2.hidden = false; }
+    } else {
+      const universe = cur ? cur.items.map(it => get(it.id)).filter(Boolean).concat(all.filter(x => !cur.items.some(it => it.id === x.id))) : all;
+      const chunks = mtChunks(universe), out = defaultPlan(mtPlan.scope); out.items = [];
+      if(cur) Object.assign(out, { title:cur.title, sub:cur.sub, outro:cur.outro, infos:cur.infos, sound:cur.sound });
+      let first = null;
+      for(let i = 0; i < chunks.length; i++){
+        say((cur ? "🔁 L'IA corrige" : "✨ L'IA monte") + (chunks.length > 1 ? ` la partie ${i + 1} sur ${chunks.length}…` : " ton plan…"));
+        const part = chunks.length > 1 ? `\n(Partie ${i + 1} sur ${chunks.length} du séjour, ${dayLong(dayKey(chunks[i][0].d))} : traite seulement ces passages, le reste est monté à part.)` : "";
+        const demande = cur
+          ? "CORRECTION d'un plan existant. Correction demandée : " + ask
+            + "\nRepars du plan actuel (champ plan_actuel de chaque passage) et ne change QUE ce qui est demandé ; garde tout le reste à l'identique."
+            + ((cur.hist || []).length ? " Demandes précédentes : " + cur.hist.slice(-2).map(h => "« " + h.slice(0, 80) + " »").join(" ; ") + "." : "") + part + MT_RULES
+          : ask + part + MT_RULES;
+        const p = await callMontage(demande, mtPassages(chunks[i], cur), mtPlan.sub);
+        if(!first) first = p; out.items.push(...mtFromAi(p, chunks[i]));
+      }
+      if(!out.items.length) throw new Error("plan vide");
+      if(first.titre) out.title = String(first.titre).slice(0, 40); if(first.sous_titre) out.sub = String(first.sous_titre).slice(0, 50); if(first.fin) out.outro = String(first.fin).slice(0, 40);
+      if(typeof first.infos === "boolean") out.infos = first.infos; if(typeof first.son === "boolean") out.sound = first.son;
+      out.ai = true; out.hist = (cur ? (cur.hist || []) : []).concat(ask).slice(-5);
+      mtPlan = out; mtSel = new Set(); drawPlan(); document.getElementById("mtMore").open = true;
+      ta.placeholder = "Pas satisfait ? Écris ce qu'il faut changer, puis « 🔁 Corriger ce plan avec l'IA ». Ou sélectionne des passages sur la timeline pour ne modifier qu'eux.";
+      msg.textContent = "✓ " + (first.resume || (cur ? "Plan corrigé." : "Plan prêt.")) + (chunks.length > 1 ? ` (monté en ${chunks.length} parties.)` : "") + " Règle-le sur la timeline ci-dessous, ou lance le montage."; msg.hidden = false;
     }
-    if(r.status === 404) throw new Error("absente");
-    if(r.status === 546) throw new Error("546 : l'IA a manqué de temps. Réessaie, ou choisis un seul jour au lieu de tout le séjour");
-    const j = await r.json(); if(!r.ok || !j.plan) throw new Error(j.error || r.status);
-    const p = j.plan, out = defaultPlan(mtPlan.scope);
-    if(cur){ Object.assign(out, { title:cur.title, sub:cur.sub, outro:cur.outro, infos:cur.infos, sound:cur.sound }); }
-    out.items = (p.items || []).map(it => { const x = all[(+it.n || 0) - 1]; if(!x) return null;
-      return { id:x.id, dur:Math.min(10, Math.max(.8, +it.duree || 3)), start:Math.max(0, +it.debut || 0), end:x.v ? Math.max(0, +it.fin || 0) : 0,
-        speed:[0.5, 1, 2].includes(+it.vitesse) ? +it.vitesse : 1, tr:trOf(it.transition), text:String(it.texte || "").slice(0, 60), move:it.mouvement !== false }; }).filter(Boolean);
-    if(!out.items.length) throw new Error("plan vide");
-    if(p.titre) out.title = String(p.titre).slice(0, 40); if(p.sous_titre) out.sub = String(p.sous_titre).slice(0, 50); if(p.fin) out.outro = String(p.fin).slice(0, 40);
-    if(typeof p.infos === "boolean") out.infos = p.infos; if(typeof p.son === "boolean") out.sound = p.son;
-    out.ai = true; out.hist = (cur ? (cur.hist || []) : []).concat(ask).slice(-5);
-    mtPlan = out; drawPlan(); document.getElementById("mtMore").open = true;
     ta.value = "";
-    ta.placeholder = "Pas satisfait ? Écris seulement ce qu'il faut changer (ex. : plus rapide au début, la 3e photo en flash, enlève la vidéo floue de Jovan), puis « 🔁 Corriger ce plan avec l'IA ».";
-    msg.textContent = "✓ " + (p.resume || (cur ? "Plan corrigé." : "Plan prêt.")) + (cur ? " Le reste du plan est gardé." : "") + " Tu peux encore corriger avec l'IA, retoucher à la main, ou lancer le montage."; msg.hidden = false;
   }catch(e){
     msg.textContent = /absente/.test(e.message) ? "L'IA n'est pas encore branchée (il manque la fonction « vegas-montage » dans Supabase). Tu peux régler le plan à la main en attendant."
-      : "L'IA n'a pas répondu (" + e.message + "). Réessaie, ou retouche le plan à la main."; msg.hidden = false;
+      : "L'IA n'a pas répondu (" + e.message + "). Réessaie, ou règle à la main sur la timeline."; msg.hidden = false;
   }
   mtAiBusy = false; b.disabled = false; b.textContent = label; aiBtns();
 }
