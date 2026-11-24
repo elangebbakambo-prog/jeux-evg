@@ -1839,7 +1839,7 @@ async function callMontage(demande, passages, sujet){
   const j = await r.json().catch(() => ({})); if(!r.ok || !j.plan) throw new Error(j.error || r.status);
   return j.plan;
 }
-const MT_RULES = "\n\n(Consigne : si une transition, une durée, une vitesse ou un ordre est demandé, respecte-le exactement, passage par passage. Transitions possibles : fondu, noir, coupe, glisse, zoom, flash. Sans précision, varie-les selon l'ambiance au lieu de mettre partout la même.)";
+const MT_RULES = "\n\n(Consigne : garde les vidéos, ce sont les moments les plus vivants : ne les retire que si on te le demande. si une transition, une durée, une vitesse ou un ordre est demandé, respecte-le exactement, passage par passage. Transitions possibles : fondu, noir, coupe, glisse, zoom, flash. Sans précision, varie-les selon l'ambiance au lieu de mettre partout la même.)";
 const MT_CHUNK = 45; // au-delà, on découpe par jour pour ne pas dépasser les limites de la fonction
 // Passages envoyés à l'IA (n = numéro dans ce lot), avec le réglage actuel quand on corrige
 function mtPassages(list, cur, curItems, curPos){
@@ -2065,6 +2065,15 @@ async function runMontage(plan){
     else drawNew(1, 0);
   };
   const keep = () => { sctx.drawImage(cv, 0, 0); };
+  // Vidéos téléchargées en entier à l'avance (2 d'avance) : pas de lecture en direct qui coupe ou qui traîne
+  const vStat = { ok:0, ko:0, why:[] }, vPre = {};
+  const preVid = x => { if(!x || !x.v || vPre[x.id]) return; vPre[x.id] = (async () => {
+      try{ const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 60000);
+        const r = await fetch(x.v + (x.v.includes("?") ? "&" : "?") + "mt=1", { mode:"cors", signal:ctl.signal }); clearTimeout(tm);
+        if(!r.ok) throw new Error("HTTP " + r.status); return URL.createObjectURL(await r.blob()); }
+      catch(e){ return { err:e.name === "AbortError" ? "téléchargement trop long" : e.message }; } })(); };
+  const preAhead = n => { for(let k = n; k < Math.min(items.length, n + 3); k++) if(items[k].x.v) preVid(items[k].x); };
+  preAhead(0);
   const frame = () => new Promise(r => requestAnimationFrame(r));
   const hold = async (ms, draw) => { const t0 = performance.now(); while(!montage.stop){ const el = performance.now() - t0, t = el / ms; if(t >= 1) break; draw(t, el); await frame(); } };
   rec.start(1000);
@@ -2073,18 +2082,24 @@ async function runMontage(plan){
     await hold(reel ? 1100 : soft ? 2800 : 2200, t => { card(plan.title || "VEGAS · EVG", plan.sub, Math.min(1, t * (reel ? 5 : 3))); bar(); });
     keep();
     for(let n = 0; n < items.length && !montage.stop; n++){
-      const { it, x } = items[n]; prog(`Montage ${n + 1} / ${items.length}…`);
+      const { it, x } = items[n]; prog(`Montage ${n + 1} / ${items.length}…`); preAhead(n + 1);
       const capA = el => Math.min(1, Math.max(0, (el - 200) / 300));
       if(x.v){
         const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto";
-        v.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
-        v.muted = !actx; v.src = x.v + (x.v.includes("?") ? "&" : "?") + "mt=1"; // adresse à part : évite la copie gardée par la story (sans CORS)
+        // iPhone : une vidéo complètement invisible peut ne plus fournir d'images, donc presque invisible plutôt que cachée
+        v.style.cssText = "position:fixed;left:0;bottom:0;width:8px;height:8px;opacity:.02;pointer-events:none;z-index:2147483647";
+        v.muted = !actx;
+        preVid(x); const pre = await vPre[x.id], blobUrl = typeof pre === "string" ? pre : null;
+        if(blobUrl) v.src = blobUrl; else { v.crossOrigin = "anonymous"; v.src = x.v + (x.v.includes("?") ? "&" : "?") + "mt=1"; } // secours : lecture en direct
+        if(blobUrl) v.removeAttribute("crossorigin");
         document.body.appendChild(v);
+        let why = pre && pre.err ? "téléchargement : " + pre.err : "";
         let src = null, gain = null;
         if(actx){ try{ src = actx.createMediaElementSource(v); gain = actx.createGain(); src.connect(gain); gain.connect(dest); }catch(e){ v.muted = true; src = null; } }
         const started = await new Promise(async r => {
-          const tm = setTimeout(() => r(false), 12000); v.onerror = () => { clearTimeout(tm); r(false); };
-          try{ await v.play(); }catch(e){ v.muted = true; try{ await v.play(); }catch(e2){ clearTimeout(tm); return r(false); } }
+          const tm = setTimeout(() => { why = why || "la vidéo n'a pas démarré à temps"; r(false); }, 25000);
+          v.onerror = () => { clearTimeout(tm); why = why || "format illisible sur cet appareil (" + ((v.error && v.error.code) || "?") + ")"; r(false); };
+          try{ await v.play(); }catch(e){ v.muted = true; try{ await v.play(); }catch(e2){ clearTimeout(tm); why = why || "lecture refusée (" + e2.name + ")"; return r(false); } }
           const wait = () => { if(v.readyState >= 2 && v.videoWidth){ clearTimeout(tm); r(true); } else if(!montage.stop) requestAnimationFrame(wait); };
           wait();
         });
@@ -2105,7 +2120,8 @@ async function runMontage(plan){
           }
           keep();
         }
-        v.pause(); if(src) try{ src.disconnect(); }catch(e){} v.removeAttribute("src"); v.load(); v.remove();
+        if(started) vStat.ok++; else { vStat.ko++; vStat.why.push((x.a || "?") + " " + hm(x.d, TZ.vegas) + " : " + why); }
+        v.pause(); if(src) try{ src.disconnect(); }catch(e){} v.removeAttribute("src"); v.load(); v.remove(); if(blobUrl) URL.revokeObjectURL(blobUrl);
         if(!started){ // vidéo illisible : on garde au moins son image d'aperçu
           const im = x.h ? await getImg(x.id) : null; if(!im) continue;
           await hold((it.dur || 3) * 1000, (t, el) => { enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height); cover(im, im.naturalWidth, im.naturalHeight, z * (1.02 + t * .08), 0, 0); });
@@ -2133,7 +2149,9 @@ async function runMontage(plan){
   const type = (mime || "video/webm").split(";")[0], ext = /mp4/.test(type) ? "mp4" : "webm";
   const blob = new Blob(chunks, { type }), url = URL.createObjectURL(blob);
   const name = "evg-vegas-" + (plan.scope === "all" ? "sejour" : plan.scope) + "." + ext;
-  stage.innerHTML = `<p class="miss ok">Montage prêt ✓ (${(blob.size / 1048576).toFixed(1)} Mo)</p>
+  const vTot = vStat.ok + vStat.ko;
+  stage.innerHTML = `<p class="miss ok">Montage prêt ✓ (${(blob.size / 1048576).toFixed(1)} Mo)${vTot ? ` · ${vStat.ok} vidéo${vStat.ok > 1 ? "s" : ""} sur ${vTot} montée${vStat.ok > 1 ? "s" : ""}` : " · aucune vidéo dans ce plan"}</p>
+    ${vStat.ko ? `<p class="note">⚠️ Vidéo${vStat.ko > 1 ? "s" : ""} pas montée${vStat.ko > 1 ? "s" : ""} (remplacée${vStat.ko > 1 ? "s" : ""} par la photo d'aperçu s'il y en a une) : ${vStat.why.map(esc).join(" · ")}. Réessaie en Wi-Fi, ou retire ces vidéos du plan.</p>` : ""}
     <video src="${url}" controls playsinline class="mt-out"></video>
     <div class="actions"><button type="button" class="btn hot" id="mtShare">Partager / enregistrer</button><a class="btn" href="${url}" download="${name}">Télécharger</a></div>
     <p class="note">Sur iPhone : « Partager » puis « Enregistrer la vidéo ». Pas content ? Change ta demande ou le plan, et relance.</p>`;
