@@ -1518,7 +1518,7 @@ function getImg(id){
       .then(j => { if(j[0] && j[0].i){ imgCache[id] = j[0].i; im.src = j[0].i; } else ok(null); }).catch(() => ok(null)); });
 }
 // --- Montage : un « plan » (ordre, durées, transitions, textes) éditable à la main ou préparé par l'IA, puis joué dans un canvas et enregistré ---
-const TRANS = { fondu:"Fondu enchaîné", noir:"Fondu au noir", coupe:"Coupe sèche", glisse:"Glissé", zoom:"Zoom", flash:"Flash blanc", whip:"Whip (fouetté rapide)" };
+const TRANS = { fondu:"Fondu enchaîné", noir:"Fondu au noir", coupe:"Coupe sèche", glisse:"Glissé", zoom:"Zoom", flash:"Flash blanc", whip:"Whip (fouetté rapide)", verre:"À travers (l'objet qui cache la caméra)" };
 // Caméras virtuelles : comment l'image bouge pendant le passage
 const CAMS = { "":"Automatique", large:"Plan large fixe", serre:"Plan serré", travelling:"Travelling", main:"Caméra à la main", punch:"Punch-in (coup de zoom)" };
 const camOf = v => { const t = String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -1531,6 +1531,7 @@ const SPEEDS = { "0.5":"Ralenti", "1":"Normal", "2":"Accéléré" };
 // Nom de transition renvoyé par l'IA (ou dit par l'utilisateur) -> une des 6 de l'appli
 const trOf = v => { const t = String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if(TRANS[t]) return t;
+  if(/verre|travers|cach|masqu|objet|occult|mask|through/.test(t)) return "verre";
   if(/noir|black|dip|sombre/.test(t)) return "noir";
   if(/coup|cut|sec|cut/.test(t)) return "coupe";
   if(/whip|fouet|swish/.test(t)) return "whip";
@@ -1565,7 +1566,7 @@ function openMontagePanel(){
     <section class="mt-ai"><label class="mt-l" for="mtPrompt">✨ Dis ce que tu veux (ou dicte avec le micro du clavier)</label>
       <textarea id="mtPrompt" rows="3" maxlength="1500" placeholder="Ex. : commence par la vidéo du quad au ralenti, enchaîne vite les photos de la piscine avec des flashs, écris « Vegas baby » sur la photo du Strip, finis sur Chris."></textarea>
       <details class="mt-help"><summary>💡 Les mots que l'IA comprend</summary>
-        <p><b>Transitions</b> : <i>fondu / fondu enchaîné</i> (doux) · <i>fondu au noir / passage au noir</i> (pause, fin de séquence) · <i>coupe sèche / cut / cut franc</i> (nerveux, sur le rythme) · <i>glissé / slide / balayage / whip</i> (passage latéral) · <i>zoom / zoom avant / punch</i> (impact) · <i>flash / flash blanc / éclair</i> (effet soirée, appareil photo).</p>
+        <p><b>Transitions</b> : <i>fondu / fondu enchaîné</i> (doux) · <i>fondu au noir / passage au noir</i> (pause, fin de séquence) · <i>coupe sèche / cut / cut franc</i> (nerveux, sur le rythme) · <i>glissé / slide / balayage / whip</i> (passage latéral) · <i>zoom / zoom avant / punch</i> (impact) · <i>flash / flash blanc / éclair</i> (effet soirée, appareil photo) · <i>à travers / à travers le verre / quand ça cache la caméra</i> (la vidéo d'avant joue jusqu'à ce qu'un verre ou une main cache la caméra, et la suivante sort de cet écran).</p>
         <p><b>Rythme et durée</b> : « 1 seconde par photo », « 0,8 s », « très rapide / rythmé / nerveux / cut sur le beat », « normal », « posé / lent / contemplatif », « tiens 5 secondes sur la photo de groupe ».</p>
         <p><b>Vitesse des vidéos</b> : « au ralenti / slow motion / slow-mo », « vitesse normale », « accéléré / x2 / timelapse ».</p>
         <p><b>Extraits de vidéo</b> : « garde de la 3e à la 8e seconde », « juste les 4 premières secondes », « la fin de la vidéo », « la vidéo en entier ».</p>
@@ -1624,7 +1625,7 @@ function probeDur(x, done){
 }
 probeDur.busy = {};
 const clipSec = (it, x) => x && x.v ? Math.max(.3, ((it.end > it.start ? it.end : (vidDur[x.id] || MAX_VID_SEC)) - it.start) / (it.speed || 1)) : (it.dur || 3);
-const TR_ICON = { fondu:"◐", noir:"■", coupe:"✂", glisse:"⇢", zoom:"⊕", flash:"⚡", whip:"↯" };
+const TR_ICON = { fondu:"◐", noir:"■", coupe:"✂", glisse:"⇢", zoom:"⊕", flash:"⚡", whip:"↯", verre:"◍" };
 // Timeline façon logiciel de montage : une bande de passages, on en sélectionne un ou plusieurs,
 // puis on les règle à la main ou on dit à l'IA ce qu'on veut sur la sélection seulement.
 function drawPlan(){
@@ -1675,7 +1676,7 @@ function drawPlan(){
         <div class="tl-cur-info"><b id="tlCurT">0:00,0</b><small id="tlCurW"></small></div></div>
       <input type="range" id="tlCur" min="0" max="1" step="0.1" value="0" aria-label="Curseur de lecture">
       <div class="tl-acts"><button type="button" id="tlCurB">◀ 0,1 s</button><button type="button" id="tlCurF">0,1 s ▶</button><button type="button" id="tlCut">✂ Couper ici</button></div>
-      <div class="tl-fx">${Object.entries({ flash:"⚡ Flash", coupe:"✂ Cut", fondu:"◐ Fondu", noir:"■ Noir", zoom:"⊕ Zoom", glisse:"⇢ Glissé" }).map(([k, l]) => `<button type="button" data-fx="${k}">${l} ici</button>`).join("")}</div>
+      <div class="tl-fx">${Object.entries({ flash:"⚡ Flash", coupe:"✂ Cut", fondu:"◐ Fondu", noir:"■ Noir", zoom:"⊕ Zoom", glisse:"⇢ Glissé", verre:"◍ À travers" }).map(([k, l]) => `<button type="button" data-fx="${k}">${l} ici</button>`).join("")}</div>
       <div class="tl-ai"><label class="mt-l" for="tlVoice">🎙️ Dis ce que tu veux à cet endroit (« mets un flash ici », « coupe là », « ralenti », « écris Jackpot »…)</label>
         <div class="tl-voice"><textarea id="tlVoice" rows="2" maxlength="400" placeholder="Ex. : à ce moment-là mets un flash"></textarea><button type="button" id="tlMic" aria-label="Dicter">🎙️</button></div>
         <button type="button" class="btn hot" id="tlVoiceGo">Appliquer ici</button><p class="note" id="tlVoiceMsg" hidden></p></div>
@@ -1776,7 +1777,8 @@ function drawPlan(){
       if(/ralenti|slow/.test(t) && x && x.v){ it.speed = .5; vt.value = ""; drawPlan(); return say2(`✓ Passage ${a.k + 1} au ralenti.`); }
       if(/accelere|rapide x2|x2|timelapse/.test(t) && x && x.v){ it.speed = 2; vt.value = ""; drawPlan(); return say2(`✓ Passage ${a.k + 1} accéléré.`); }
       if(/(supprime|enleve|retire)/.test(t) && /(passage|photo|video|ca|ce)/.test(t)){ mtPlan.items.splice(a.k, 1); vt.value = ""; mtSel = new Set(); drawPlan(); return say2(`✓ Passage retiré.`); }
-      const tr = /fondu au noir|au noir|noir/.test(t) ? "noir" : /flash|eclair|blanc/.test(t) ? "flash" : /\bcut\b|coupe|couper|cute/.test(t) ? "coupe"
+      if(/en entier|entiere|en entiere|complete|jusqu.?au bout/.test(t) && x && x.v){ it.start = 0; it.end = 0; vt.value = ""; drawPlan(); return say2(`✓ Passage ${a.k + 1} : vidéo en entier.`); }
+      const tr = /verre|a travers|cache la camera|masque/.test(t) ? "verre" : /fondu au noir|au noir|noir/.test(t) ? "noir" : /flash|eclair|blanc/.test(t) ? "flash" : /\bcut\b|coupe|couper|cute/.test(t) ? "coupe"
         : /gliss|slide|balaye|whip/.test(t) ? "glisse" : /zoom|punch/.test(t) ? "zoom" : /fondu|fade/.test(t) ? "fondu" : null;
       if(tr && t.split(/\s+/).length <= 12){ vt.value = ""; return fxHere(tr); }
       // Demande plus riche : l'IA travaille sur le passage sous le curseur et le suivant
@@ -1867,7 +1869,7 @@ async function callMontage(demande, passages, sujet){
   const j = await r.json().catch(() => ({})); if(!r.ok || !j.plan) throw new Error(j.error || r.status);
   return j.plan;
 }
-const MT_RULES = "\n\n(Consigne : garde les vidéos, ce sont les moments les plus vivants : ne les retire que si on te le demande. si une transition, une durée, une vitesse ou un ordre est demandé, respecte-le exactement, passage par passage. Transitions possibles : fondu, noir, coupe, glisse, zoom, flash. Sans précision, varie-les selon l'ambiance au lieu de mettre partout la même.)";
+const MT_RULES = "\n\n(Consigne : garde les vidéos, ce sont les moments les plus vivants : ne les retire que si on te le demande. si une transition, une durée, une vitesse ou un ordre est demandé, respecte-le exactement, passage par passage. Transitions possibles : fondu, noir, coupe, glisse, zoom, flash, whip, verre (« verre » = à travers l'objet qui cache la caméra : la vidéo d'AVANT est jouée jusqu'à ce que la caméra soit cachée, puis ce passage apparaît en sortant de cet écran ; à utiliser quand on demande « à travers », « quand X cache la caméra », « avec le verre »). « En entier » pour une vidéo = debut 0 et fin 0. Sans précision, varie-les selon l'ambiance au lieu de mettre partout la même.)";
 const MT_CHUNK = 45; // au-delà, on découpe par jour pour ne pas dépasser les limites de la fonction
 // Passages envoyés à l'IA (n = numéro dans ce lot), avec le réglage actuel quand on corrige
 function mtPassages(list, cur, curItems, curPos){
@@ -1894,8 +1896,10 @@ async function reelify(plan){
   let nv = 0, np = 0;
   plan.items.forEach((it, i) => { const x = get(it.id); if(!x) return;
     // entrées variées : surtout des coupes sèches, un whip toutes les 3 entrées, un flash de temps en temps
-    const entry = i === 0 ? "coupe" : (it.tr === "flash" || it.tr === "zoom" || it.tr === "whip") ? it.tr : (i % 3 === 2 ? "whip" : i % 5 === 4 ? "flash" : i % 7 === 6 ? "zoom" : "coupe");
+    const entry = i === 0 ? "coupe" : (it.tr === "flash" || it.tr === "zoom" || it.tr === "whip" || it.tr === "verre") ? it.tr : (i % 3 === 2 ? "whip" : i % 5 === 4 ? "flash" : i % 7 === 6 ? "zoom" : "coupe");
     if(!x.v){ out.push({ ...it, dur:Math.min(1.2, Math.max(.7, it.dur && it.dur < 1.3 ? it.dur : .9)), tr:entry, cam:it.cam || camsP[np++ % camsP.length], move:true }); return; }
+    // la vidéo suivante arrive « à travers » : on garde celle-ci d'un seul tenant, jusqu'au moment où la caméra est cachée
+    if((plan.items[i + 1] || {}).tr === "verre"){ out.push({ ...it, end:0, tr:entry, cam:it.cam || "large" }); return; }
     const full = vidDur[x.id] || 0, a = it.start || 0, bEnd = it.end > a ? it.end : (full || a + 5), span = Math.max(.5, bEnd - a);
     // découpe : des bouts de 1,2 à 1,8 s répartis sur l'extrait, avec de petits sauts entre eux (le « jump cut »)
     const cuts = span < 2.6 ? 1 : span < 5 ? 2 : 3, seg = Math.min(1.8, Math.max(1.2, span / cuts * .7)), gap = cuts > 1 ? (span - seg * cuts) / (cuts - 1) : 0;
@@ -2025,7 +2029,8 @@ async function musicBuffer(ac, music){
 function beatSync(plan){
   const B = MT_BEATS[(plan.music || "").replace("beat:", "")]; if(!B) return false;
   const beat = 60 / B.bpm; plan.bpm = B.bpm;
-  plan.items.forEach(it => { const x = posts.find(y => y.id === it.id); if(!x) return;
+  plan.items.forEach((it, i) => { const x = posts.find(y => y.id === it.id); if(!x) return;
+    if(x.v && (plan.items[i + 1] || {}).tr === "verre") return; // elle doit aller jusqu'au moment où la caméra est cachée
     if(!x.v){ it.dur = Math.round(Math.max(beat, Math.round((it.dur || 1) / beat) * beat) * 100) / 100; return; }
     const full = vidDur[x.id] || MAX_VID_SEC, endV = it.end > it.start ? it.end : full, sp = it.speed || 1;
     const beats = Math.max(2, Math.round((endV - it.start) / sp / beat / 2) * 2);
@@ -2121,7 +2126,7 @@ async function runMontage(plan){
   };
   // Transition d'entrée : on mélange l'image du passage précédent (gardée dans « snap ») avec le nouveau, pendant TR ms.
   // Durée de chaque transition (ms) : assez longue pour qu'on les distingue bien
-  const TRD = { fondu:soft ? 1300 : 900, noir:1100, glisse:550, zoom:500, flash:350, coupe:0, whip:280 };
+  const TRD = { fondu:soft ? 1300 : 900, noir:1100, glisse:550, zoom:500, flash:350, coupe:0, whip:280, verre:850 };
   // Caméras virtuelles : zoom, décalage et petite rotation selon le temps dans le passage (t de 0 à 1, el en ms)
   const camXf = (cam, t, el, seed) => {
     const s1 = Math.sin(el / 97 + seed), s2 = Math.sin(el / 61 + seed * 2), s3 = Math.sin(el / 143 + seed * 3);
@@ -2146,6 +2151,11 @@ async function runMontage(plan){
         ctx.save(); ctx.translate(-Math.min(1, d) * cv.width, 0); ctx.drawImage(snap, 0, 0); ctx.restore();
         ctx.save(); ctx.translate((1 - Math.min(1, d)) * cv.width, 0); drawNew(1, 0); ctx.restore(); }
       ctx.globalAlpha = 1; }
+    else if(tr === "verre"){ // à travers : on part de l'écran caché (couleur de l'objet), la nouvelle image sort du flou en reculant
+      const c = entryCol || [236, 228, 232], q = p < .12 ? 0 : (p - .12) / .88, e2 = 1 - Math.pow(1 - q, 3);
+      const fl = "filter" in ctx && q < 1; if(fl) ctx.filter = `blur(${Math.round((1 - q) * 16)}px)`;
+      drawNew(1.22 - .22 * e2, 0); if(fl) ctx.filter = "none";
+      ctx.fillStyle = `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${Math.pow(1 - q, 1.4).toFixed(3)})`; ctx.fillRect(0, 0, cv.width, cv.height); }
     else if(tr === "flash"){ if(p < .3){ ctx.drawImage(snap, 0, 0); ctx.fillStyle = `rgba(255,255,255,${p / .3})`; } else { drawNew(1, 0); ctx.fillStyle = `rgba(255,255,255,${1 - (p - .3) / .7})`; } ctx.fillRect(0, 0, cv.width, cv.height); }
     else drawNew(1, 0);
   };
@@ -2171,6 +2181,9 @@ async function runMontage(plan){
     ctx.restore(); };
   // Vidéos téléchargées en entier à l'avance (2 d'avance) : pas de lecture en direct qui coupe ou qui traîne
   const vStat = { ok:0, ko:0, seek:0, why:[] }, vPre = {}, lastUse = {};
+  // « À travers » : couleur de l'écran quand la caméra est cachée (repérée sur la vidéo d'avant), reprise par l'entrée du passage suivant
+  let coverCol = null, entryCol = null;
+  const avgSnap = () => { try{ const c = document.createElement("canvas"); c.width = c.height = 1; const g = c.getContext("2d"); g.drawImage(snap, 0, 0, 1, 1); const d = g.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2]]; }catch(e){ return null; } };
   items.forEach((o, k) => { lastUse[o.x.id] = k; });
   const preVid = x => { if(!x || !x.v || vPre[x.id]) return; vPre[x.id] = (async () => {
       try{ const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 60000);
@@ -2193,6 +2206,8 @@ async function runMontage(plan){
     keep();
     for(let n = 0; n < items.length && !montage.stop; n++){
       const { it, x } = items[n]; prog(`Montage ${n + 1} / ${items.length}…`); preAhead(n + 1);
+      entryCol = it.tr === "verre" ? (coverCol || avgSnap()) : null; coverCol = null;
+      const toCover = !!x.v && !!items[n + 1] && items[n + 1].it.tr === "verre";
       const capA = el => Math.min(1, Math.max(0, (el - 200) / 300));
       if(x.v){
         // On réutilise les lecteurs « déverrouillés » au moment du tap (l'iPhone refuse de lancer un nouveau lecteur sans geste)
@@ -2210,7 +2225,7 @@ async function runMontage(plan){
         let mode = "", shown = false;
         if(meta){
           const full = isFinite(v.duration) && v.duration > 0 ? v.duration : MAX_VID_SEC;
-          const a = Math.min(it.start || 0, Math.max(0, full - .5)), b = it.end > a ? Math.min(it.end, full) : full, sp = it.speed || 1;
+          const a = Math.min(it.start || 0, Math.max(0, full - .5)), b = it.end > a && !toCover ? Math.min(it.end, full) : full, sp = it.speed || 1;
           const seekTo = t => new Promise(r => { const tm = setTimeout(r, 1500); v.onseeked = () => { clearTimeout(tm); r(); }; try{ v.currentTime = t; }catch(e){ clearTimeout(tm); r(); } });
           await seekTo(a);
           // 1) lecture normale (avec le son) ; 2) sinon lecture image par image en se déplaçant dans la vidéo (toujours permis, même en économie d'énergie)
@@ -2221,6 +2236,9 @@ async function runMontage(plan){
           if(mode === "seek"){ try{ v.pause(); }catch(e){} v.muted = true; if(gain) gain.gain.value = 0; }
           const len = (b - a) / sp * 1000, t0 = performance.now(), cam = it.cam || (reel ? ["large", "punch", "serre", "main"].at(n % 4) : "");
           let seeking = false; v.onseeked = () => { seeking = false; };
+          // Repère le moment où la caméra est cachée (verre, main…) : image presque uniforme pendant ~0,2 s
+          let pctx = null, lastProbe = -1e9, coverN = 0, base = 0, baseN = 0;
+          if(toCover){ try{ const pc = document.createElement("canvas"); pc.width = 12; pc.height = 20; pctx = pc.getContext("2d", { willReadFrequently:true }); }catch(e){} }
           while(!montage.stop){
             const el = performance.now() - t0; if(el >= len || el > (MAX_VID_SEC + 4) * 1000) break;
             if(mode === "play"){ if(v.ended || v.currentTime >= b) break; }
@@ -2228,7 +2246,15 @@ async function runMontage(plan){
             if(v.readyState >= 2 && v.videoWidth){ shown = true;
               ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
               enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height); camDraw(v, v.videoWidth, v.videoHeight, z, cam, el / len, el, n + 1); });
-              overlay(x, Math.min(1, el / 400)); social(x, el, len); caption(it.text, capA(el)); bar(); }
+              overlay(x, Math.min(1, el / 400)); social(x, el, len); caption(it.text, capA(el)); bar();
+              if(pctx && el - lastProbe > 60){ lastProbe = el;
+                try{ pctx.drawImage(v, 0, 0, 12, 20); const d = pctx.getImageData(0, 0, 12, 20).data, N = d.length / 4; let s = 0, s2 = 0, cr = 0, cg = 0, cb = 0;
+                  for(let i = 0; i < d.length; i += 4){ const l = .3 * d[i] + .59 * d[i + 1] + .11 * d[i + 2]; s += l; s2 += l * l; cr += d[i]; cg += d[i + 1]; cb += d[i + 2]; }
+                  const m = s / N, sd = Math.sqrt(Math.max(0, s2 / N - m * m));
+                  if(el < 1200){ base += sd; baseN++; }
+                  const thr = Math.max(9, Math.min(22, (baseN ? base / baseN : 40) * .35));
+                  if(el > 900 && sd < thr){ if(++coverN >= 3){ coverCol = [cr / N, cg / N, cb / N]; break; } } else coverN = 0;
+                }catch(e){ pctx = null; } } }
             const fadeOut = !items[n + 1] && len - el < 400 ? 1 - (len - el) / 400 : 0;
             if(gain && mode === "play") gain.gain.value = Math.min(1, el / 200) * (1 - fadeOut);
             if(el < 50) duck(!!gain && mode === "play");
