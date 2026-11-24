@@ -432,6 +432,7 @@ h1, .dhead h2, .panel h3, .top b, .dr-title, .day b, .stop h3, .now h3, .cta b, 
 #montage .tl-fx{ display:flex; flex-wrap:wrap; gap:6px; } #montage .tl-fx button{ all:unset; cursor:pointer; padding:7px 10px; border-radius:10px; background:var(--card2); font-size:.82rem; }
 #montage .tl-voice{ display:flex; gap:6px; } #montage .tl-voice textarea{ flex:1; }
 #montage .tl-voice button{ all:unset; cursor:pointer; width:48px; border-radius:12px; background:var(--card2); display:grid; place-items:center; font-size:1.3rem; } #montage .tl-voice button.on{ background:var(--pink); }
+#montage .mt-mus{ display:flex; flex-direction:column; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; } #montage .mt-mus[hidden]{ display:none; } #montage .mt-mus input[type=range]{ width:100%; accent-color:var(--pink); }
 #montage .tl-insp{ background:var(--card); border:1px solid var(--pink); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:10px; }
 #montage .tl-it{ margin:0; font-size:.9rem; } #montage .tl-it small{ color:var(--muted); }
 #montage .tl-acts{ display:flex; gap:6px; flex-wrap:wrap; } #montage .tl-acts button{ all:unset; cursor:pointer; padding:8px 12px; border-radius:10px; background:var(--card2); font-size:.85rem; }
@@ -1540,7 +1541,8 @@ const trOf = v => { const t = String(v || "").toLowerCase().normalize("NFD").rep
 let mtPlan = null, mtAiBusy = false, mtSel = new Set();
 const mtItems = scope => scope === "all" ? storyList() : ((memoryDays().find(d => d.k === scope) || {}).list || []);
 function defaultPlan(scope){
-  return { scope, style:(mtPlan && mtPlan.style) || "classique", title:"VEGAS · EVG", sub:scope === "all" ? "Tout le séjour" : dayLong(scope), outro:"À SUIVRE…", infos:true, sound:true,
+  const keep0 = mtPlan || {};
+  return { scope, style:keep0.style || "classique", music:keep0.music || "", musicVol:keep0.musicVol ?? .8, duck:keep0.duck !== false, social:!!keep0.social, title:"VEGAS · EVG", sub:scope === "all" ? "Tout le séjour" : dayLong(scope), outro:"À SUIVRE…", infos:true, sound:true,
     items:mtItems(scope).map(x => ({ id:x.id, dur:3, start:0, end:x.v ? 5 : 0, speed:1, tr:"fondu", text:"", move:true })) };
 }
 function openMontagePanel(){
@@ -1551,6 +1553,13 @@ function openMontagePanel(){
   if(!mtPlan || !mtItems(mtPlan.scope).length) mtPlan = defaultPlan(days.length ? days[days.length - 1].k : "all");
   ov.innerHTML = `<div class="mt-box"><div class="mt-head"><h3>🎬 Créer un montage</h3><button type="button" class="st-close" id="mtClose" aria-label="Fermer">✕</button></div>
     <label class="mt-l">Style<select id="mtStyle">${Object.entries(MT_STYLES).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></label>
+    <label class="mt-l">Musique<select id="mtMusic"><option value="">Aucune (seulement le son des vidéos)</option>${Object.entries(MT_BEATS).map(([k, b]) => `<option value="beat:${k}">${b.name} (${b.bpm} BPM, libre de droits)</option>`).join("")}<option value="file">${mtMusicFile ? "🎵 " + esc(mtMusicFile.name) : "Ma musique (fichier du téléphone)…"}</option></select></label>
+    <input type="file" id="mtMusicFile" accept="audio/*" hidden>
+    <div class="mt-mus" id="mtMusBox"><label class="mt-l">Volume de la musique<input type="range" id="mtMusVol" min="0" max="1" step="0.05"></label>
+      <label class="chk2"><input type="checkbox" id="mtDuck"> Baisser la musique quand une vidéo a du son</label>
+      <div class="tl-acts"><button type="button" id="mtMusPlay">▶ Écouter</button><button type="button" id="mtBeatSync">🥁 Caler les coupes sur le beat</button></div>
+      <p class="note" id="mtMusMsg" hidden></p></div>
+    <label class="chk2"><input type="checkbox" id="mtSocial"> Commentaires et réactions dans le montage (façon live)</label>
     <button type="button" class="btn" id="mtReelify">⚡ Rendre mon plan dynamique (jump cuts, caméras, whips)</button>
     <label class="mt-l">Quoi<select id="mtDay"><option value="all">Tout le séjour (${storyList().length})</option>${days.map(d => `<option value="${d.k}">${esc(dayLong(d.k))} (${d.list.length})</option>`).join("")}</select></label>
     <section class="mt-ai"><label class="mt-l" for="mtPrompt">✨ Dis ce que tu veux (ou dicte avec le micro du clavier)</label>
@@ -1581,6 +1590,25 @@ function openMontagePanel(){
   aiBtns();
   document.getElementById("mtGo").onclick = () => runMontage(mtPlan);
   const st = document.getElementById("mtStyle"); st.value = mtPlan.style || "classique";
+  // Musique
+  const mm = document.getElementById("mtMusic"), mf = document.getElementById("mtMusicFile"), mb = document.getElementById("mtMusBox"), mmsg = document.getElementById("mtMusMsg");
+  const musUI = () => { mm.value = mtPlan.music || ""; mb.hidden = !mtPlan.music; document.getElementById("mtBeatSync").hidden = !String(mtPlan.music || "").startsWith("beat:");
+    document.getElementById("mtMusVol").value = mtPlan.musicVol ?? .8; document.getElementById("mtDuck").checked = mtPlan.duck !== false; };
+  mm.onchange = () => { if(mm.value === "file"){ mf.click(); return; } mtPlan.music = mm.value; musUI(); };
+  mf.onchange = () => { const f = mf.files && mf.files[0]; if(f){ mtMusicFile = f; mtPlan.music = "file"; mm.options[mm.options.length - 1].textContent = "🎵 " + f.name; } musUI(); };
+  document.getElementById("mtMusVol").oninput = e => { mtPlan.musicVol = +e.target.value; };
+  document.getElementById("mtDuck").onchange = e => { mtPlan.duck = e.target.checked; };
+  let prevAc = null;
+  document.getElementById("mtMusPlay").onclick = async e => { const b = e.target;
+    if(prevAc){ try{ prevAc.close(); }catch(x){} prevAc = null; b.textContent = "▶ Écouter"; return; }
+    try{ const ac = prevAc = new (window.AudioContext || window.webkitAudioContext)(); await ac.resume(); b.textContent = "⏹ Stop";
+      const buf = await musicBuffer(ac, mtPlan.music); if(!buf || prevAc !== ac) return; const s = ac.createBufferSource(), g = ac.createGain(); s.buffer = buf; s.loop = true; g.gain.value = mtPlan.musicVol ?? .8; s.connect(g).connect(ac.destination); s.start();
+      setTimeout(() => { if(prevAc === ac){ try{ ac.close(); }catch(x){} prevAc = null; b.textContent = "▶ Écouter"; } }, 12000); }
+    catch(x){ prevAc = null; b.textContent = "▶ Écouter"; mmsg.textContent = "Impossible de lire cette musique sur ce téléphone."; mmsg.hidden = false; } };
+  document.getElementById("mtBeatSync").onclick = () => { if(beatSync(mtPlan)){ drawPlan(); document.getElementById("mtMore").open = true;
+    mmsg.textContent = `✓ Coupes calées sur ${mtPlan.bpm} BPM : chaque photo et chaque morceau de vidéo tombe sur le rythme.`; mmsg.hidden = false; } };
+  musUI();
+  const so = document.getElementById("mtSocial"); so.checked = !!mtPlan.social; so.onchange = () => { mtPlan.social = so.checked; };
   st.onchange = () => { mtPlan.style = st.value; };
   document.getElementById("mtReelify").onclick = async () => { const b = document.getElementById("mtReelify"), l = b.textContent; b.disabled = true; b.textContent = "⚡ Découpe en cours…";
     await reelify(mtPlan); mtPlan.style = "reel"; st.value = "reel"; mtSel = new Set(); drawPlan(); document.getElementById("mtMore").open = true; b.disabled = false; b.textContent = l; };
@@ -1956,12 +1984,61 @@ function pickMime(){
   for(const m of c){ try{ if(MediaRecorder.isTypeSupported(m)) return m; }catch(e){} }
   return "";
 }
+// --- Musique du montage : beats fabriqués par l'appli (libres de droits) ou un fichier du téléphone ---
+const MT_BEATS = { boombap:{ name:"Beat boom bap", bpm:90 }, house:{ name:"Beat house", bpm:122 }, trap:{ name:"Beat trap", bpm:140 } };
+let mtMusicFile = null; // fichier audio choisi (gardé le temps de la session)
+// Fabrique 4 mesures du beat (bouclées ensuite) dans un contexte audio hors ligne
+async function renderBeat(kind){
+  const B = MT_BEATS[kind]; if(!B) return null;
+  const sr = 44100, beat = 60 / B.bpm, bars = 4, len = beat * 4 * bars, oc = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, Math.ceil(sr * len), sr);
+  const master = oc.createGain(); master.gain.value = .8; master.connect(oc.destination);
+  const noise = (() => { const b = oc.createBuffer(1, sr, sr), d = b.getChannelData(0); for(let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; })();
+  const kick = t => { const o = oc.createOscillator(), g = oc.createGain(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + .14);
+    g.gain.setValueAtTime(1, t); g.gain.exponentialRampToValueAtTime(.001, t + .35); o.connect(g).connect(master); o.start(t); o.stop(t + .4); };
+  const hit = (t, f, dur, vol, type) => { const s = oc.createBufferSource(), fl = oc.createBiquadFilter(), g = oc.createGain(); s.buffer = noise; fl.type = type || "highpass"; fl.frequency.value = f;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur); s.connect(fl).connect(g).connect(master); s.start(t); s.stop(t + dur + .02); };
+  const snare = t => { hit(t, 1500, .18, .55); const o = oc.createOscillator(), g = oc.createGain(); o.frequency.value = 190; g.gain.setValueAtTime(.25, t); g.gain.exponentialRampToValueAtTime(.001, t + .1); o.connect(g).connect(master); o.start(t); o.stop(t + .12); };
+  const hat = (t, v) => hit(t, 7500, .05, v || .18);
+  const bass = (t, f, dur, glide) => { const o = oc.createOscillator(), g = oc.createGain(), lp = oc.createBiquadFilter(); o.type = kind === "house" ? "sawtooth" : "sine"; lp.type = "lowpass"; lp.frequency.value = kind === "house" ? 600 : 300;
+    o.frequency.setValueAtTime(f, t); if(glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur * .8);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(kind === "trap" ? .7 : .45, t + .02); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.connect(lp).connect(g).connect(master); o.start(t); o.stop(t + dur + .05); };
+  const roots = [55, 55, 43.65, 49];
+  for(let bar = 0; bar < bars; bar++){ const b0 = bar * 4 * beat, r = roots[bar % 4];
+    if(kind === "boombap"){ [0, 1.5, 2.25].forEach(k => kick(b0 + k * beat)); [1, 3].forEach(k => snare(b0 + k * beat));
+      for(let k = 0; k < 8; k++) hat(b0 + k * beat / 2, k % 2 ? .1 : .2); bass(b0, r, beat * 1.4); bass(b0 + 2.25 * beat, r * 1.5, beat); }
+    if(kind === "house"){ for(let k = 0; k < 4; k++){ kick(b0 + k * beat); hat(b0 + (k + .5) * beat, .28); bass(b0 + (k + .5) * beat, r * 2, beat * .45); } [1, 3].forEach(k => hit(b0 + k * beat, 1200, .16, .45)); }
+    if(kind === "trap"){ kick(b0); kick(b0 + 2.75 * beat); snare(b0 + 2 * beat);
+      for(let k = 0; k < 16; k++) hat(b0 + k * beat / 4, k % 4 ? .09 : .16); if(bar % 2) for(let k = 0; k < 6; k++) hat(b0 + 3.5 * beat + k * beat / 12, .1);
+      bass(b0, r, beat * 2.4, r * .8); bass(b0 + 2.75 * beat, r * 1.2, beat * 1.1); }
+  }
+  return await oc.startRendering();
+}
+// Tampon audio de la musique choisie
+async function musicBuffer(ac, music){
+  if(!music) return null;
+  if(music === "file"){ if(!mtMusicFile) return null; const ab = await mtMusicFile.arrayBuffer(); return await new Promise((ok, ko) => { const r = ac.decodeAudioData(ab, ok, ko); if(r && r.then) r.then(ok, ko); }); }
+  if(music.startsWith("beat:")) return await renderBeat(music.slice(5));
+  return null;
+}
+// Coupes calées sur le rythme : photos sur 2 temps, morceaux de vidéo sur 2 ou 4 temps
+function beatSync(plan){
+  const B = MT_BEATS[(plan.music || "").replace("beat:", "")]; if(!B) return false;
+  const beat = 60 / B.bpm; plan.bpm = B.bpm;
+  plan.items.forEach(it => { const x = posts.find(y => y.id === it.id); if(!x) return;
+    if(!x.v){ it.dur = Math.round(Math.max(beat, Math.round((it.dur || 1) / beat) * beat) * 100) / 100; return; }
+    const full = vidDur[x.id] || MAX_VID_SEC, endV = it.end > it.start ? it.end : full, sp = it.speed || 1;
+    const beats = Math.max(2, Math.round((endV - it.start) / sp / beat / 2) * 2);
+    it.end = Math.round(Math.min(full, it.start + beats * beat * sp) * 100) / 100; });
+  return true;
+}
 // Vidéo noire minuscule (0,2 s) qui sert à déverrouiller les lecteurs sur iPhone
 const MT_BLANK = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMpbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAAMgAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAlN0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAAMgAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAADIAAAAAAABAAAAAAHLbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAAoAAAACABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABdm1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAATZzdGJsAAAAtnN0c2QAAAAAAAAAAQAAAKZhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAABAAEABIAAAASAAAAAAAAAABFUxhdmM2MC4zMS4xMDIgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAALGF2Y0MBQsAe/+EAFWdCwB7aewEQAAADABAAAAMBQPFi6gEABGjOD8gAAAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAABmMAAAZjAAAAAYc3R0cwAAAAAAAAABAAAAAgAABAAAAAAUc3RzcwAAAAAAAAABAAAAAQAAABxzdHNjAAAAAAAAAAEAAAABAAAAAgAAAAEAAAAcc3RzegAAAAAAAAAAAAAAAgAAAoUAAAAJAAAAFHN0Y28AAAAAAAAAAQAAA1kAAABidWR0YQAAAFptZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAAC1pbHN0AAAAJal0b28AAAAdZGF0YQAAAAEAAAAATGF2ZjYwLjE2LjEwMAAAAAhmcmVlAAAClm1kYXQAAAJwBgX//2zcRem95tlIt5Ys2CDZI+7veDI2NCAtIGNvcmUgMTY0IHIzMTA4IDMxZTE5ZjkgLSBILjI2NC9NUEVHLTQgQVZDIGNvZGVjIC0gQ29weWxlZnQgMjAwMy0yMDIzIC0gaHR0cDovL3d3dy52aWRlb2xhbi5vcmcveDI2NC5odG1sIC0gb3B0aW9uczogY2FiYWM9MCByZWY9MSBkZWJsb2NrPTE6MDowIGFuYWx5c2U9MHgxOjB4MTExIG1lPWhleCBzdWJtZT0yIHBzeT0xIHBzeV9yZD0xLjAwOjAuMDAgbWl4ZWRfcmVmPTAgbWVfcmFuZ2U9MTYgY2hyb21hX21lPTEgdHJlbGxpcz0wIDh4OGRjdD0wIGNxbT0wIGRlYWR6b25lPTIxLDExIGZhc3RfcHNraXA9MSBjaHJvbWFfcXBfb2Zmc2V0PTAgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MCB3ZWlnaHRwPTAga2V5aW50PTI1MCBrZXlpbnRfbWluPTEwIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9MTAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAAADWWIhA7///w9FAAEd/4AAAAFQZogN9Q=";
 async function runMontage(plan){
   // Le son se prépare tout de suite, pendant le tap (sinon le téléphone le bloque) ; sans son qui tourne, l'enregistrement perdait les photos.
   let actx = null, dest = null;
-  if(plan.sound){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); dest = actx.createMediaStreamDestination(); }catch(e){ actx = null; dest = null; } }
+  const wantMusic = !!plan.music && (plan.music !== "file" || !!mtMusicFile);
+  if(plan.sound || wantMusic){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); dest = actx.createMediaStreamDestination(); }catch(e){ actx = null; dest = null; } }
   // iPhone : on « déverrouille » 2 lecteurs vidéo pendant le tap, puis on les réutilise pour toutes les vidéos du montage
   const pool = plan.items.some(it => (posts.find(y => y.id === it.id) || {}).v) ? [0, 1].map(() => { const v = document.createElement("video");
     v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto"; v.muted = true;
@@ -1997,7 +2074,8 @@ async function runMontage(plan){
   const prog = t => { const el = document.getElementById("mtProg"); if(el) el.textContent = t; };
   const cover = (src, w, h, z, ox, oy) => { const k = Math.max(cv.width / w, cv.height / h) * z, dw = w * k, dh = h * k;
     ctx.drawImage(src, (cv.width - dw) / 2 + ox, (cv.height - dh) / 2 + oy, dw, dh); };
-  const reel = plan.style === "reel", soft = plan.style === "souvenir";
+  const reel = plan.style === "reel", soft = plan.style === "souvenir"; let musRef = null;
+  const duck = on => { if(!musRef || plan.duck === false) return; try{ musRef.g.gain.setTargetAtTime(on ? musRef.vol * .3 : musRef.vol, actx.currentTime, .12); }catch(e){} };
   // Durée prévue (pour la barre de progression façon story)
   const estMs = (reel ? 2400 : 4000) + plan.items.reduce((a, it) => a + clipSec(it, posts.find(y => y.id === it.id)) * 1000, 0); let tStart = 0;
   const bar = () => { if(!reel || !tStart) return; const p = Math.min(1, (performance.now() - tStart) / estMs);
@@ -2072,6 +2150,25 @@ async function runMontage(plan){
     else drawNew(1, 0);
   };
   const keep = () => { sctx.drawImage(cv, 0, 0); };
+  // Commentaires en bulles et réactions qui s'envolent, comme un live
+  const social = (x, el, len) => {
+    if(!plan.social) return;
+    const cs = comments.filter(c => c.p === x.id).slice(0, 3), rs = reacts.filter(r => r.p === x.id).slice(0, 10);
+    ctx.save(); ctx.textBaseline = "middle";
+    cs.forEach((c, i) => { const t0 = 350 + i * Math.min(900, len / 4); if(el < t0) return; const a = Math.min(1, (el - t0) / 220), k = .8 + .2 * a;
+      ctx.font = "800 32px system-ui, -apple-system, sans-serif"; const nm = (c.a || "?") + "  "; ctx.font = "600 32px system-ui, -apple-system, sans-serif";
+      let tx = c.t; const maxW = cv.width * .8; ctx.font = "800 32px system-ui, -apple-system, sans-serif"; const wn = ctx.measureText(nm).width; ctx.font = "500 32px system-ui, -apple-system, sans-serif";
+      while(ctx.measureText(tx).width > maxW - wn - 40 && tx.length > 3) tx = tx.slice(0, -2); if(tx !== c.t) tx = tx.slice(0, -1) + "…";
+      const w = wn + ctx.measureText(tx).width + 84, y = cv.height - (reel ? 250 : 420) - (cs.length - 1 - i) * 84;
+      ctx.globalAlpha = a; ctx.save(); ctx.translate(28, y); ctx.scale(k, k);
+      ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(0, -34, w, 68, 34) : ctx.rect(0, -34, w, 68); ctx.fill();
+      ctx.fillStyle = ["#FF3B4A", "#FFC15E", "#5EE0B5", "#7FB2FF"].at((c.a || "").length % 4); ctx.beginPath(); ctx.arc(32, 0, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#111"; ctx.font = "900 20px system-ui, -apple-system, sans-serif"; ctx.textAlign = "center"; ctx.fillText(([...(c.a || "?")][0] || "?").toUpperCase(), 30, 1); ctx.textAlign = "left";
+      ctx.fillStyle = "#fff"; ctx.font = "800 32px system-ui, -apple-system, sans-serif"; ctx.fillText(nm, 60, 1); ctx.font = "500 32px system-ui, -apple-system, sans-serif"; ctx.fillText(tx, 60 + wn, 1); ctx.restore(); });
+    ctx.font = "56px system-ui, -apple-system, sans-serif"; ctx.textAlign = "center";
+    rs.forEach((r, k) => { const t0 = 200 + k * 260, p = (el - t0) / 1600; if(p < 0 || p > 1) return;
+      ctx.globalAlpha = p < .15 ? p / .15 : 1 - Math.max(0, (p - .6) / .4); ctx.fillText(r.e, cv.width - 70 - (k % 3) * 34 + Math.sin(p * 6 + k) * 14, cv.height - 300 - p * 520); });
+    ctx.restore(); };
   // Vidéos téléchargées en entier à l'avance (2 d'avance) : pas de lecture en direct qui coupe ou qui traîne
   const vStat = { ok:0, ko:0, seek:0, why:[] }, vPre = {}, lastUse = {};
   items.forEach((o, k) => { lastUse[o.x.id] = k; });
@@ -2086,6 +2183,11 @@ async function runMontage(plan){
   const hold = async (ms, draw) => { const t0 = performance.now(); while(!montage.stop){ const el = performance.now() - t0, t = el / ms; if(t >= 1) break; draw(t, el); await frame(); } };
   rec.start(1000);
   try{
+    // Musique : bouclée sous tout le montage
+    let mus = null;
+    if(actx && wantMusic){ try{ const buf = await musicBuffer(actx, plan.music); if(buf){ const s0 = actx.createBufferSource(), g0 = actx.createGain(); s0.buffer = buf; s0.loop = true;
+      g0.gain.value = plan.musicVol ?? .8; s0.connect(g0); g0.connect(dest); s0.start(); mus = { s:s0, g:g0, vol:plan.musicVol ?? .8 }; } }catch(e){ say("Musique illisible sur ce téléphone : montage sans musique."); } }
+    musRef = mus;
     tStart = performance.now();
     await hold(reel ? 1100 : soft ? 2800 : 2200, t => { card(plan.title || "VEGAS · EVG", plan.sub, Math.min(1, t * (reel ? 5 : 3))); bar(); });
     keep();
@@ -2100,7 +2202,7 @@ async function runMontage(plan){
         v.onerror = null; v.onseeked = null; v.onloadedmetadata = null; try{ v.pause(); }catch(e){}
         if(blobUrl){ v.removeAttribute("crossorigin"); v.src = blobUrl; } else { v.crossOrigin = "anonymous"; v.src = x.v + (x.v.includes("?") ? "&" : "?") + "mt=1"; }
         if(actx && !P.node){ try{ P.node = actx.createMediaElementSource(v); P.gain = actx.createGain(); P.node.connect(P.gain); P.gain.connect(dest); }catch(e){ P.node = "x"; } }
-        const gain = actx && P.gain ? P.gain : null; v.muted = !gain; if(gain) gain.gain.value = 0;
+        const gain = plan.sound && actx && P.gain ? P.gain : null; v.muted = !gain; if(gain) gain.gain.value = 0;
         const meta = await new Promise(r => { if(v.readyState >= 1) return r(true);
           const tm = setTimeout(() => { why = why || "la vidéo n'a pas chargé à temps"; r(false); }, 25000);
           v.onloadedmetadata = () => { clearTimeout(tm); r(true); };
@@ -2126,12 +2228,13 @@ async function runMontage(plan){
             if(v.readyState >= 2 && v.videoWidth){ shown = true;
               ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
               enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height); camDraw(v, v.videoWidth, v.videoHeight, z, cam, el / len, el, n + 1); });
-              overlay(x, Math.min(1, el / 400)); caption(it.text, capA(el)); bar(); }
+              overlay(x, Math.min(1, el / 400)); social(x, el, len); caption(it.text, capA(el)); bar(); }
             const fadeOut = !items[n + 1] && len - el < 400 ? 1 - (len - el) / 400 : 0;
             if(gain && mode === "play") gain.gain.value = Math.min(1, el / 200) * (1 - fadeOut);
+            if(el < 50) duck(!!gain && mode === "play");
             await frame();
           }
-          try{ v.pause(); }catch(e){} if(gain) gain.gain.value = 0;
+          try{ v.pause(); }catch(e){} if(gain) gain.gain.value = 0; duck(false);
           if(shown) keep(); else why = why || "aucune image lisible";
         }
         if(shown){ vStat.ok++; if(mode === "seek") vStat.seek++; } else { vStat.ko++; vStat.why.push((x.a || "?") + " " + hm(x.d, TZ.vegas) + " : " + why); }
@@ -2150,13 +2253,14 @@ async function runMontage(plan){
           enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
             if(pcam) camDraw(im, im.naturalWidth, im.naturalHeight, z, pcam, t, el, n + 1);
             else cover(im, im.naturalWidth, im.naturalHeight, z * (it.move ? 1.02 + t * .08 : 1), it.move ? dir * t * 30 : 0, 0); });
-          overlay(x, Math.min(1, t * 4)); caption(it.text, capA(el)); bar(); });
+          overlay(x, Math.min(1, t * 4)); social(x, el, (it.dur || 3) * 1000); caption(it.text, capA(el)); bar(); });
         keep();
       }
     }
-    if(!montage.stop) await hold(reel ? 1200 : soft ? 2400 : 1800, (t, el) => { enter("fondu", el, () => card(plan.outro || "À SUIVRE…", "EVG de Sobek", 1)); if(t > .6){ ctx.fillStyle = `rgba(0,0,0,${(t - .6) * 2.5})`; ctx.fillRect(0, 0, cv.width, cv.height); } });
+    if(!montage.stop) await hold(reel ? 1200 : soft ? 2400 : 1800, (t, el) => { if(musRef) musRef.g.gain.value = musRef.vol * (1 - t); enter("fondu", el, () => card(plan.outro || "À SUIVRE…", "EVG de Sobek", 1)); if(t > .6){ ctx.fillStyle = `rgba(0,0,0,${(t - .6) * 2.5})`; ctx.fillRect(0, 0, cv.width, cv.height); } });
   }catch(e){ say("Le montage s'est arrêté : " + e.message); }
   const stopped = montage.stop;
+  if(musRef){ try{ musRef.s.stop(); }catch(e){} }
   rec.stop(); await done;
   pool.forEach(P => { try{ P.v.pause(); P.v.removeAttribute("src"); P.v.load(); P.v.remove(); }catch(e){} });
   Object.values(vPre).forEach(async pr => { const u = await pr; if(typeof u === "string") URL.revokeObjectURL(u); }); try{ wake && wake.release(); }catch(e){} try{ actx && actx.close(); }catch(e){}
