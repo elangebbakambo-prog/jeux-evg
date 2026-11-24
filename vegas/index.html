@@ -1956,10 +1956,17 @@ function pickMime(){
   for(const m of c){ try{ if(MediaRecorder.isTypeSupported(m)) return m; }catch(e){} }
   return "";
 }
+// Vidéo noire minuscule (0,2 s) qui sert à déverrouiller les lecteurs sur iPhone
+const MT_BLANK = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMpbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAAMgAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAlN0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAAMgAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAADIAAAAAAABAAAAAAHLbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAAoAAAACABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABdm1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAATZzdGJsAAAAtnN0c2QAAAAAAAAAAQAAAKZhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAABAAEABIAAAASAAAAAAAAAABFUxhdmM2MC4zMS4xMDIgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAALGF2Y0MBQsAe/+EAFWdCwB7aewEQAAADABAAAAMBQPFi6gEABGjOD8gAAAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAABmMAAAZjAAAAAYc3R0cwAAAAAAAAABAAAAAgAABAAAAAAUc3RzcwAAAAAAAAABAAAAAQAAABxzdHNjAAAAAAAAAAEAAAABAAAAAgAAAAEAAAAcc3RzegAAAAAAAAAAAAAAAgAAAoUAAAAJAAAAFHN0Y28AAAAAAAAAAQAAA1kAAABidWR0YQAAAFptZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAAC1pbHN0AAAAJal0b28AAAAdZGF0YQAAAAEAAAAATGF2ZjYwLjE2LjEwMAAAAAhmcmVlAAAClm1kYXQAAAJwBgX//2zcRem95tlIt5Ys2CDZI+7veDI2NCAtIGNvcmUgMTY0IHIzMTA4IDMxZTE5ZjkgLSBILjI2NC9NUEVHLTQgQVZDIGNvZGVjIC0gQ29weWxlZnQgMjAwMy0yMDIzIC0gaHR0cDovL3d3dy52aWRlb2xhbi5vcmcveDI2NC5odG1sIC0gb3B0aW9uczogY2FiYWM9MCByZWY9MSBkZWJsb2NrPTE6MDowIGFuYWx5c2U9MHgxOjB4MTExIG1lPWhleCBzdWJtZT0yIHBzeT0xIHBzeV9yZD0xLjAwOjAuMDAgbWl4ZWRfcmVmPTAgbWVfcmFuZ2U9MTYgY2hyb21hX21lPTEgdHJlbGxpcz0wIDh4OGRjdD0wIGNxbT0wIGRlYWR6b25lPTIxLDExIGZhc3RfcHNraXA9MSBjaHJvbWFfcXBfb2Zmc2V0PTAgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MCB3ZWlnaHRwPTAga2V5aW50PTI1MCBrZXlpbnRfbWluPTEwIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9MTAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAAADWWIhA7///w9FAAEd/4AAAAFQZogN9Q=";
 async function runMontage(plan){
   // Le son se prépare tout de suite, pendant le tap (sinon le téléphone le bloque) ; sans son qui tourne, l'enregistrement perdait les photos.
   let actx = null, dest = null;
   if(plan.sound){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); dest = actx.createMediaStreamDestination(); }catch(e){ actx = null; dest = null; } }
+  // iPhone : on « déverrouille » 2 lecteurs vidéo pendant le tap, puis on les réutilise pour toutes les vidéos du montage
+  const pool = plan.items.some(it => (posts.find(y => y.id === it.id) || {}).v) ? [0, 1].map(() => { const v = document.createElement("video");
+    v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto"; v.muted = true;
+    v.style.cssText = "position:fixed;left:0;bottom:0;width:8px;height:8px;opacity:.02;pointer-events:none;z-index:2147483647";
+    document.body.appendChild(v); v.src = MT_BLANK; const pr = v.play(); if(pr && pr.then) pr.then(() => v.pause()).catch(() => {}); return { v, node:null, gain:null }; }) : [];
   const err = document.getElementById("mtErr"), stage = document.getElementById("mtStage");
   const say = t => { err.textContent = t; err.hidden = false; };
   const mime = pickMime();
@@ -2066,7 +2073,8 @@ async function runMontage(plan){
   };
   const keep = () => { sctx.drawImage(cv, 0, 0); };
   // Vidéos téléchargées en entier à l'avance (2 d'avance) : pas de lecture en direct qui coupe ou qui traîne
-  const vStat = { ok:0, ko:0, why:[] }, vPre = {};
+  const vStat = { ok:0, ko:0, seek:0, why:[] }, vPre = {}, lastUse = {};
+  items.forEach((o, k) => { lastUse[o.x.id] = k; });
   const preVid = x => { if(!x || !x.v || vPre[x.id]) return; vPre[x.id] = (async () => {
       try{ const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 60000);
         const r = await fetch(x.v + (x.v.includes("?") ? "&" : "?") + "mt=1", { mode:"cors", signal:ctl.signal }); clearTimeout(tm);
@@ -2085,44 +2093,51 @@ async function runMontage(plan){
       const { it, x } = items[n]; prog(`Montage ${n + 1} / ${items.length}…`); preAhead(n + 1);
       const capA = el => Math.min(1, Math.max(0, (el - 200) / 300));
       if(x.v){
-        const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto";
-        // iPhone : une vidéo complètement invisible peut ne plus fournir d'images, donc presque invisible plutôt que cachée
-        v.style.cssText = "position:fixed;left:0;bottom:0;width:8px;height:8px;opacity:.02;pointer-events:none;z-index:2147483647";
-        v.muted = !actx;
+        // On réutilise les lecteurs « déverrouillés » au moment du tap (l'iPhone refuse de lancer un nouveau lecteur sans geste)
+        const P = pool[n % pool.length], v = P.v;
         preVid(x); const pre = await vPre[x.id], blobUrl = typeof pre === "string" ? pre : null;
-        if(blobUrl) v.src = blobUrl; else { v.crossOrigin = "anonymous"; v.src = x.v + (x.v.includes("?") ? "&" : "?") + "mt=1"; } // secours : lecture en direct
-        if(blobUrl) v.removeAttribute("crossorigin");
-        document.body.appendChild(v);
         let why = pre && pre.err ? "téléchargement : " + pre.err : "";
-        let src = null, gain = null;
-        if(actx){ try{ src = actx.createMediaElementSource(v); gain = actx.createGain(); src.connect(gain); gain.connect(dest); }catch(e){ v.muted = true; src = null; } }
-        const started = await new Promise(async r => {
-          const tm = setTimeout(() => { why = why || "la vidéo n'a pas démarré à temps"; r(false); }, 25000);
-          v.onerror = () => { clearTimeout(tm); why = why || "format illisible sur cet appareil (" + ((v.error && v.error.code) || "?") + ")"; r(false); };
-          try{ await v.play(); }catch(e){ v.muted = true; try{ await v.play(); }catch(e2){ clearTimeout(tm); why = why || "lecture refusée (" + e2.name + ")"; return r(false); } }
-          const wait = () => { if(v.readyState >= 2 && v.videoWidth){ clearTimeout(tm); r(true); } else if(!montage.stop) requestAnimationFrame(wait); };
-          wait();
-        });
-        if(started){
+        v.onerror = null; v.onseeked = null; v.onloadedmetadata = null; try{ v.pause(); }catch(e){}
+        if(blobUrl){ v.removeAttribute("crossorigin"); v.src = blobUrl; } else { v.crossOrigin = "anonymous"; v.src = x.v + (x.v.includes("?") ? "&" : "?") + "mt=1"; }
+        if(actx && !P.node){ try{ P.node = actx.createMediaElementSource(v); P.gain = actx.createGain(); P.node.connect(P.gain); P.gain.connect(dest); }catch(e){ P.node = "x"; } }
+        const gain = actx && P.gain ? P.gain : null; v.muted = !gain; if(gain) gain.gain.value = 0;
+        const meta = await new Promise(r => { if(v.readyState >= 1) return r(true);
+          const tm = setTimeout(() => { why = why || "la vidéo n'a pas chargé à temps"; r(false); }, 25000);
+          v.onloadedmetadata = () => { clearTimeout(tm); r(true); };
+          v.onerror = () => { clearTimeout(tm); why = why || "format illisible sur cet appareil (" + ((v.error && v.error.code) || "?") + ")"; r(false); }; });
+        let mode = "", shown = false;
+        if(meta){
           const full = isFinite(v.duration) && v.duration > 0 ? v.duration : MAX_VID_SEC;
-          const a = Math.min(it.start || 0, Math.max(0, full - .5)), b = it.end > a ? Math.min(it.end, full) : full;
-          if(a > 0){ try{ v.currentTime = a; await new Promise(r => { const t = setTimeout(r, 1500); v.onseeked = () => { clearTimeout(t); r(); }; }); }catch(e){} }
-          try{ v.playbackRate = it.speed || 1; }catch(e){}
-          const len = (b - a) / (it.speed || 1) * 1000, t0 = performance.now(), cam = it.cam || (reel ? ["large", "punch", "serre", "main"].at(n % 4) : "");
-          while(!montage.stop && !v.ended){
-            const el = performance.now() - t0; if(el >= len || v.currentTime >= b || el > (MAX_VID_SEC + 4) * 1000) break;
-            ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
-            enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height); camDraw(v, v.videoWidth, v.videoHeight, z, cam, el / len, el, n + 1); });
-            overlay(x, Math.min(1, el / 400)); caption(it.text, capA(el)); bar();
+          const a = Math.min(it.start || 0, Math.max(0, full - .5)), b = it.end > a ? Math.min(it.end, full) : full, sp = it.speed || 1;
+          const seekTo = t => new Promise(r => { const tm = setTimeout(r, 1500); v.onseeked = () => { clearTimeout(tm); r(); }; try{ v.currentTime = t; }catch(e){ clearTimeout(tm); r(); } });
+          await seekTo(a);
+          // 1) lecture normale (avec le son) ; 2) sinon lecture image par image en se déplaçant dans la vidéo (toujours permis, même en économie d'énergie)
+          try{ v.playbackRate = sp; }catch(e){}
+          try{ await v.play(); mode = "play"; }catch(e){ v.muted = true; try{ await v.play(); mode = "play"; }catch(e2){ mode = "seek"; } }
+          if(mode === "play"){ const ok = await new Promise(r => { const tm = setTimeout(() => r(false), 6000); const w = () => { if(v.readyState >= 2 && v.videoWidth){ clearTimeout(tm); r(true); } else if(!montage.stop) requestAnimationFrame(w); }; w(); });
+            if(!ok){ try{ v.pause(); }catch(e){} mode = "seek"; await seekTo(a); } }
+          if(mode === "seek"){ try{ v.pause(); }catch(e){} v.muted = true; if(gain) gain.gain.value = 0; }
+          const len = (b - a) / sp * 1000, t0 = performance.now(), cam = it.cam || (reel ? ["large", "punch", "serre", "main"].at(n % 4) : "");
+          let seeking = false; v.onseeked = () => { seeking = false; };
+          while(!montage.stop){
+            const el = performance.now() - t0; if(el >= len || el > (MAX_VID_SEC + 4) * 1000) break;
+            if(mode === "play"){ if(v.ended || v.currentTime >= b) break; }
+            else { const target = Math.min(b, a + el / 1000 * sp); if(!seeking && Math.abs(v.currentTime - target) > .03){ seeking = true; try{ v.currentTime = target; }catch(e){ seeking = false; } } }
+            if(v.readyState >= 2 && v.videoWidth){ shown = true;
+              ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+              enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height); camDraw(v, v.videoWidth, v.videoHeight, z, cam, el / len, el, n + 1); });
+              overlay(x, Math.min(1, el / 400)); caption(it.text, capA(el)); bar(); }
             const fadeOut = !items[n + 1] && len - el < 400 ? 1 - (len - el) / 400 : 0;
-            if(gain) gain.gain.value = Math.min(1, el / 200) * (1 - fadeOut);
+            if(gain && mode === "play") gain.gain.value = Math.min(1, el / 200) * (1 - fadeOut);
             await frame();
           }
-          keep();
+          try{ v.pause(); }catch(e){} if(gain) gain.gain.value = 0;
+          if(shown) keep(); else why = why || "aucune image lisible";
         }
-        if(started) vStat.ok++; else { vStat.ko++; vStat.why.push((x.a || "?") + " " + hm(x.d, TZ.vegas) + " : " + why); }
-        v.pause(); if(src) try{ src.disconnect(); }catch(e){} v.removeAttribute("src"); v.load(); v.remove(); if(blobUrl) URL.revokeObjectURL(blobUrl);
-        if(!started){ // vidéo illisible : on garde au moins son image d'aperçu
+        if(shown){ vStat.ok++; if(mode === "seek") vStat.seek++; } else { vStat.ko++; vStat.why.push((x.a || "?") + " " + hm(x.d, TZ.vegas) + " : " + why); }
+        // La vidéo n'est libérée de la mémoire qu'après son dernier morceau (jump cuts)
+        if(lastUse[x.id] === n){ if(blobUrl){ try{ v.removeAttribute("src"); v.load(); }catch(e){} URL.revokeObjectURL(blobUrl); } delete vPre[x.id]; }
+        if(!shown){ // vidéo illisible : on garde au moins son image d'aperçu
           const im = x.h ? await getImg(x.id) : null; if(!im) continue;
           await hold((it.dur || 3) * 1000, (t, el) => { enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height); cover(im, im.naturalWidth, im.naturalHeight, z * (1.02 + t * .08), 0, 0); });
             overlay(x, Math.min(1, t * 4)); caption(it.text, capA(el)); });
@@ -2142,7 +2157,9 @@ async function runMontage(plan){
     if(!montage.stop) await hold(reel ? 1200 : soft ? 2400 : 1800, (t, el) => { enter("fondu", el, () => card(plan.outro || "À SUIVRE…", "EVG de Sobek", 1)); if(t > .6){ ctx.fillStyle = `rgba(0,0,0,${(t - .6) * 2.5})`; ctx.fillRect(0, 0, cv.width, cv.height); } });
   }catch(e){ say("Le montage s'est arrêté : " + e.message); }
   const stopped = montage.stop;
-  rec.stop(); await done; try{ wake && wake.release(); }catch(e){} try{ actx && actx.close(); }catch(e){}
+  rec.stop(); await done;
+  pool.forEach(P => { try{ P.v.pause(); P.v.removeAttribute("src"); P.v.load(); P.v.remove(); }catch(e){} });
+  Object.values(vPre).forEach(async pr => { const u = await pr; if(typeof u === "string") URL.revokeObjectURL(u); }); try{ wake && wake.release(); }catch(e){} try{ actx && actx.close(); }catch(e){}
   montage = null;
   if(!document.getElementById("mtStage")) return; // fermé entre-temps
   if(stopped){ stage.innerHTML = ""; document.getElementById("mtGo").hidden = false; return; }
@@ -2151,6 +2168,7 @@ async function runMontage(plan){
   const name = "evg-vegas-" + (plan.scope === "all" ? "sejour" : plan.scope) + "." + ext;
   const vTot = vStat.ok + vStat.ko;
   stage.innerHTML = `<p class="miss ok">Montage prêt ✓ (${(blob.size / 1048576).toFixed(1)} Mo)${vTot ? ` · ${vStat.ok} vidéo${vStat.ok > 1 ? "s" : ""} sur ${vTot} montée${vStat.ok > 1 ? "s" : ""}` : " · aucune vidéo dans ce plan"}</p>
+    ${vStat.seek ? `<p class="note">ℹ️ ${vStat.seek} morceau${vStat.seek > 1 ? "x" : ""} de vidéo lu${vStat.seek > 1 ? "s" : ""} image par image (l'iPhone a refusé la lecture normale, souvent à cause du mode économie d'énergie) : image un peu moins fluide et sans le son de la vidéo.</p>` : ""}
     ${vStat.ko ? `<p class="note">⚠️ Vidéo${vStat.ko > 1 ? "s" : ""} pas montée${vStat.ko > 1 ? "s" : ""} (remplacée${vStat.ko > 1 ? "s" : ""} par la photo d'aperçu s'il y en a une) : ${vStat.why.map(esc).join(" · ")}. Réessaie en Wi-Fi, ou retire ces vidéos du plan.</p>` : ""}
     <video src="${url}" controls playsinline class="mt-out"></video>
     <div class="actions"><button type="button" class="btn hot" id="mtShare">Partager / enregistrer</button><a class="btn" href="${url}" download="${name}">Télécharger</a></div>
