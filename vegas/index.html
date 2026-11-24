@@ -1517,21 +1517,30 @@ function getImg(id){
       .then(j => { if(j[0] && j[0].i){ imgCache[id] = j[0].i; im.src = j[0].i; } else ok(null); }).catch(() => ok(null)); });
 }
 // --- Montage : un « plan » (ordre, durées, transitions, textes) éditable à la main ou préparé par l'IA, puis joué dans un canvas et enregistré ---
-const TRANS = { fondu:"Fondu enchaîné", noir:"Fondu au noir", coupe:"Coupe sèche", glisse:"Glissé", zoom:"Zoom", flash:"Flash blanc" };
+const TRANS = { fondu:"Fondu enchaîné", noir:"Fondu au noir", coupe:"Coupe sèche", glisse:"Glissé", zoom:"Zoom", flash:"Flash blanc", whip:"Whip (fouetté rapide)" };
+// Caméras virtuelles : comment l'image bouge pendant le passage
+const CAMS = { "":"Automatique", large:"Plan large fixe", serre:"Plan serré", travelling:"Travelling", main:"Caméra à la main", punch:"Punch-in (coup de zoom)" };
+const camOf = v => { const t = String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if(CAMS[t] !== undefined) return t;
+  if(/punch|coup de zoom|zoom sec/.test(t)) return "punch"; if(/serr|gros plan|close/.test(t)) return "serre";
+  if(/travel|pan|derive|glisse/.test(t)) return "travelling"; if(/main|handheld|bouge|shake|tremble/.test(t)) return "main";
+  if(/large|fixe|wide/.test(t)) return "large"; return ""; };
+const MT_STYLES = { classique:"Classique", reel:"Reel Insta / vlog dynamique", souvenir:"Souvenir posé" };
 const SPEEDS = { "0.5":"Ralenti", "1":"Normal", "2":"Accéléré" };
 // Nom de transition renvoyé par l'IA (ou dit par l'utilisateur) -> une des 6 de l'appli
 const trOf = v => { const t = String(v || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if(TRANS[t]) return t;
   if(/noir|black|dip|sombre/.test(t)) return "noir";
   if(/coup|cut|sec|cut/.test(t)) return "coupe";
-  if(/gliss|slide|swipe|whip|lateral|balay|pousse|push/.test(t)) return "glisse";
+  if(/whip|fouet|swish/.test(t)) return "whip";
+  if(/gliss|slide|swipe|lateral|balay|pousse|push/.test(t)) return "glisse";
   if(/zoom|punch|impact|choc/.test(t)) return "zoom";
   if(/flash|blanc|white|eclair|stroboscope|strobe/.test(t)) return "flash";
   return "fondu"; };
 let mtPlan = null, mtAiBusy = false, mtSel = new Set();
 const mtItems = scope => scope === "all" ? storyList() : ((memoryDays().find(d => d.k === scope) || {}).list || []);
 function defaultPlan(scope){
-  return { scope, title:"VEGAS · EVG", sub:scope === "all" ? "Tout le séjour" : dayLong(scope), outro:"À SUIVRE…", infos:true, sound:true,
+  return { scope, style:(mtPlan && mtPlan.style) || "classique", title:"VEGAS · EVG", sub:scope === "all" ? "Tout le séjour" : dayLong(scope), outro:"À SUIVRE…", infos:true, sound:true,
     items:mtItems(scope).map(x => ({ id:x.id, dur:3, start:0, end:x.v ? 5 : 0, speed:1, tr:"fondu", text:"", move:true })) };
 }
 function openMontagePanel(){
@@ -1541,6 +1550,8 @@ function openMontagePanel(){
   ov.hidden = false; document.documentElement.style.overflow = "hidden";
   if(!mtPlan || !mtItems(mtPlan.scope).length) mtPlan = defaultPlan(days.length ? days[days.length - 1].k : "all");
   ov.innerHTML = `<div class="mt-box"><div class="mt-head"><h3>🎬 Créer un montage</h3><button type="button" class="st-close" id="mtClose" aria-label="Fermer">✕</button></div>
+    <label class="mt-l">Style<select id="mtStyle">${Object.entries(MT_STYLES).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></label>
+    <button type="button" class="btn" id="mtReelify">⚡ Rendre mon plan dynamique (jump cuts, caméras, whips)</button>
     <label class="mt-l">Quoi<select id="mtDay"><option value="all">Tout le séjour (${storyList().length})</option>${days.map(d => `<option value="${d.k}">${esc(dayLong(d.k))} (${d.list.length})</option>`).join("")}</select></label>
     <section class="mt-ai"><label class="mt-l" for="mtPrompt">✨ Dis ce que tu veux (ou dicte avec le micro du clavier)</label>
       <textarea id="mtPrompt" rows="3" maxlength="1500" placeholder="Ex. : commence par la vidéo du quad au ralenti, enchaîne vite les photos de la piscine avec des flashs, écris « Vegas baby » sur la photo du Strip, finis sur Chris."></textarea>
@@ -1569,6 +1580,10 @@ function openMontagePanel(){
   document.getElementById("mtAiFix").onclick = () => aiPlan("fix");
   aiBtns();
   document.getElementById("mtGo").onclick = () => runMontage(mtPlan);
+  const st = document.getElementById("mtStyle"); st.value = mtPlan.style || "classique";
+  st.onchange = () => { mtPlan.style = st.value; };
+  document.getElementById("mtReelify").onclick = async () => { const b = document.getElementById("mtReelify"), l = b.textContent; b.disabled = true; b.textContent = "⚡ Découpe en cours…";
+    await reelify(mtPlan); mtPlan.style = "reel"; st.value = "reel"; mtSel = new Set(); drawPlan(); document.getElementById("mtMore").open = true; b.disabled = false; b.textContent = l; };
   drawPlan();
 }
 // Durée d'un passage dans le montage (s)
@@ -1581,7 +1596,7 @@ function probeDur(x, done){
 }
 probeDur.busy = {};
 const clipSec = (it, x) => x && x.v ? Math.max(.3, ((it.end > it.start ? it.end : (vidDur[x.id] || MAX_VID_SEC)) - it.start) / (it.speed || 1)) : (it.dur || 3);
-const TR_ICON = { fondu:"◐", noir:"■", coupe:"✂", glisse:"⇢", zoom:"⊕", flash:"⚡" };
+const TR_ICON = { fondu:"◐", noir:"■", coupe:"✂", glisse:"⇢", zoom:"⊕", flash:"⚡", whip:"↯" };
 // Timeline façon logiciel de montage : une bande de passages, on en sélectionne un ou plusieurs,
 // puis on les règle à la main ou on dit à l'IA ce qu'on veut sur la sélection seulement.
 function drawPlan(){
@@ -1651,6 +1666,7 @@ function drawPlan(){
         <div class="tl-trim-row"><span>Durée <b id="tlDurV">${fx(one.dur)} s</b></span><input type="range" id="tlDur" min="0.5" max="10" step="0.1" value="${one.dur}"></div></div>` : ""}
       <div class="mt-row2">
         <label>Transition d'entrée<select data-g="tr"><option value="">—</option>${opt(TRANS, one ? one.tr : "")}</select></label>
+        <label>Caméra<select data-g="cam"><option value="-">—</option>${opt(CAMS, one ? one.cam || "" : "-")}</select></label>
         ${!one && selPosts.some(x => !x.v) ? `<label>Durée des photos<select data-g="dur"><option value="">—</option>${opt({ "0.8":"0,8 s", "1":"1 s", "1.5":"1,5 s", "2":"2 s", "3":"3 s", "4":"4 s", "5":"5 s", "7":"7 s", "10":"10 s" }, "")}</select></label>` : ""}
         ${selPosts.some(x => x.v) ? `<label>Vitesse ${one ? "" : "des vidéos"}<select data-g="speed"><option value="">—</option>${opt(SPEEDS, one && oneX.v ? one.speed : "")}</select></label>` : ""}
         ${one && !oneX.v ? `<label class="chk2"><input type="checkbox" data-g="move" ${one.move ? "checked" : ""}> Zoom lent</label>` : ""}
@@ -1790,10 +1806,10 @@ function drawPlan(){
   }
   // Réglages appliqués à toute la sélection
   box.querySelectorAll(".tl-insp [data-g]").forEach(el => el.onchange = () => {
-    const f = el.dataset.g; if(el.tagName === "SELECT" && el.value === "") return;
+    const f = el.dataset.g; if(el.tagName === "SELECT" && (f === "cam" ? el.value === "-" : el.value === "")) return;
     sel.forEach(k => { const it = mtPlan.items[k], x = get(it.id); if(!x) return;
       if(f === "dur" && x.v) return; if(f === "speed" && !x.v) return;
-      it[f] = el.type === "checkbox" ? el.checked : (f === "text" || f === "tr") ? el.value : Math.max(0, +el.value || 0); });
+      it[f] = el.type === "checkbox" ? el.checked : (f === "text" || f === "tr" || f === "cam") ? el.value : Math.max(0, +el.value || 0); });
     if(f === "text") paintTrack(); else drawPlan(); });
   box.querySelectorAll("[data-mv]").forEach(b => b.onclick = () => { const k = sel[0], d = +b.dataset.mv, a = mtPlan.items; [a[k], a[k + d]] = [a[k + d], a[k]]; mtSel = new Set([k + d]); drawPlan(); });
   const del = document.getElementById("tlDel"); if(del) del.onclick = () => { mtPlan.items = mtPlan.items.filter((_, k) => !mtSel.has(k)); mtSel = new Set(); drawPlan(); };
@@ -1835,7 +1851,33 @@ function mtPassages(list, cur, curItems, curPos){
 }
 const mtFromAi = (p, list) => (p.items || []).map(it => { const x = list[(+it.n || 0) - 1]; if(!x) return null;
   return { id:x.id, dur:Math.min(10, Math.max(.8, +it.duree || 3)), start:Math.max(0, +it.debut || 0), end:x.v ? Math.max(0, +it.fin || 0) : 0,
-    speed:[0.5, 1, 2].includes(+it.vitesse) ? +it.vitesse : 1, tr:trOf(it.transition), text:String(it.texte || "").slice(0, 60), move:it.mouvement !== false }; }).filter(Boolean);
+    speed:[0.5, 1, 2].includes(+it.vitesse) ? +it.vitesse : 1, tr:trOf(it.transition), text:String(it.texte || "").slice(0, 60), move:it.mouvement !== false, cam:camOf(it.camera) }; }).filter(Boolean);
+const wantsReel = t => /reel|vlog|tiktok|insta|dynamique|nerveux|rythm|jump ?cut|camera|cam[eé]ra/i.test(t || "");
+const MT_REEL = "\n(Style REEL INSTAGRAM / VLOG : ouvre sur le moment le plus fort (accroche dans les 2 premières secondes), rythme très rapide, photos courtes (duree 0.8 à 1.2), coupes sèches surtout, quelques \"whip\" (transition fouettée) et flashs. Pour chaque passage tu peux ajouter \"camera\" parmi large, serre, travelling, main (caméra à la main), punch (coup de zoom) : varie-les pour donner l'impression de plusieurs caméras. Les vidéos seront découpées en jump cuts automatiquement.)";
+// Lit la vraie durée des vidéos du plan (4 s max par vidéo)
+async function ensureDurations(list){
+  await Promise.all(list.filter(x => x && x.v && !vidDur[x.id]).map(x => new Promise(r => { const t = setTimeout(r, 4000); probeDur(x, () => { clearTimeout(t); r(); }); })));
+}
+// Style Reel / vlog : jump cuts (2 à 3 bouts par vidéo), cadrages qui changent à chaque coupe, photos courtes, coupes sèches et whips
+async function reelify(plan){
+  const get = id => posts.find(x => x.id === id);
+  await ensureDurations(plan.items.map(it => get(it.id)));
+  const camsV = ["large", "serre", "main", "punch", "travelling"], camsP = ["punch", "travelling", "main", "serre"], out = [];
+  let nv = 0, np = 0;
+  plan.items.forEach((it, i) => { const x = get(it.id); if(!x) return;
+    // entrées variées : surtout des coupes sèches, un whip toutes les 3 entrées, un flash de temps en temps
+    const entry = i === 0 ? "coupe" : (it.tr === "flash" || it.tr === "zoom" || it.tr === "whip") ? it.tr : (i % 3 === 2 ? "whip" : i % 5 === 4 ? "flash" : i % 7 === 6 ? "zoom" : "coupe");
+    if(!x.v){ out.push({ ...it, dur:Math.min(1.2, Math.max(.7, it.dur && it.dur < 1.3 ? it.dur : .9)), tr:entry, cam:it.cam || camsP[np++ % camsP.length], move:true }); return; }
+    const full = vidDur[x.id] || 0, a = it.start || 0, bEnd = it.end > a ? it.end : (full || a + 5), span = Math.max(.5, bEnd - a);
+    // découpe : des bouts de 1,2 à 1,8 s répartis sur l'extrait, avec de petits sauts entre eux (le « jump cut »)
+    const cuts = span < 2.6 ? 1 : span < 5 ? 2 : 3, seg = Math.min(1.8, Math.max(1.2, span / cuts * .7)), gap = cuts > 1 ? (span - seg * cuts) / (cuts - 1) : 0;
+    for(let c = 0; c < cuts; c++){ const s0 = Math.round((a + c * (seg + gap)) * 10) / 10;
+      out.push({ ...it, start:s0, end:Math.round(Math.min(bEnd, s0 + seg) * 10) / 10, speed:it.speed || 1, tr:c === 0 ? entry : "coupe",
+        cam:c === 0 && it.cam ? it.cam : camsV[nv++ % camsV.length], text:c === 0 ? it.text : "" }); }
+  });
+  plan.items = out; plan.style = "reel"; plan.infos = plan.infos !== false;
+  return plan;
+}
 // Lots : tout d'un coup si c'est petit, sinon un lot par jour (dans l'ordre)
 function mtChunks(list){
   if(list.length <= MT_CHUNK) return [list];
@@ -1859,7 +1901,7 @@ async function aiPlan(mode, direct){
       if(!list.length) throw new Error("rien de sélectionné");
       say("🎯 L'IA modifie ta sélection…");
       const p = await callMontage("MODIFICATION D'UNE SÉLECTION de la timeline : " + ask
-        + "\nCes passages sont une partie du montage (champ plan_actuel = leur réglage actuel). Applique la demande à ces passages ; garde l'ordre et les réglages non concernés. Tu peux en retirer si on te le demande, jamais en ajouter d'autres." + MT_RULES,
+        + (mtPlan.style === "reel" ? MT_REEL : "") + "\nCes passages sont une partie du montage (champ plan_actuel = leur réglage actuel). Applique la demande à ces passages ; garde l'ordre et les réglages non concernés. Tu peux en retirer si on te le demande, jamais en ajouter d'autres." + MT_RULES,
         mtPassages(list, mtPlan, ks.map(k => mtPlan.items[k]), ks), mtPlan.sub);
       const got = mtFromAi(p, list); if(!got.length && !/retir|enl[eè]v|supprim/i.test(ask)) throw new Error("plan vide");
       const contiguous = ks.every((k, i) => !i || k === ks[i - 1] + 1);
@@ -1871,7 +1913,8 @@ async function aiPlan(mode, direct){
       if(m2){ m2.textContent = "✓ " + (p.resume || "Sélection modifiée.") + " Le reste du montage n'a pas bougé."; m2.hidden = false; }
     } else {
       const universe = cur ? cur.items.map(it => get(it.id)).filter(Boolean).concat(all.filter(x => !cur.items.some(it => it.id === x.id))) : all;
-      const chunks = mtChunks(universe), out = defaultPlan(mtPlan.scope); out.items = [];
+      const reel = mtPlan.style === "reel" || wantsReel(ask);
+      const chunks = mtChunks(universe), out = defaultPlan(mtPlan.scope); out.items = []; if(reel) out.style = "reel";
       if(cur) Object.assign(out, { title:cur.title, sub:cur.sub, outro:cur.outro, infos:cur.infos, sound:cur.sound });
       let first = null;
       for(let i = 0; i < chunks.length; i++){
@@ -1881,7 +1924,7 @@ async function aiPlan(mode, direct){
           ? "CORRECTION d'un plan existant. Correction demandée : " + ask
             + "\nRepars du plan actuel (champ plan_actuel de chaque passage) et ne change QUE ce qui est demandé ; garde tout le reste à l'identique."
             + ((cur.hist || []).length ? " Demandes précédentes : " + cur.hist.slice(-2).map(h => "« " + h.slice(0, 80) + " »").join(" ; ") + "." : "") + part + MT_RULES
-          : ask + part + MT_RULES;
+          : ask + part + (reel ? MT_REEL : "") + MT_RULES;
         const p = await callMontage(demande, mtPassages(chunks[i], cur), mtPlan.sub);
         if(!first) first = p; out.items.push(...mtFromAi(p, chunks[i]));
       }
@@ -1889,6 +1932,7 @@ async function aiPlan(mode, direct){
       if(first.titre) out.title = String(first.titre).slice(0, 40); if(first.sous_titre) out.sub = String(first.sous_titre).slice(0, 50); if(first.fin) out.outro = String(first.fin).slice(0, 40);
       if(typeof first.infos === "boolean") out.infos = first.infos; if(typeof first.son === "boolean") out.sound = first.son;
       out.ai = true; out.hist = (cur ? (cur.hist || []) : []).concat(ask).slice(-5);
+      if(reel && !cur){ say("⚡ Jump cuts et caméras…"); await reelify(out); }
       mtPlan = out; mtSel = new Set(); drawPlan(); document.getElementById("mtMore").open = true;
       ta.placeholder = "Pas satisfait ? Écris ce qu'il faut changer, puis « 🔁 Corriger ce plan avec l'IA ». Ou sélectionne des passages sur la timeline pour ne modifier qu'eux.";
       msg.textContent = "✓ " + (first.resume || (cur ? "Plan corrigé." : "Plan prêt.")) + (chunks.length > 1 ? ` (monté en ${chunks.length} parties.)` : "") + " Règle-le sur la timeline ci-dessous, ou lance le montage."; msg.hidden = false;
@@ -1946,8 +1990,17 @@ async function runMontage(plan){
   const prog = t => { const el = document.getElementById("mtProg"); if(el) el.textContent = t; };
   const cover = (src, w, h, z, ox, oy) => { const k = Math.max(cv.width / w, cv.height / h) * z, dw = w * k, dh = h * k;
     ctx.drawImage(src, (cv.width - dw) / 2 + ox, (cv.height - dh) / 2 + oy, dw, dh); };
+  const reel = plan.style === "reel", soft = plan.style === "souvenir";
+  // Durée prévue (pour la barre de progression façon story)
+  const estMs = (reel ? 2400 : 4000) + plan.items.reduce((a, it) => a + clipSec(it, posts.find(y => y.id === it.id)) * 1000, 0); let tStart = 0;
+  const bar = () => { if(!reel || !tStart) return; const p = Math.min(1, (performance.now() - tStart) / estMs);
+    ctx.fillStyle = "rgba(255,255,255,.28)"; ctx.fillRect(24, 22, cv.width - 48, 6); ctx.fillStyle = "#fff"; ctx.fillRect(24, 22, (cv.width - 48) * p, 6); };
   const overlay = (x, alpha) => {
     if(!plan.infos) return;
+    if(reel){ // petit badge en haut à gauche, comme une story
+      ctx.save(); ctx.globalAlpha = alpha; ctx.font = "800 30px system-ui, -apple-system, sans-serif"; const lab = "@" + (x.a || "?") + "  ·  " + hm(x.d, TZ.vegas);
+      const w = ctx.measureText(lab).width + 36; ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(24, 44, w, 52, 26) : ctx.rect(24, 44, w, 52); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.fillText(lab, 42, 71); ctx.restore(); return; }
     const g = ctx.createLinearGradient(0, cv.height - 330, 0, cv.height); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,.75)");
     ctx.fillStyle = g; ctx.fillRect(0, cv.height - 330, cv.width, 330);
     ctx.globalAlpha = alpha; ctx.textBaseline = "alphabetic";
@@ -1960,7 +2013,14 @@ async function runMontage(plan){
   };
   // Texte demandé pour ce passage : gros, centré, avec un contour, qui apparaît en douceur.
   const caption = (txt, a) => {
-    if(!txt) return; ctx.save(); ctx.globalAlpha = a; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    if(!txt) return;
+    if(reel){ // sous-titre façon Reel : bulle blanche, texte noir, qui « pop » à l'entrée
+      ctx.save(); ctx.globalAlpha = Math.min(1, a * 1.5); let size = 58; ctx.font = `900 ${size}px system-ui, -apple-system, sans-serif`;
+      while(ctx.measureText(txt).width > cv.width - 120 && size > 30){ size -= 4; ctx.font = `900 ${size}px system-ui, -apple-system, sans-serif`; }
+      const k = .85 + .15 * Math.min(1, a * 2), w = ctx.measureText(txt).width + 48, h = size + 34, cx = cv.width / 2, cy = cv.height * .66;
+      ctx.translate(cx, cy); ctx.scale(k, k); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-w / 2, -h / 2, w, h, 18) : ctx.rect(-w / 2, -h / 2, w, h); ctx.fill();
+      ctx.fillStyle = "#111"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, 0, 3); ctx.restore(); return; }
+    ctx.save(); ctx.globalAlpha = a; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     let size = 76; ctx.font = `900 ${size}px system-ui, -apple-system, sans-serif`;
     while(ctx.measureText(txt).width > cv.width - 70 && size > 34){ size -= 4; ctx.font = `900 ${size}px system-ui, -apple-system, sans-serif`; }
     ctx.lineWidth = size / 7; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.lineJoin = "round"; ctx.strokeText(txt, cv.width / 2, cv.height * .42);
@@ -1976,7 +2036,19 @@ async function runMontage(plan){
   };
   // Transition d'entrée : on mélange l'image du passage précédent (gardée dans « snap ») avec le nouveau, pendant TR ms.
   // Durée de chaque transition (ms) : assez longue pour qu'on les distingue bien
-  const TRD = { fondu:900, noir:1100, glisse:550, zoom:500, flash:350, coupe:0 };
+  const TRD = { fondu:soft ? 1300 : 900, noir:1100, glisse:550, zoom:500, flash:350, coupe:0, whip:280 };
+  // Caméras virtuelles : zoom, décalage et petite rotation selon le temps dans le passage (t de 0 à 1, el en ms)
+  const camXf = (cam, t, el, seed) => {
+    const s1 = Math.sin(el / 97 + seed), s2 = Math.sin(el / 61 + seed * 2), s3 = Math.sin(el / 143 + seed * 3);
+    if(cam === "serre") return { z:1.38, ox:0, oy:70, r:0 };
+    if(cam === "travelling") return { z:1.18 + t * .1, ox:(seed % 2 ? 1 : -1) * (t - .5) * 90, oy:20, r:0 };
+    if(cam === "main") return { z:1.12, ox:s1 * 7 + s3 * 4, oy:s2 * 6, r:(s2 * .35 + s3 * .2) * Math.PI / 180 };
+    if(cam === "punch") return t < .45 ? { z:1.04, ox:0, oy:0, r:0 } : { z:1.36, ox:0, oy:60, r:0 };
+    if(cam === "large") return { z:1, ox:0, oy:0, r:0 };
+    return null; };
+  const camDraw = (src, w, h, z, cam, t, el, seed) => { const c = camXf(cam, t, el, seed); if(!c){ cover(src, w, h, z, 0, 0); return; }
+    if(c.r){ ctx.save(); ctx.translate(cv.width / 2, cv.height / 2); ctx.rotate(c.r); ctx.translate(-cv.width / 2, -cv.height / 2); cover(src, w, h, z * c.z, c.ox, c.oy); ctx.restore(); }
+    else cover(src, w, h, z * c.z, c.ox, c.oy); };
   const enter = (tr, el, drawNew) => {
     const TR = TRD[tr] || 700, p = TR ? Math.min(1, el / TR) : 1, e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
     if(p >= 1 || tr === "coupe"){ drawNew(1, 0); return; }
@@ -1984,6 +2056,11 @@ async function runMontage(plan){
     else if(tr === "noir"){ if(p < .5){ ctx.drawImage(snap, 0, 0); ctx.fillStyle = `rgba(0,0,0,${p * 2})`; } else { drawNew(1, 0); ctx.fillStyle = `rgba(0,0,0,${2 - p * 2})`; } ctx.fillRect(0, 0, cv.width, cv.height); }
     else if(tr === "glisse"){ ctx.save(); ctx.translate(-e * cv.width, 0); ctx.drawImage(snap, 0, 0); ctx.restore(); ctx.save(); ctx.translate((1 - e) * cv.width, 0); drawNew(1, 0); ctx.restore(); }
     else if(tr === "zoom"){ drawNew(1.6 - .6 * e, 0); if(p < .25){ ctx.globalAlpha = 1 - p * 4; ctx.drawImage(snap, 0, 0); ctx.globalAlpha = 1; } }
+    else if(tr === "whip"){ // fouetté : l'ancienne image part à gauche, la nouvelle arrive de la droite, avec un flou de mouvement
+      for(let g = 0; g < 4; g++){ const d = e + g * .05; ctx.globalAlpha = g ? .22 : 1;
+        ctx.save(); ctx.translate(-Math.min(1, d) * cv.width, 0); ctx.drawImage(snap, 0, 0); ctx.restore();
+        ctx.save(); ctx.translate((1 - Math.min(1, d)) * cv.width, 0); drawNew(1, 0); ctx.restore(); }
+      ctx.globalAlpha = 1; }
     else if(tr === "flash"){ if(p < .3){ ctx.drawImage(snap, 0, 0); ctx.fillStyle = `rgba(255,255,255,${p / .3})`; } else { drawNew(1, 0); ctx.fillStyle = `rgba(255,255,255,${1 - (p - .3) / .7})`; } ctx.fillRect(0, 0, cv.width, cv.height); }
     else drawNew(1, 0);
   };
@@ -1992,7 +2069,8 @@ async function runMontage(plan){
   const hold = async (ms, draw) => { const t0 = performance.now(); while(!montage.stop){ const el = performance.now() - t0, t = el / ms; if(t >= 1) break; draw(t, el); await frame(); } };
   rec.start(1000);
   try{
-    await hold(2200, t => card(plan.title || "VEGAS · EVG", plan.sub, Math.min(1, t * 3)));
+    tStart = performance.now();
+    await hold(reel ? 1100 : soft ? 2800 : 2200, t => { card(plan.title || "VEGAS · EVG", plan.sub, Math.min(1, t * (reel ? 5 : 3))); bar(); });
     keep();
     for(let n = 0; n < items.length && !montage.stop; n++){
       const { it, x } = items[n]; prog(`Montage ${n + 1} / ${items.length}…`);
@@ -2015,12 +2093,12 @@ async function runMontage(plan){
           const a = Math.min(it.start || 0, Math.max(0, full - .5)), b = it.end > a ? Math.min(it.end, full) : full;
           if(a > 0){ try{ v.currentTime = a; await new Promise(r => { const t = setTimeout(r, 1500); v.onseeked = () => { clearTimeout(t); r(); }; }); }catch(e){} }
           try{ v.playbackRate = it.speed || 1; }catch(e){}
-          const len = (b - a) / (it.speed || 1) * 1000, t0 = performance.now();
+          const len = (b - a) / (it.speed || 1) * 1000, t0 = performance.now(), cam = it.cam || (reel ? ["large", "punch", "serre", "main"].at(n % 4) : "");
           while(!montage.stop && !v.ended){
             const el = performance.now() - t0; if(el >= len || v.currentTime >= b || el > (MAX_VID_SEC + 4) * 1000) break;
             ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
-            enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height); cover(v, v.videoWidth, v.videoHeight, z, 0, 0); });
-            overlay(x, Math.min(1, el / 400)); caption(it.text, capA(el));
+            enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height); camDraw(v, v.videoWidth, v.videoHeight, z, cam, el / len, el, n + 1); });
+            overlay(x, Math.min(1, el / 400)); caption(it.text, capA(el)); bar();
             const fadeOut = !items[n + 1] && len - el < 400 ? 1 - (len - el) / 400 : 0;
             if(gain) gain.gain.value = Math.min(1, el / 200) * (1 - fadeOut);
             await frame();
@@ -2036,15 +2114,16 @@ async function runMontage(plan){
         }
       } else {
         const im = await getImg(x.id); if(!im) continue;
-        const dir = n % 2 ? 1 : -1;
+        const dir = n % 2 ? 1 : -1, pcam = it.cam || (reel ? ["punch", "travelling", "main"].at(n % 3) : "");
         await hold((it.dur || 3) * 1000, (t, el) => {
           enter(it.tr, el, z => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
-            cover(im, im.naturalWidth, im.naturalHeight, z * (it.move ? 1.02 + t * .08 : 1), it.move ? dir * t * 30 : 0, 0); });
-          overlay(x, Math.min(1, t * 4)); caption(it.text, capA(el)); });
+            if(pcam) camDraw(im, im.naturalWidth, im.naturalHeight, z, pcam, t, el, n + 1);
+            else cover(im, im.naturalWidth, im.naturalHeight, z * (it.move ? 1.02 + t * .08 : 1), it.move ? dir * t * 30 : 0, 0); });
+          overlay(x, Math.min(1, t * 4)); caption(it.text, capA(el)); bar(); });
         keep();
       }
     }
-    if(!montage.stop) await hold(1800, (t, el) => { enter("fondu", el, () => card(plan.outro || "À SUIVRE…", "EVG de Sobek", 1)); if(t > .6){ ctx.fillStyle = `rgba(0,0,0,${(t - .6) * 2.5})`; ctx.fillRect(0, 0, cv.width, cv.height); } });
+    if(!montage.stop) await hold(reel ? 1200 : soft ? 2400 : 1800, (t, el) => { enter("fondu", el, () => card(plan.outro || "À SUIVRE…", "EVG de Sobek", 1)); if(t > .6){ ctx.fillStyle = `rgba(0,0,0,${(t - .6) * 2.5})`; ctx.fillRect(0, 0, cv.width, cv.height); } });
   }catch(e){ say("Le montage s'est arrêté : " + e.message); }
   const stopped = montage.stop;
   rec.stop(); await done; try{ wake && wake.release(); }catch(e){} try{ actx && actx.close(); }catch(e){}
